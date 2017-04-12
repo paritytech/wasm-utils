@@ -13,6 +13,8 @@ cd wasm-tools/runner
 
 and then open `http://localhost:8000`, press `Execute call` to run a contract `call` function, see browser console log for gas counter
 
+see `/samples` directory for sample contracts that are compiled this way
+
 ## Prerequisites 
 
 Emscripiten for C/C++ (see [this page](http://kripken.github.io/emscripten-site/docs/getting_started/downloads.html), `emcc` should be in the `PATH`)
