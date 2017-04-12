@@ -18,6 +18,22 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, inserted_index: u32) {
     }
 }
 
+pub fn inject_counter(opcodes: &mut elements::Opcodes, gas_func: u32) {
+    use parity_wasm::elements::Opcode::*;
+    for opcode in opcodes.elements_mut().iter_mut() {
+        match opcode {
+            &mut Block(_, ref mut block) | &mut If(_, ref mut block) => {
+                inject_counter(block, gas_func)
+            },
+            _ => { }
+        }
+    }
+
+    let ops = opcodes.elements_mut().len() as u32;
+    opcodes.elements_mut().insert(0, I32Const(ops));
+    opcodes.elements_mut().insert(1, Call(gas_func));
+}
+
 fn main() {
 
     let args = env::args().collect::<Vec<_>>();
@@ -66,6 +82,7 @@ fn main() {
             &mut elements::Section::Code(ref mut code_section) => {
                 for ref mut func_body in code_section.bodies_mut() {
                     update_call_index(func_body.code_mut(), gas_func);
+                    inject_counter(func_body.code_mut(), gas_func);
                 }
             },
             _ => { }
