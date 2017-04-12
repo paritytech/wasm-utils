@@ -1,6 +1,6 @@
 # wasm-tools
 
-Boiler plate code to test parity wasm tools and compile rust/c/c++ code to wasm-contracts
+Boilerplate code to test Parity WASM tools and compile rust/c/c++ code to wasm-contracts
 
 ## How to compile contract
 
