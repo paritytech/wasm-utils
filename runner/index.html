@@ -35,7 +35,7 @@
 
           env.DYNAMICTOP_PTR = env.DYNAMICTOP_PTR || 0;
           env.STACKTOP = env.STACKTOP || 0;
-          env.STACK_MAX = env.STACK_MAX || 0;
+          env.STACK_MAX = env.STACK_MAX || 5*1024*1024;
           env.enlargeMemory = env.enlargeMemory || function() { throw "error enlarging memory"; };
           env.getTotalMemory = env.getTotalMemory || function() { return 65536 * 256; };
           env.abortOnCannotGrowMemory = env.abortOnCannotGrowMemory || function() { throw "abort growing memory"; };
@@ -45,10 +45,10 @@
           env.tableBase = env.tableBase || 0;
 
           if (!imports.env.memory) {
-            imports.env.memory = new WebAssembly.Memory({ initial: 256 });
+            imports.env.memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
           }
           if (!imports.env.table) {
-            imports.env.table = new WebAssembly.Table({ initial: 0, element: 'anyfunc' });
+            imports.env.table = new WebAssembly.Table({ initial: 0, maximum: 0, element: 'anyfunc' });
           }
           return new WebAssembly.Instance(module, imports);
         });
