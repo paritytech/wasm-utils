@@ -34,12 +34,10 @@ fn main() {
     let import_sig = mbuilder.push_signature(
         builder::signature()
             .param().i32()
-            .param().i32()
-            .return_type().i32()
             .build_sig()
         );
 
-    let gas_func = mbuilder.push_import(
+    let mut gas_func = mbuilder.push_import(
         builder::import()
             .module("env")
             .field("gas")
@@ -47,8 +45,20 @@ fn main() {
             .build()
         );
 
-    // Updating calling addresses (all calls to function index >= `gas_func` should be incremented)
+    // back to plain module
     let mut module = mbuilder.build();
+
+    // calculate actual function index of the imported definition
+    //    (substract all imports that are NOT functions)
+
+    for import_entry in module.import_section().expect("Builder should have insert the import section").entries() {
+        match *import_entry.external() {
+            elements::External::Function(_) => {},
+            _ => { gas_func -= 1; }
+        }
+    }
+
+    // Updating calling addresses (all calls to function index >= `gas_func` should be incremented)
     for section in module.sections_mut() {
         match section {
             &mut elements::Section::Code(ref mut code_section) => {

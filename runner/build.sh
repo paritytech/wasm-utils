@@ -14,9 +14,10 @@ else
     emcc $file -Os -s WASM=1 -s SIDE_MODULE=1 -o out/contract.wasm
 fi
 
-if [ ! -f ./../gas/target/release/gas ] && [ ! -f ./../gas/target/release/gas.exe ] then
+if [ ! -f ./../gas/target/release/gas ] && [ ! -f ./../gas/target/release/gas.exe ] 
+then
     echo "No gas utility, compile it in /gas folder with"
-    echo "cargo build --release"    
+    echo "cargo build --release"
+else
+    ./../gas/target/release/gas ./out/contract.wasm ./out/contract.wasm
 fi
-
-./../gas/target/release/gas ./out/contract.wasm ./out/contract.wasm
