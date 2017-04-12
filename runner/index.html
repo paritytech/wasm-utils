@@ -45,6 +45,10 @@
           env.memoryBase = env.memoryBase || 0;
           env.tableBase = env.tableBase || 0;
 
+          env.gas = function(upd) {
+            console.log("used " + upd + " gas");
+          }
+
           if (!imports.env.memory) {
             imports.env.memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
           }
@@ -63,6 +67,7 @@
         button.value = 'Execute call';
         button.addEventListener('click', function() {
             call();
+            console.log("Call succeded");
         }, false);
       }
     );
