@@ -1,5 +1,4 @@
 #![feature(link_args)]
-#![feature(lang_items)]
 #![feature(drop_types_in_const)]
 #![no_main]
 
