@@ -80,7 +80,7 @@
             imports.env.memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
           }
           if (!imports.env.table) {
-            imports.env.table = new WebAssembly.Table({ initial: 8, maximum: 8, element: 'anyfunc' });
+            imports.env.table = new WebAssembly.Table({ initial: 0, maximum: 0, element: 'anyfunc' });
           }
           return new WebAssembly.Instance(module, imports);
         });
