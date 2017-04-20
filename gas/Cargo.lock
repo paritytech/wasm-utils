@@ -2,7 +2,7 @@
 name = "gas"
 version = "0.1.0"
 dependencies = [
- "parity-wasm 0.2.0 (git+https://github.com/nikvolf/parity-wasm)",
+ "parity-wasm 0.3.0 (git+https://github.com/nikvolf/parity-wasm)",
 ]
 
 [[package]]
@@ -12,12 +12,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "parity-wasm"
-version = "0.2.0"
-source = "git+https://github.com/nikvolf/parity-wasm#4011af4f75e9334a2a018fdb2f464d9c7eb21617"
+version = "0.3.0"
+source = "git+https://github.com/nikvolf/parity-wasm#afb5b8d523227445d648deaee6ca6c9448d24a73"
 dependencies = [
  "byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [metadata]
 "checksum byteorder 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "c40977b0ee6b9885c9013cd41d9feffdd22deb3bb4dc3a71d901cc7a77de18c8"
-"checksum parity-wasm 0.2.0 (git+https://github.com/nikvolf/parity-wasm)" = "<none>"
+"checksum parity-wasm 0.3.0 (git+https://github.com/nikvolf/parity-wasm)" = "<none>"

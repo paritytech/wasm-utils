@@ -7,7 +7,7 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, inserted_index: u32) {
     use parity_wasm::elements::Opcode::*;
     for opcode in opcodes.elements_mut().iter_mut() {
         match opcode {
-            &mut Block(_, ref mut block) | &mut If(_, ref mut block) => {
+            &mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
                 update_call_index(block, inserted_index)
             },
             &mut Call(ref mut call_index) | &mut CallIndirect(ref mut call_index, _) => {
@@ -22,7 +22,7 @@ pub fn inject_counter(opcodes: &mut elements::Opcodes, gas_func: u32) {
     use parity_wasm::elements::Opcode::*;
     for opcode in opcodes.elements_mut().iter_mut() {
         match opcode {
-            &mut Block(_, ref mut block) | &mut If(_, ref mut block) => {
+            &mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
                 inject_counter(block, gas_func)
             },
             _ => { }
@@ -30,7 +30,7 @@ pub fn inject_counter(opcodes: &mut elements::Opcodes, gas_func: u32) {
     }
 
     let ops = opcodes.elements_mut().len() as u32;
-    opcodes.elements_mut().insert(0, I32Const(ops));
+    opcodes.elements_mut().insert(0, I32Const(ops as i32));
     opcodes.elements_mut().insert(1, Call(gas_func));
 }
 
@@ -85,6 +85,16 @@ fn main() {
                     inject_counter(func_body.code_mut(), gas_func);
                 }
             },
+            &mut elements::Section::Export(ref mut export_section) => {
+                for ref mut export in export_section.entries_mut() {
+                    match export.internal_mut() {
+                        &mut elements::Internal::Function(ref mut func_index) => {
+                            if *func_index >= gas_func { *func_index += 1}
+                        },
+                        _ => {}
+                    } 
+                }
+            }
             _ => { }
         }
     }

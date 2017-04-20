@@ -20,4 +20,5 @@ then
     echo "cargo build --release"
 else
     ./../gas/target/release/gas ./out/contract.wasm ./out/contract.wasm
+    # echo "Removed gasification"
 fi
