@@ -95,7 +95,6 @@
 
     loadWebAssembly('out/contract.wasm')
       .then(instance => {
-        debugger;
         var exports = instance.exports;
         var call = exports._call;
         var malloc = exports._malloc;
@@ -121,6 +120,23 @@
   </script>
 </head>
 <body>
-  <input type="button" id="do-call" value="(waiting for WebAssembly)"/>
+  <div>
+    <label for="context" style="display: block">Context</label>
+    <textarea style="width: 480px; height: 96px; margin-bottom: 24px; resize: none" id="context">[]</textarea>
+  </div>
+
+  <div>
+    <label for="storage" style="display: block">Storage</label>
+    <textarea style="width: 480px; height: 120px; margin-bottom: 24px; resize: none" id="storage">[]</textarea>
+  </div>
+
+  <div>
+    <label for="result" style="display: block">Result</label>
+    <textarea style="width: 480px; height: 96px; margin-bottom: 24px; resize: none" id="result">[]</textarea>
+  </div>
+
+  <div style="height: 5px; border-top: 1px solid black"></div>
+
+  <input type="button" id="do-call" value="(waiting for WebAssembly)"></input>
 </body>
 </html>

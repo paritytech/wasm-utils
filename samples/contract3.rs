@@ -95,7 +95,6 @@ impl CallArgs {
         // managed in calling code
         std::mem::forget(result);
     }
-
 }
 
 #[no_mangle]
