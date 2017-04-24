@@ -82,13 +82,13 @@
           env.gas = function(upd) {
             console.log("used " + upd + " gas");
           }
-
           if (!imports.env.memory) {
             imports.env.memory = memory;
           }
           if (!imports.env.table) {
             imports.env.table = new WebAssembly.Table({ initial: 0, maximum: 0, element: 'anyfunc' });
           }
+          window.testMemory = memory;
           return new WebAssembly.Instance(module, imports);
         });
     }
@@ -99,14 +99,20 @@
         var exports = instance.exports;
         var call = exports._call;
         var malloc = exports._malloc;
-        var data_ptr = malloc(1024*8);
 
-        console.log("data_ptr: " + data_ptr);
+        // raw call context
+        var context_ptr = malloc(256);
+
+        // raw persistent storage
+        var storage_ptr = malloc(8192);
+
+        console.log("context_ptr: " + context_ptr);
+        console.log("storage_ptr: " + storage_ptr);
 
         var button = document.getElementById('do-call');
         button.value = 'Execute call';
         button.addEventListener('click', function() {
-            call();
+            let new_storage_ptr = call(context_ptr, storage_ptr);
             console.log("Call succeded");
         }, false);
       }
