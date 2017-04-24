@@ -70,9 +70,9 @@ fn read_u32(slc: &[u8]) -> u32 {
 
 fn write_u32(dst: &mut [u8], val: u32) {
     dst[0] = (val & 0x000000ff) as u8;
-    dst[1] = (val & 0x0000ff00 >> 8) as u8;
-    dst[2] = (val & 0x00ff0000 >> 16) as u8;
-    dst[3] = (val & 0xff000000 >> 24) as u8;
+    dst[1] = ((val & 0x0000ff00) >> 8) as u8;
+    dst[2] = ((val & 0x00ff0000) >> 16) as u8;
+    dst[3] = ((val & 0xff000000) >> 24) as u8;
 }
 
 fn write_ptr(dst: &mut [u8], ptr: *mut u8) {
@@ -105,7 +105,7 @@ impl CallArgs {
     }
 
     pub fn save(self, ptr: *mut u8) {
-        let dst = unsafe { slice::from_raw_parts_mut(ptr, 6 * 4) };
+        let dst = unsafe { slice::from_raw_parts_mut(ptr.offset(8), 2 * 4) };
         let context = self.context;
         let mut result = self.result;
 
@@ -114,8 +114,8 @@ impl CallArgs {
 
         if result.len() > 0 {
             // result
-            write_ptr(dst, result.as_mut_ptr());
-            write_u32(dst, result.len() as u32);
+            write_ptr(&mut dst[0..4], result.as_mut_ptr());
+            write_u32(&mut dst[4..8], result.len() as u32);
             // managed in calling code
             std::mem::forget(result);
         }
@@ -125,6 +125,8 @@ impl CallArgs {
 #[no_mangle]
 pub fn call(descriptor: *mut u8) {
     let mut ctx = CallArgs::from_raw(descriptor);
-    let _ = storage::append(ctx.context());
-    *ctx.result_mut() = ctx.context().to_vec();
+    let data = ctx.context().to_vec();
+    let _ = storage::append(&data);
+    *ctx.result_mut() = data;
+    ctx.save(descriptor);
 }

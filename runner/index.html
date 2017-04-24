@@ -67,12 +67,13 @@
       self.total = 0;
 
       self.write = function(offset, len, ptr) {
+        console.log("storage_write: " + JSON.stringify(arguments));
         var oldSize = false;
         while (offset + len > self.size) {
           oldSize || (oldSize = self.size);
           self.size = self.size * 2;
         }
-        if (oldSize != self.size) {
+        if (oldSize) {
             self.buffer = ArrayBuffer.transfer(self.buffer, self.size);
         }
 
@@ -80,10 +81,10 @@
           self.total = offset + len;
         }
 
-        let memView = new Int8Array(self.memory);
-        let storageView = new Int8Array(self.buffer);
+        let memView = new DataView(self.memory);
+        let storageView = new DataView(self.buffer);
         for (i = 0; i < len; i++) {
-          storageView[offset+i] = memView[ptr+i];
+          storageView.setInt8(offset+i, memView.getInt8(ptr+i));
         }
         return len;
       }
@@ -93,11 +94,11 @@
           return -1;
         }
 
-        let memView = new Int8Array(self.memory);
-        let storageView = new Int8Array(self.buffer);
+        let memView = new DataView(self.memory);
+        let storageView = new DataView(self.buffer);
 
-        for (i = 0; i < len; i++) {
-          memView[ptr+i] = storageView[offset+i];
+        for (var i = 0; i < len; i++) {
+          memView.setInt8(ptr+i, storageView.getInt8(offset+i));
         }
         return len;
       }
@@ -105,18 +106,29 @@
       self.size = function() {
         return self.total;
       }
+
+      self.toArr = function() {
+        let result = [];
+        let dataView = new DataView(self.buffer);
+        for (var i = 0; i < self.total; i++) {
+          result.push(dataView.getInt8(i));
+        }
+        return result;
+      }
     }
 
-    function set_ptr(view, offset, val) {
-      view[offset] = val & 0x000000ff;
-      view[offset+1] = (val & 0x0000ff00) >> 8;
-      view[offset+2] = (val & 0x00ff0000) >> 16;        
-      view[offset+3] = (val & 0xff000000) >> 24;
-    }
+    // function set_ptr(view, offset, val) {
+    //   console.log("set_ptr: " + JSON.stringify(arguments));
 
-    function get_ptr(view, offset) {
-      return view[offset] + (view[offset] << 8) + (view[offset] << 16) + (view[offset] << 24);
-    }
+    //   view[offset] = val & 0x000000ff;
+    //   view[offset+1] = (val & 0x0000ff00) >> 8;
+    //   view[offset+2] = (val & 0x00ff0000) >> 16;        
+    //   view[offset+3] = (val & 0xff000000) >> 24;
+    // }
+
+    // function get_ptr(view, offset) {
+    //   return view[offset] + (view[offset] << 8) + (view[offset] << 16) + (view[offset] << 24);
+    // }
 
     function Runtime() {
       var self = this;
@@ -129,29 +141,36 @@
       }
 
       self.call = function(instance, args) {
+        console.log("call: " + JSON.stringify(args));
+
         let alloc = self.resolveAlloc(instance);
         // call descriptor size
         let ptr = alloc(16);
         let arg_ptr = alloc(args.length);
-        let memView = new Int8Array(self.memory);
-        set_ptr(memView, 0, args.length);
-        set_ptr(memView, 4, arg_ptr);
-        set_ptr(memView, 8, 0);
-        set_ptr(memView, 12, 0);
+
+        console.log("call allocs: " + JSON.stringify([ptr, arg_ptr]));
+
+        let dataView = new DataView(self.memory.buffer);
+        dataView.setInt32(ptr, arg_ptr, true);
+        dataView.setInt32(ptr+4, args.length, true);
 
         for (var i = 0; i < args.length; i++) {
-          memView[arg_ptr+i] = args[i];
+          dataView.setInt8(arg_ptr+i, args[i], false);
         }
+
+        debugger;
 
         instance.exports._call(ptr);
 
-        let result_length = get_ptr(memView, 8);
-        let result_ptr = get_ptr(memView, 12);
+        let result_ptr = dataView.getInt32(ptr+8, true);
+        let result_length = dataView.getInt32(ptr+12, true);
+
+        console.log("result: " + JSON.stringify([result_ptr, result_length]));
 
         let result = [];
         if (result_ptr != 0) {
           for (var i = 0; i < result_length; i++) {
-            result.push(memVew[result_ptr + i]);
+            result.push(dataView.getInt8(result_ptr + i));
           }
         }
         return result;
@@ -222,12 +241,28 @@
         });
     }
 
+    function strToArray(str) {
+      var src = str.trim().substr(1, str.length-2);
+      if (src.length == 0) {
+        return [];
+      } else {
+        return src.split(",").map(p => Number(p.trim()));
+      }
+    }
+
+    function arrayToStr(arr) {
+      return "[" + arr.join(", ") + "]";
+    }
+
     loadWebAssembly('out/contract.wasm')
       .then(instance => {
         var button = document.getElementById('do-call');
         button.value = 'Execute call';
         button.addEventListener('click', function() {
-          runtime.call(instance, []);
+          let args = strToArray(document.getElementById("context").value);
+          let result = runtime.call(instance, args);
+          document.getElementById("result").value = arrayToStr(result);
+          document.getElementById("storage").value = arrayToStr(runtime.storage.toArr());
           console.log("Call succeded");
         }, false);
       }
