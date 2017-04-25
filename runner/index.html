@@ -129,6 +129,10 @@
         return instance.exports._malloc;
       }
 
+      self.resolveFree = function(instance) {
+        return instance.exports._free;
+      }
+
       self.gas = function(val) {
         self.gasCounter += val;
       }
@@ -138,15 +142,27 @@
 
         // call descriptor size
         let ptr = alloc(16);
-        let arg_ptr = alloc(args.length);
-
         let dataView = new DataView(self.memory.buffer);
-        dataView.setInt32(ptr, arg_ptr, true);
-        dataView.setInt32(ptr+4, args.length, true);
 
-        for (var i = 0; i < args.length; i++) {
-          dataView.setInt8(arg_ptr+i, args[i], false);
+        var arg_ptr = false;
+        if (args.length > 0) {
+          arg_ptr = alloc(args.length);
+          dataView.setInt32(ptr, arg_ptr, true);
+          dataView.setInt32(ptr+4, args.length, true);
+
+          for (var i = 0; i < args.length; i++) {
+            dataView.setInt8(arg_ptr+i, args[i], false);
+          }
+
+        } else {
+          dataView.setInt32(ptr, 0, true);
+          dataView.setInt32(ptr+4, 0, true);
         }
+
+        // zero result
+        dataView.setInt32(ptr+8, 0, true);
+        dataView.setInt32(ptr+12, 0, true);
+
 
         self.gasCounter = 0;
         instance.exports._call(ptr);
@@ -154,12 +170,19 @@
         let result_ptr = dataView.getInt32(ptr+8, true);
         let result_length = dataView.getInt32(ptr+12, true);
 
+        let free = self.resolveFree(instance);
+
         let result = [];
         if (result_ptr != 0) {
           for (var i = 0; i < result_length; i++) {
             result.push(dataView.getInt8(result_ptr + i));
           }
         }
+
+        arg_ptr && (free(arg_ptr));
+        result_ptr && (free(result_ptr));
+        free(ptr);
+
         return result;
 
       }
@@ -243,11 +266,13 @@
         var button = document.getElementById('do-call');
         button.value = 'Execute call';
         button.addEventListener('click', function() {
+          button.setAttribute("disabled", "1");
           let args = strToArray(document.getElementById("context").value);
           let result = runtime.call(instance, args);
           document.getElementById("result").value = arrayToStr(result);
           document.getElementById("storage").value = arrayToStr(runtime.storage.toArr());
           document.getElementById("gas").innerHTML = "Gas used: <b>" + runtime.gasCounter + "</b>";
+          button.removeAttribute("disabled");
         }, false);
       }
     );
@@ -255,9 +280,31 @@
   </script>
 </head>
 <body>
+  <div style="position: absolute; margin-top: 24px; top: 0px; left: 600px; height: 300px; width: 600px">
+    <textarea readonly style="width: 100%; height: 100%; padding: 8px; resize: none">
+pub fn call(descriptor: *mut u8) {
+    // This initializes safe wrapper for contract input and output
+    let mut ctx = CallArgs::from_raw(descriptor);
+
+    // Copies all contract input data to the separate buffer
+    let data = ctx.context().to_vec();
+
+    // Appends all input to the storage (as it is a logger contract)
+    let _ = storage::append(&data);
+
+    // Returns all that passed to this contract as an output
+    *ctx.result_mut() = data;
+
+    // Saves the wrapper state to commit return stream
+    ctx.save(descriptor);
+}
+    </textarea>
+    <a href="https://github.com/NikVolf/wasm-tools/blob/master/samples/logger_contract.rs">Full source with preamble</a>
+  </div>
+
   <div>
     <label for="context" style="display: block">Input</label>
-    <textarea style="width: 480px; height: 96px; margin-bottom: 24px; resize: none" id="context">[]</textarea>
+    <textarea style="width: 480px; height: 96px; margin-bottom: 24px; resize: none" id="context">[10, 12, 16]</textarea>
   </div>
 
   <div>
@@ -276,7 +323,8 @@
 
   <div style="height: 5px; margin-top: 5px; border-top: 1px solid black"></div>
 
-  <input type="button" id="do-call" value="(waiting for WebAssembly)"></input>
+  <input type="button" id="do-call" value="(waiting for WebAssembly)" style="background-color: rgb(240, 64, 64); color: white; font-size: 120%" ></input>
   <span id="gas" style="margin-left: 32px">Gas cost: <b>0</b></span>
+
 </body>
 </html>
