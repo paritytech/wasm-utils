@@ -13,22 +13,24 @@ enum Symbol {
 }
 
 fn resolve_function(module: &elements::Module, index: u32) -> Symbol {
-    let imports_len = module
-        .import_section()
-        .expect("Functions section to exist")
-        .entries()
-        .iter()
-        .map(|e| match e.external() {
-            &elements::External::Function(_) => 1,
-            _ => 0,
-        })
-        .sum();
+    println!("Resolving function {}", index);
 
-    if index < imports_len {
-        Symbol::Import(index as usize)
-    } else {
-        Symbol::Function(index as usize - imports_len as usize)
+    let mut functions = 0;
+    let mut non_functions = 0;
+    for (item_index, item) in module.import_section().expect("Functions section to exist").entries().iter().enumerate() {
+        match item.external() {
+            &elements::External::Function(_) => {
+                if functions == index {
+                    println!("Import {}", item_index);
+                    return Symbol::Import(item_index as usize);
+                }
+                functions += 1;
+            },
+            _ => {}
+        }
     }
+
+    Symbol::Function(index as usize - functions as usize)
 }
 
 fn resolve_global(module: &elements::Module, index: u32) -> Symbol {
@@ -133,6 +135,48 @@ fn expand_symbols(module: &elements::Module, set: &mut HashSet<Symbol>) {
     }
 }
 
+pub fn update_call_index(opcodes: &mut elements::Opcodes, eliminated_index: u32) {
+    use parity_wasm::elements::Opcode::*;
+    for opcode in opcodes.elements_mut().iter_mut() {
+        match opcode {
+            &mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
+                update_call_index(block, eliminated_index)
+            },
+            &mut Call(ref mut call_index) | &mut CallIndirect(ref mut call_index, _) => {
+                if *call_index > eliminated_index { *call_index -= 1}
+            },
+            _ => { },
+        }
+    }
+}
+
+pub fn update_global_index(opcodes: &mut elements::Opcodes, eliminated_index: u32) {
+    use parity_wasm::elements::Opcode::*;
+    for opcode in opcodes.elements_mut().iter_mut() {
+        match opcode {
+            &mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
+                update_global_index(block, eliminated_index)
+            },
+            &mut GetGlobal(ref mut index) | &mut SetGlobal(ref mut index) => {
+                if *index > eliminated_index { *index -= 1}
+            },
+            _ => { },
+        }
+    }
+}
+
+pub fn import_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::ImportSection> {
+   for section in module.sections_mut() {
+        match section {
+            &mut elements::Section::Import(ref mut sect) => {
+                return Some(sect);
+            },
+            _ => { }
+        }
+    }
+    None
+}
+
 fn main() {
 
     let args = env::args().collect::<Vec<_>>();
@@ -165,6 +209,54 @@ fn main() {
 
     for symbol in stay.iter() {
         println!("symbol to stay: {:?}", symbol);
+    }
+
+    // Keep track of referreable symbols to rewire calls/globals
+    let mut eliminated_funcs = Vec::new();
+    let mut eliminated_globals = Vec::new();
+
+    // First iterate throgh imports 
+    let mut index = 0;
+    let mut old_index = 0;
+    let mut top_funcs = 0;
+    let mut top_globals = 0;
+
+    {
+        let imports = import_section(&mut module).expect("Import section to exist");
+        loop {
+            let mut remove = false;
+            match imports.entries()[index].external() {
+                &elements::External::Function(_) => {
+                    if stay.contains(&Symbol::Import(old_index)) {
+                        index += 1;
+                    } else {
+                        remove = true;
+                        eliminated_funcs.push(top_funcs);
+                        println!("Eliminated import({}) func({}, {})", old_index, top_funcs, imports.entries()[index].field());
+                    }
+                    top_funcs += 1;
+                },
+                &elements::External::Global(_) => {
+                    if stay.contains(&Symbol::Import(old_index)) {
+                        index += 1;
+                    } else {
+                        remove = true;
+                        eliminated_globals.push(top_globals);
+                    }
+                    top_globals += 1;
+                },
+                _ => {
+                    index += 1;
+                }
+            }
+            if remove {
+                imports.entries_mut().remove(index);
+            }
+
+            old_index += 1;
+
+            if index == imports.entries().len() { break; }
+        }
     }
 
     // Finally, delete all items one by one, updating reference indices in the process
