@@ -1,5 +1,4 @@
 #![feature(link_args)]
-#![feature(drop_types_in_const)]
 #![no_main]
 
 // as it is experimental preamble
@@ -10,6 +9,8 @@ use std::slice;
 #[link_args = "-s WASM=1 -s NO_EXIT_RUNTIME=1 -s NO_FILESYSTEM=1 -s"]
 extern {}
 
+/// Wrapper over storage read/write/size externs
+/// Storage api is a file-like with random reads/writes
 mod storage {
     pub struct Error;
 
@@ -20,6 +21,8 @@ mod storage {
         fn storage_size() -> u32;
     }
 
+    /// Performs read from storage to the specified slice `dst`, using all slice length
+    /// Can return `Error` if data is read from outside of the storage boundaries
     pub fn read(offset: u32, dst: &mut [u8]) -> Result<u32, Error> {
         match unsafe {
             storage_read(offset, dst.len() as u32, dst.as_mut_ptr())
@@ -29,6 +32,7 @@ mod storage {
         }
     }
 
+    /// Performs write to the storage from the specified slice `src`
     pub fn write(offset: u32, src: &[u8]) -> Result<u32, Error> {
         match unsafe {
             storage_write(offset, src.len() as u32, src.as_ptr())
@@ -38,12 +42,14 @@ mod storage {
         }
     }
 
+    /// Returns current length of the contract storage
     pub fn size() -> u32 {
         unsafe {
             storage_size()
         }
     }
 
+    /// Appends the slice content to the end of the storage
     pub fn append(src: &[u8]) -> Result<u32, Error> {
         let sz = size();
         match write(sz, src) {
@@ -53,7 +59,7 @@ mod storage {
     }
 }
 
-/// Safe (?) wrapper around call context
+/// Safe wrapper for call context
 struct CallArgs {
     context: Box<[u8]>,
     result: Vec<u8>,
@@ -124,9 +130,18 @@ impl CallArgs {
 
 #[no_mangle]
 pub fn call(descriptor: *mut u8) {
+    // This initializes safe wrapper for contract input and output
     let mut ctx = CallArgs::from_raw(descriptor);
+
+    // Copies all input to the contract in the separate buffer
     let data = ctx.context().to_vec();
+
+    // Appends all input to the storage (as it is a logger contract)
     let _ = storage::append(&data);
+
+    // Returns all that passed to this contract as an output
     *ctx.result_mut() = data;
+
+    // Saves the wrapper state to commit return stream
     ctx.save(descriptor);
 }
