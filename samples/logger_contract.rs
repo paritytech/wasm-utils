@@ -133,7 +133,7 @@ pub fn call(descriptor: *mut u8) {
     // This initializes safe wrapper for contract input and output
     let mut ctx = CallArgs::from_raw(descriptor);
 
-    // Copies all input to the contract in the separate buffer
+    // Copies all contract input data to the separate buffer
     let data = ctx.context().to_vec();
 
     // Appends all input to the storage (as it is a logger contract)

@@ -67,7 +67,6 @@
       self.total = 0;
 
       self.write = function(offset, len, ptr) {
-        console.log("storage_write: " + JSON.stringify(arguments));
         var oldSize = false;
         while (offset + len > self.size) {
           oldSize || (oldSize = self.size);
@@ -117,38 +116,29 @@
       }
     }
 
-    // function set_ptr(view, offset, val) {
-    //   console.log("set_ptr: " + JSON.stringify(arguments));
-
-    //   view[offset] = val & 0x000000ff;
-    //   view[offset+1] = (val & 0x0000ff00) >> 8;
-    //   view[offset+2] = (val & 0x00ff0000) >> 16;        
-    //   view[offset+3] = (val & 0xff000000) >> 24;
-    // }
-
-    // function get_ptr(view, offset) {
-    //   return view[offset] + (view[offset] << 8) + (view[offset] << 16) + (view[offset] << 24);
-    // }
-
     function Runtime() {
       var self = this;
 
       self.memory = new WebAssembly.Memory({ initial: 256, maximum: 256 });
       self.storage = new Storage(self.memory.buffer);
 
+      // todo: figure out how to do counter with multiple executables
+      self.gasCounter = 0;
+
       self.resolveAlloc = function(instance) {
         return instance.exports._malloc;
       }
 
-      self.call = function(instance, args) {
-        console.log("call: " + JSON.stringify(args));
+      self.gas = function(val) {
+        self.gasCounter += val;
+      }
 
+      self.call = function(instance, args) {
         let alloc = self.resolveAlloc(instance);
+
         // call descriptor size
         let ptr = alloc(16);
         let arg_ptr = alloc(args.length);
-
-        console.log("call allocs: " + JSON.stringify([ptr, arg_ptr]));
 
         let dataView = new DataView(self.memory.buffer);
         dataView.setInt32(ptr, arg_ptr, true);
@@ -158,14 +148,11 @@
           dataView.setInt8(arg_ptr+i, args[i], false);
         }
 
-        debugger;
-
+        self.gasCounter = 0;
         instance.exports._call(ptr);
 
         let result_ptr = dataView.getInt32(ptr+8, true);
         let result_length = dataView.getInt32(ptr+12, true);
-
-        console.log("result: " + JSON.stringify([result_ptr, result_length]));
 
         let result = [];
         if (result_ptr != 0) {
@@ -195,7 +182,6 @@
           env.STACK_MAX = env.STACK_MAX || 5*1024*1024;
           env.DYNAMICTOP_PTR = env.STACK_MAX;
           env.enlargeMemory = env.enlargeMemory || function() { 
-            console.log("called enlargeMemory(" + JSON.stringify(arguments) + ");");
             return 1;
           };
           env.getTotalMemory = env.getTotalMemory || function() {
@@ -227,10 +213,8 @@
           env._storage_read = runtime.storage.read;
           env._storage_write = runtime.storage.write;
           env._storage_size = runtime.storage.size;
+          env.gas = runtime.gas;
 
-          env.gas = function(upd) {
-            console.log("used " + upd + " gas");
-          }
           if (!imports.env.memory) {
             imports.env.memory = runtime.memory;
           }
@@ -263,7 +247,7 @@
           let result = runtime.call(instance, args);
           document.getElementById("result").value = arrayToStr(result);
           document.getElementById("storage").value = arrayToStr(runtime.storage.toArr());
-          console.log("Call succeded");
+          document.getElementById("gas").innerHTML = "Gas used: <b>" + runtime.gasCounter + "</b>";
         }, false);
       }
     );
@@ -272,22 +256,27 @@
 </head>
 <body>
   <div>
-    <label for="context" style="display: block">Context</label>
+    <label for="context" style="display: block">Input</label>
     <textarea style="width: 480px; height: 96px; margin-bottom: 24px; resize: none" id="context">[]</textarea>
   </div>
 
   <div>
     <label for="storage" style="display: block">Storage</label>
-    <textarea style="width: 480px; height: 120px; margin-bottom: 24px; resize: none" id="storage">[]</textarea>
+    <div style="padding: 5px; background-color: lightgray; display: inline-block">
+      <textarea readonly style="width: 480px; height: 120px; margin-bottom: 24px; resize: none" id="storage">[]</textarea>
+    </div>
   </div>
 
   <div>
     <label for="result" style="display: block">Result</label>
-    <textarea style="width: 480px; height: 96px; margin-bottom: 24px; resize: none" id="result">[]</textarea>
+    <div style="padding: 5px; background-color: lightgray; display: inline-block">
+      <textarea readonly style="width: 480px; height: 96px; margin-bottom: 24px; resize: none" id="result">[]</textarea>
+    </div>
   </div>
 
-  <div style="height: 5px; border-top: 1px solid black"></div>
+  <div style="height: 5px; margin-top: 5px; border-top: 1px solid black"></div>
 
   <input type="button" id="do-call" value="(waiting for WebAssembly)"></input>
+  <span id="gas" style="margin-left: 32px">Gas cost: <b>0</b></span>
 </body>
 </html>
