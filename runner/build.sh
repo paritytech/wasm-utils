@@ -19,6 +19,6 @@ then
     echo "No gas utility, compile it in /gas folder with"
     echo "cargo build --release"
 else
-    ./../gas/target/release/gas ./out/contract.wasm ./out/contract.wasm
+    cargo run --manifest-path=./../gas/Cargo.toml --release -- ./out/contract.wasm ./out/contract.wasm
     # echo "Removed gasification"
 fi
