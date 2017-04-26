@@ -51,7 +51,7 @@ fn push_code_symbols(module: &elements::Module, opcodes: &[elements::Opcode], de
 
     for opcode in opcodes {
         match opcode {
-            &Call(idx) | &CallIndirect(idx, _) => {
+            &Call(idx) => {
                 dest.push(resolve_function(module, idx));
             },
             &GetGlobal(idx) | &SetGlobal(idx) => {
@@ -129,30 +129,35 @@ fn expand_symbols(module: &elements::Module, set: &mut HashSet<Symbol>) {
     }
 }
 
-pub fn update_call_index(opcodes: &mut elements::Opcodes, eliminated_index: u32) {
+pub fn update_call_index(opcodes: &mut elements::Opcodes, eliminated_indices: &[usize]) {
     use parity_wasm::elements::Opcode::*;
     for opcode in opcodes.elements_mut().iter_mut() {
         match opcode {
             &mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
-                update_call_index(block, eliminated_index)
+                update_call_index(block, eliminated_indices)
             },
-            &mut Call(ref mut call_index) | &mut CallIndirect(ref mut call_index, _) => {
-                if *call_index > eliminated_index { *call_index -= 1}
+            &mut Call(ref mut call_index) => {
+                let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
+                println!("rewired call {} -> call {}", *call_index, *call_index - totalle as u32);
+                *call_index -= totalle as u32;
             },
             _ => { },
         }
     }
 }
 
-pub fn update_global_index(opcodes: &mut elements::Opcodes, eliminated_index: u32) {
+/// Updates global references considering the _ordered_ list of eliminated indices
+pub fn update_global_index(opcodes: &mut Vec<elements::Opcode>, eliminated_indices: &[usize]) {
     use parity_wasm::elements::Opcode::*;
-    for opcode in opcodes.elements_mut().iter_mut() {
+    for opcode in opcodes.iter_mut() {
         match opcode {
             &mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
-                update_global_index(block, eliminated_index)
+                update_global_index(block.elements_mut(), eliminated_indices)
             },
             &mut GetGlobal(ref mut index) | &mut SetGlobal(ref mut index) => {
-                if *index > eliminated_index { *index -= 1}
+                let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *index).count();
+                println!("rewired global {} -> global {}", *index, *index - totalle as u32);
+                *index -= totalle as u32;
             },
             _ => { },
         }
@@ -207,6 +212,18 @@ pub fn code_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elem
     None
 }
 
+pub fn export_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::ExportSection> {
+   for section in module.sections_mut() {
+        match section {
+            &mut elements::Section::Export(ref mut sect) => {
+                return Some(sect);
+            },
+            _ => { }
+        }
+    }
+    None
+}
+
 fn main() {
 
     let args = env::args().collect::<Vec<_>>();
@@ -232,6 +249,20 @@ fn main() {
             stay.insert(Symbol::Export(index));
         } 
     }
+
+    // All symbols used in data/element segments are also should be preserved
+    let mut init_symbols = Vec::new();
+    if let Some(data_section) = module.data_section() {
+        for segment in data_section.entries() {
+            push_code_symbols(&module, segment.offset().code(), &mut init_symbols);
+        }
+    }
+    if let Some(elements_section) = module.elements_section() {
+        for segment in elements_section.entries() {
+            push_code_symbols(&module, segment.offset().code(), &mut init_symbols);
+        }
+    }
+    for symbol in init_symbols.drain(..) { stay.insert(symbol); }
 
     // Call function which will traverse the list recursively, filling stay with all symbols
     // that are already used by those which already there
@@ -320,7 +351,7 @@ fn main() {
             index += 1;
         } else {
             functions_section(&mut module).expect("Functons section to exist").entries_mut().remove(index);
-            code_section(&mut module).expect("Functons section to exist").bodies_mut().remove(index);
+            code_section(&mut module).expect("Code section to exist").bodies_mut().remove(index);
 
             eliminated_funcs.push(top_funcs + old_index);
             println!("Eliminated function({})", top_funcs + old_index);
@@ -328,8 +359,73 @@ fn main() {
         old_index += 1;
     }
 
-    // Finally, delete all items one by one, updating reference indices in the process
-    //   (todo: initial naive impementation can be optimized to avoid multiple passes)
+    // Forth, eliminate unused exports
+    {
+        let exports = export_section(&mut module).expect("Export section to exist");
+
+        index = 0;
+        old_index = 0;
+
+        loop {
+            if exports.entries_mut().len() == index { break; }
+            if stay.contains(&Symbol::Export(old_index)) {
+                index += 1;
+            } else {
+                println!("Eliminated export({}, {})", old_index, exports.entries_mut()[index].field());
+                exports.entries_mut().remove(index);
+            }
+            old_index += 1;
+        }
+    }
+
+    if eliminated_globals.len() > 0 || eliminated_funcs.len() > 0 {
+        // Finaly, rewire all calls and globals references to the new indices
+        //   (only if there is anything to do)
+        eliminated_globals.sort();
+        eliminated_funcs.sort();
+
+        for section in module.sections_mut() {
+            match section {
+                &mut elements::Section::Code(ref mut code_section) => {
+                    for ref mut func_body in code_section.bodies_mut() {
+                        update_call_index(func_body.code_mut(), &eliminated_funcs);
+                        update_global_index(func_body.code_mut().elements_mut(), &eliminated_globals)
+                    }
+                },
+                &mut elements::Section::Export(ref mut export_section) => {
+                    for ref mut export in export_section.entries_mut() {
+                        match export.internal_mut() {
+                            &mut elements::Internal::Function(ref mut func_index) => {
+                                let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < *func_index).count();
+                                *func_index -= totalle as u32;
+                            },
+                            &mut elements::Internal::Global(ref mut global_index) => {
+                                let totalle = eliminated_globals.iter().take_while(|i| (**i as u32) < *global_index).count();
+                                *global_index -= totalle as u32;
+                            },
+                            _ => {}
+                        } 
+                    }
+                },
+                &mut elements::Section::Global(ref mut global_section) => {
+                    for ref mut global_entry in global_section.entries_mut() {
+                        update_global_index(global_entry.init_expr_mut().code_mut(), &eliminated_globals)
+                    }                    
+                },
+                &mut elements::Section::Data(ref mut data_section) => {
+                    for ref mut segment in data_section.entries_mut() {
+                        update_global_index(segment.offset_mut().code_mut(), &eliminated_globals)
+                    }                    
+                },
+                &mut elements::Section::Element(ref mut elements_section) => {
+                    for ref mut segment in elements_section.entries_mut() {
+                        update_global_index(segment.offset_mut().code_mut(), &eliminated_globals)
+                    }                    
+                },
+                _ => { }
+            }
+        }
+    }
 
     parity_wasm::serialize_to_file(&args[2], module).unwrap();    
 }

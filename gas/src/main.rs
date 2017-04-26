@@ -10,7 +10,7 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, inserted_index: u32) {
             &mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
                 update_call_index(block, inserted_index)
             },
-            &mut Call(ref mut call_index) | &mut CallIndirect(ref mut call_index, _) => {
+            &mut Call(ref mut call_index) => {
                 if *call_index >= inserted_index { *call_index += 1}
             },
             _ => { }
