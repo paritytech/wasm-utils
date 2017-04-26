@@ -13,15 +13,11 @@ enum Symbol {
 }
 
 fn resolve_function(module: &elements::Module, index: u32) -> Symbol {
-    println!("Resolving function {}", index);
-
     let mut functions = 0;
-    let mut non_functions = 0;
     for (item_index, item) in module.import_section().expect("Functions section to exist").entries().iter().enumerate() {
         match item.external() {
             &elements::External::Function(_) => {
                 if functions == index {
-                    println!("Import {}", item_index);
                     return Symbol::Import(item_index as usize);
                 }
                 functions += 1;
@@ -34,22 +30,20 @@ fn resolve_function(module: &elements::Module, index: u32) -> Symbol {
 }
 
 fn resolve_global(module: &elements::Module, index: u32) -> Symbol {
-    let imports_len = module
-        .import_section()
-        .expect("Functions section to exist")
-        .entries()
-        .iter()
-        .map(|e| match e.external() {
-            &elements::External::Global(_) => 1,
-            _ => 0,
-        })
-        .sum();
-
-    if index < imports_len {
-        Symbol::Import(index as usize)
-    } else {
-        Symbol::Global(index as usize - imports_len as usize)
+    let mut globals = 0;
+    for (item_index, item) in module.import_section().expect("Functions section to exist").entries().iter().enumerate() {
+        match item.external() {
+            &elements::External::Global(_) => {
+                if globals == index {
+                    return Symbol::Import(item_index as usize);
+                }
+                globals += 1;
+            },
+            _ => {}
+        }
     }
+
+    Symbol::Global(index as usize - globals as usize)
 }
 
 fn push_code_symbols(module: &elements::Module, opcodes: &[elements::Opcode], dest: &mut Vec<Symbol>) {
@@ -177,6 +171,42 @@ pub fn import_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut el
     None
 }
 
+pub fn global_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::GlobalSection> {
+   for section in module.sections_mut() {
+        match section {
+            &mut elements::Section::Global(ref mut sect) => {
+                return Some(sect);
+            },
+            _ => { }
+        }
+    }
+    None
+}
+
+pub fn functions_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::FunctionsSection> {
+   for section in module.sections_mut() {
+        match section {
+            &mut elements::Section::Function(ref mut sect) => {
+                return Some(sect);
+            },
+            _ => { }
+        }
+    }
+    None
+}
+
+pub fn code_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::CodeSection> {
+   for section in module.sections_mut() {
+        match section {
+            &mut elements::Section::Code(ref mut sect) => {
+                return Some(sect);
+            },
+            _ => { }
+        }
+    }
+    None
+}
+
 fn main() {
 
     let args = env::args().collect::<Vec<_>>();
@@ -242,6 +272,7 @@ fn main() {
                     } else {
                         remove = true;
                         eliminated_globals.push(top_globals);
+                        println!("Eliminated import({}) global({}, {})", old_index, top_globals, imports.entries()[index].field());                        
                     }
                     top_globals += 1;
                 },
@@ -257,6 +288,44 @@ fn main() {
 
             if index == imports.entries().len() { break; }
         }
+    }
+
+    // Senond, iterate through globals
+    {
+        let globals = global_section(&mut module).expect("Global section to exist");
+
+        index = 0;
+        old_index = 0;
+
+        loop {
+            if globals.entries_mut().len() == index { break; }
+            if stay.contains(&Symbol::Global(old_index)) {
+                index += 1;
+            } else {
+                globals.entries_mut().remove(index);
+                eliminated_globals.push(top_globals + old_index);
+                println!("Eliminated global({})", top_globals + old_index);
+            }
+            old_index += 1;
+        }
+    }
+
+    // Third, delete orphaned functions
+    index = 0;
+    old_index = 0;
+
+    loop {
+        if functions_section(&mut module).expect("Functons section to exist").entries_mut().len() == index { break; }
+        if stay.contains(&Symbol::Function(old_index)) {
+            index += 1;
+        } else {
+            functions_section(&mut module).expect("Functons section to exist").entries_mut().remove(index);
+            code_section(&mut module).expect("Functons section to exist").bodies_mut().remove(index);
+
+            eliminated_funcs.push(top_funcs + old_index);
+            println!("Eliminated function({})", top_funcs + old_index);
+        }
+        old_index += 1;
     }
 
     // Finally, delete all items one by one, updating reference indices in the process
