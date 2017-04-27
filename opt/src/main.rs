@@ -240,7 +240,7 @@ fn main() {
     //   which in turn compile in unused imports and leaves unused functions
 
     // List of exports that are actually used in the managed code
-    let used_exports = vec!["_call", "_malloc", "_free"];
+    let used_exports = vec!["_call"];
 
     // Algo starts from the top, listing all items that should stay
     let mut stay = HashSet::new();
