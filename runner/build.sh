@@ -25,6 +25,9 @@ else
 
     # Gas injector
     cargo run --manifest-path=./../gas/Cargo.toml --release -- ./out/contract.wasm ./out/contract.wasm
+
+    # Symbols optimizer
+    cargo run --manifest-path=./../opt/Cargo.toml --release -- ./out/contract.wasm ./out/contract.wasm
 fi
 
 
