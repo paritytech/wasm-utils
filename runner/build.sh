@@ -14,4 +14,12 @@ else
     emcc $file -Os -s WASM=1 -s SIDE_MODULE=1 -o out/contract.wasm
 fi
 
+# Gas injector
 cargo run --manifest-path=./../gas/Cargo.toml --release -- ./out/contract.wasm ./out/contract.wasm
+
+# Allocator replacer
+cargo run --manifest-path=./../ext/Cargo.toml --release -- ./out/contract.wasm ./out/contract.wasm
+
+# Symbols optimizer
+cargo run --manifest-path=./../opt/Cargo.toml --release -- ./out/contract.wasm ./out/contract.wasm
+
