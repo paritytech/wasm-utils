@@ -260,6 +260,9 @@ fn main() {
     if let Some(elements_section) = module.elements_section() {
         for segment in elements_section.entries() {
             push_code_symbols(&module, segment.offset().code(), &mut init_symbols);
+            for func_index in segment.members() {
+                stay.insert(resolve_function(&module, *func_index));
+            }
         }
     }
     for symbol in init_symbols.drain(..) { stay.insert(symbol); }
@@ -410,17 +413,22 @@ fn main() {
                 &mut elements::Section::Global(ref mut global_section) => {
                     for ref mut global_entry in global_section.entries_mut() {
                         update_global_index(global_entry.init_expr_mut().code_mut(), &eliminated_globals)
-                    }                    
+                    }
                 },
                 &mut elements::Section::Data(ref mut data_section) => {
                     for ref mut segment in data_section.entries_mut() {
                         update_global_index(segment.offset_mut().code_mut(), &eliminated_globals)
-                    }                    
+                    }
                 },
                 &mut elements::Section::Element(ref mut elements_section) => {
                     for ref mut segment in elements_section.entries_mut() {
-                        update_global_index(segment.offset_mut().code_mut(), &eliminated_globals)
-                    }                    
+                        update_global_index(segment.offset_mut().code_mut(), &eliminated_globals);
+                        // update all indirect call addresses initial values
+                        for func_index in segment.members_mut() {
+                            let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < *func_index).count();     
+                            *func_index -= totalle as u32;
+                        }
+                    }
                 },
                 _ => { }
             }
