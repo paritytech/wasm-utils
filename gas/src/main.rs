@@ -94,7 +94,15 @@ fn main() {
                         _ => {}
                     } 
                 }
-            }
+            },
+            &mut elements::Section::Element(ref mut elements_section) => {
+                for ref mut segment in elements_section.entries_mut() {
+                    // update all indirect call addresses initial values
+                    for func_index in segment.members_mut() {
+                        if *func_index >= gas_func { *func_index += 1}
+                    }
+                }
+            },
             _ => { }
         }
     }
