@@ -14,11 +14,4 @@ else
     emcc $file -Os -s WASM=1 -s SIDE_MODULE=1 -o out/contract.wasm
 fi
 
-if [ ! -f ./../gas/target/release/gas ] && [ ! -f ./../gas/target/release/gas.exe ] 
-then
-    echo "No gas utility, compile it in /gas folder with"
-    echo "cargo build --release"
-else
-    cargo run --manifest-path=./../gas/Cargo.toml --release -- ./out/contract.wasm ./out/contract.wasm
-    # echo "Removed gasification"
-fi
+cargo run --manifest-path=./../gas/Cargo.toml --release -- ./out/contract.wasm ./out/contract.wasm
