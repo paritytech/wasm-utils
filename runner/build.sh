@@ -21,7 +21,7 @@ then
 
 else
     # c/c++ can be compiled directly by emcc
-    emcc $file -Os -s WASM=1 -s SIDE_MODULE=1 -o out/contract.wasm
+    emcc $file -O3 -s WASM=1 -s SIDE_MODULE=1 -o out/contract.wasm -s
 
     # Gas injector
     cargo run --manifest-path=./../gas/Cargo.toml --release -- ./out/contract.wasm ./out/contract.wasm
