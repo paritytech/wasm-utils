@@ -11,7 +11,7 @@ cd wasm-tools/runner
 ./start.sh
 ```
 
-and then open `http://localhost:8000`, press `Execute call` to run a contract `call` function, see browser console log for gas counter
+and then open `http://localhost:8000`, specify input stream in `Input` input, press `Execute call` to run a contract `call` function, see storage update (if contract produced any) as well as `Result` stream (again, if contract produced any).
 
 see `/samples` directory for sample contracts that are compiled this way
 
