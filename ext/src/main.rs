@@ -3,7 +3,7 @@ extern crate parity_wasm;
 use std::env;
 use parity_wasm::{builder, elements};
 
-type Insertion = (u32, u32, String);
+type Insertion = (usize, u32, u32, String);
 
 pub fn update_call_index(opcodes: &mut elements::Opcodes, original_imports: usize, inserts: &[Insertion]) {
     use parity_wasm::elements::Opcode::*;
@@ -13,7 +13,7 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, original_imports: usiz
                 update_call_index(block, original_imports, inserts)
             },
             &mut Call(ref mut call_index) => {
-                if let Some(pos) = inserts.iter().position(|x| x.0 == *call_index) {
+                if let Some(pos) = inserts.iter().position(|x| x.1 == *call_index) {
                     *call_index = (original_imports + pos) as u32; 
                 } else if *call_index as usize > original_imports {
                     *call_index += inserts.len() as u32;
@@ -35,7 +35,7 @@ fn main() {
     // Loading module
     let module = parity_wasm::deserialize_file(&args[1]).unwrap();
 
-    let replaced_funcs = vec!["_free", "_malloc", "_storage_read", "_storage_write", "_storage_size"];
+    let replaced_funcs = vec!["_free", "_malloc"];
 
     // Save import functions number for later
     let import_funcs_total = module
@@ -47,31 +47,33 @@ fn main() {
 
     // First, we find functions indices that are to be rewired to externals
     //   Triple is (function_index (callable), type_index, function_name)
-    let replaces: Vec<Insertion> = replaced_funcs
+    let mut replaces: Vec<Insertion> = replaced_funcs
         .into_iter()
         .filter_map(|f| {
             let export = module
                 .export_section().expect("Export section to exist")
-                .entries().iter()
-                .find(|e| e.field() == f)
+                .entries().iter().enumerate()
+                .find(|&(_, entry)| entry.field() == f)
                 .expect("All functions of interest to exist");
 
-            if let &elements::Internal::Function(func_idx) = export.internal() {
+            if let &elements::Internal::Function(func_idx) = export.1.internal() {
                 let type_ref = module
                     .functions_section().expect("Functions section to exist")
                     .entries()[func_idx as usize - import_funcs_total]
                     .type_ref();
 
-                Some((func_idx, type_ref, export.field().to_owned()))
+                Some((export.0, func_idx, type_ref, export.1.field().to_owned()))
             } else {
                 None
             }
         })
         .collect();
 
+    replaces.sort_by_key(|e| e.0);
+
     // Second, we duplicate them as import definitions
     let mut mbuilder = builder::from_module(module);
-    for &(_, type_ref, ref field) in replaces.iter() {
+    for &(_, _, type_ref, ref field) in replaces.iter() {
         mbuilder.push_import(
             builder::import()
                 .module("env")
