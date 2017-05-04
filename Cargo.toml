@@ -1,0 +1,21 @@
+[package]
+name = "wasm-utils"
+version = "0.1.0"
+authors = ["NikVolf <nikvolf@gmail.com>"]
+
+[dependencies]
+parity-wasm = { git="https://github.com/nikvolf/parity-wasm" }
+
+[lib]
+
+[[bin]]
+name = "wasm-opt"
+path = "opt/src/main.rs"
+
+[[bin]]
+name = "wasm-ext"
+path = "ext/src/main.rs"
+
+[[bin]]
+name = "wasm-gas"
+path = "gas/src/main.rs"
