@@ -6,7 +6,7 @@
 
 use std::slice;
 
-#[link_args = "-s WASM=1 -s NO_EXIT_RUNTIME=1 -s NO_FILESYSTEM=1 -s"]
+#[link_args = "-s WASM=1 -s NO_EXIT_RUNTIME=1 -s NO_FILESYSTEM=1"]
 extern {}
 
 /// Wrapper over storage read/write/size externs
