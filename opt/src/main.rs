@@ -6,6 +6,7 @@ use parity_wasm::elements;
 
 #[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 enum Symbol {
+    Type(usize),
     Import(usize),
     Global(usize),
     Function(usize),
@@ -100,6 +101,19 @@ fn expand_symbols(module: &elements::Module, set: &mut HashSet<Symbol>) {
                     _ => {}
                 }
             },
+            Import(idx) => {
+                let entry = &module.import_section().expect("Import section to exist").entries()[idx];
+                match entry.external() {
+                    &elements::External::Function(type_idx) => {
+                        let type_symbol = Symbol::Type(type_idx as usize);
+                        if !stop.contains(&type_symbol) {
+                            fringe.push(type_symbol);
+                        }
+                        set.insert(type_symbol);        
+                    },
+                    _ => {}                
+                }
+            },
             Function(idx) => {
                 let body = &module.code_section().expect("Code section to exist").bodies()[idx];
                 let mut code_symbols = Vec::new();
@@ -110,6 +124,13 @@ fn expand_symbols(module: &elements::Module, set: &mut HashSet<Symbol>) {
                     }
                     set.insert(symbol);
                 }
+
+                let signature = &module.functions_section().expect("Functions section to exist").entries()[idx];
+                let type_symbol = Symbol::Type(signature.type_ref() as usize);
+                if !stop.contains(&type_symbol) {
+                    fringe.push(type_symbol);
+                }
+                set.insert(type_symbol);
             },
             Global(idx) => {
                 let entry = &module.global_section().expect("Global section to exist").entries()[idx];
@@ -224,6 +245,18 @@ pub fn export_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut el
     None
 }
 
+pub fn type_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::TypeSection> {
+   for section in module.sections_mut() {
+        match section {
+            &mut elements::Section::Type(ref mut sect) => {
+                return Some(sect);
+            },
+            _ => { }
+        }
+    }
+    None
+}
+
 fn main() {
 
     let args = env::args().collect::<Vec<_>>();
@@ -278,14 +311,34 @@ fn main() {
     // Keep track of referreable symbols to rewire calls/globals
     let mut eliminated_funcs = Vec::new();
     let mut eliminated_globals = Vec::new();
+    let mut eliminated_types = Vec::new();
 
-    // First iterate throgh imports 
+    // First, iterate through types
     let mut index = 0;
     let mut old_index = 0;
+
+    {
+        loop {
+            if type_section(&mut module).expect("Functons section to exist").types_mut().len() == index { break; }
+
+            if stay.contains(&Symbol::Type(old_index)) {
+                index += 1;
+            } else {
+                type_section(&mut module).expect("Code section to exist").types_mut().remove(index);
+                eliminated_types.push(old_index);
+                println!("Eliminated type({})", old_index);
+            }
+            old_index += 1;
+        }
+    }
+
+    // Second, iterate through imports
     let mut top_funcs = 0;
     let mut top_globals = 0;
 
     {
+        index = 0;
+        old_index = 0;
         let imports = import_section(&mut module).expect("Import section to exist");
         loop {
             let mut remove = false;
@@ -324,7 +377,7 @@ fn main() {
         }
     }
 
-    // Senond, iterate through globals
+    // Third, iterate through globals
     {
         let globals = global_section(&mut module).expect("Global section to exist");
 
@@ -344,7 +397,7 @@ fn main() {
         }
     }
 
-    // Third, delete orphaned functions
+    // Forth, delete orphaned functions
     index = 0;
     old_index = 0;
 
@@ -362,7 +415,7 @@ fn main() {
         old_index += 1;
     }
 
-    // Forth, eliminate unused exports
+    // Fivth, eliminate unused exports
     {
         let exports = export_section(&mut module).expect("Export section to exist");
 
@@ -381,14 +434,29 @@ fn main() {
         }
     }
 
-    if eliminated_globals.len() > 0 || eliminated_funcs.len() > 0 {
-        // Finaly, rewire all calls and globals references to the new indices
+    if eliminated_globals.len() > 0 || eliminated_funcs.len() > 0 || eliminated_types.len() > 0 {
+        // Finaly, rewire all calls, globals references and types to the new indices
         //   (only if there is anything to do)
         eliminated_globals.sort();
         eliminated_funcs.sort();
+        eliminated_types.sort();
 
         for section in module.sections_mut() {
             match section {
+                &mut elements::Section::Function(ref mut function_section) => {
+                    for ref mut func_signature in function_section.entries_mut() {
+                        let totalle = eliminated_types.iter().take_while(|i| (**i as u32) < func_signature.type_ref()).count();
+                        *func_signature.type_ref_mut() -= totalle as u32;                        
+                    }                    
+                },
+                &mut elements::Section::Import(ref mut import_section) => {
+                    for ref mut import_entry in import_section.entries_mut() {
+                        if let &mut elements::External::Function(ref mut type_ref) = import_entry.external_mut() { 
+                            let totalle = eliminated_types.iter().take_while(|i| (**i as u32) < *type_ref).count();
+                            *type_ref -= totalle as u32;                
+                        }        
+                    }                     
+                },
                 &mut elements::Section::Code(ref mut code_section) => {
                     for ref mut func_body in code_section.bodies_mut() {
                         update_call_index(func_body.code_mut(), &eliminated_funcs);
