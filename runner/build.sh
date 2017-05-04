@@ -8,7 +8,7 @@ file=$1
 if [ ${file: -3} == ".rs" ]
 then
     # Rust is compiled with rustc
-    rustc $file -o out/contract.js -O --target wasm32-unknown-emscripten
+    rustc $file -o out/contract.js -O --target wasm32-unknown-emscripten -C linker=./linker_emcc.sh
 
     # Gas injector
     cargo run --manifest-path=./../gas/Cargo.toml --release -- ./out/contract.wasm ./out/contract.wasm
