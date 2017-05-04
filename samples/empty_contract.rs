@@ -4,7 +4,7 @@
 // as it is experimental preamble
 #![allow(dead_code)]
 
-#[link_args = "-s WASM=1 -s NO_EXIT_RUNTIME=1 -s NO_FILESYSTEM=1 -s"]
+#[link_args = "-s WASM=1 -s NO_EXIT_RUNTIME=1 -s NO_FILESYSTEM=1"]
 extern {}
 
 #[no_mangle]
