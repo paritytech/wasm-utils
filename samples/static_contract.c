@@ -5,7 +5,7 @@ int call(void* descriptor) {
     data += *input_length;
 }
 
-/* produces the following code (with gas counter)
+/* produces the following code (with gas counter and call optimization)
 (module
   (type (;0;) (func (param i32) (result i32)))
   (type (;1;) (func))
