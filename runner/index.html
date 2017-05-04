@@ -255,7 +255,7 @@
             imports.env.memory = runtime.memory;
           }
           if (!imports.env.table) {
-            imports.env.table = new WebAssembly.Table({ initial: 6, maximum: 6, element: 'anyfunc' });
+            imports.env.table = new WebAssembly.Table({ initial: 0, maximum: 0, element: 'anyfunc' });
           }
           return new WebAssembly.Instance(module, imports);
         });
