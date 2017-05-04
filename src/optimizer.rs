@@ -5,7 +5,7 @@ use symbols::{Symbol, expand_symbols, push_code_symbols, resolve_function};
 
 pub fn optimize(
     module: &mut elements::Module, // Module to optimize
-    used_exports: Vec<&str>,     // List of only exports that will be usable after optimization
+    used_exports: Vec<&str>,       // List of only exports that will be usable after optimization
 ) {
     // WebAssembly exports optimizer
     // Motivation: emscripten compiler backend compiles in many unused exports
