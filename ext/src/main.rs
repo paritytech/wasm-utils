@@ -35,7 +35,7 @@ fn main() {
     // Loading module
     let module = parity_wasm::deserialize_file(&args[1]).unwrap();
 
-    let replaced_funcs = vec!["_free", "_malloc"];
+    let replaced_funcs = vec!["_free", "_malloc", "_storage_read", "_storage_write", "_storage_size"];
 
     // Save import functions number for later
     let import_funcs_total = module
