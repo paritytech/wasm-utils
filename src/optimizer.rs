@@ -41,7 +41,7 @@ pub fn optimize(
     expand_symbols(module, &mut stay);
 
     for symbol in stay.iter() {
-        println!("symbol to stay: {:?}", symbol);
+        trace!("symbol to stay: {:?}", symbol);
     }
 
     // Keep track of referreable symbols to rewire calls/globals
@@ -62,7 +62,7 @@ pub fn optimize(
             } else {
                 type_section(module).expect("Code section to exist").types_mut().remove(index);
                 eliminated_types.push(old_index);
-                println!("Eliminated type({})", old_index);
+                trace!("Eliminated type({})", old_index);
             }
             old_index += 1;
         }
@@ -85,7 +85,7 @@ pub fn optimize(
                     } else {
                         remove = true;
                         eliminated_funcs.push(top_funcs);
-                        println!("Eliminated import({}) func({}, {})", old_index, top_funcs, imports.entries()[index].field());
+                        trace!("Eliminated import({}) func({}, {})", old_index, top_funcs, imports.entries()[index].field());
                     }
                     top_funcs += 1;
                 },
@@ -95,7 +95,7 @@ pub fn optimize(
                     } else {
                         remove = true;
                         eliminated_globals.push(top_globals);
-                        println!("Eliminated import({}) global({}, {})", old_index, top_globals, imports.entries()[index].field());                        
+                        trace!("Eliminated import({}) global({}, {})", old_index, top_globals, imports.entries()[index].field());                        
                     }
                     top_globals += 1;
                 },
@@ -127,7 +127,7 @@ pub fn optimize(
             } else {
                 globals.entries_mut().remove(index);
                 eliminated_globals.push(top_globals + old_index);
-                println!("Eliminated global({})", top_globals + old_index);
+                trace!("Eliminated global({})", top_globals + old_index);
             }
             old_index += 1;
         }
@@ -146,7 +146,7 @@ pub fn optimize(
             code_section(module).expect("Code section to exist").bodies_mut().remove(index);
 
             eliminated_funcs.push(top_funcs + old_index);
-            println!("Eliminated function({})", top_funcs + old_index);
+            trace!("Eliminated function({})", top_funcs + old_index);
         }
         old_index += 1;
     }
@@ -163,7 +163,7 @@ pub fn optimize(
             if stay.contains(&Symbol::Export(old_index)) {
                 index += 1;
             } else {
-                println!("Eliminated export({}, {})", old_index, exports.entries_mut()[index].field());
+                trace!("Eliminated export({}, {})", old_index, exports.entries_mut()[index].field());
                 exports.entries_mut().remove(index);
             }
             old_index += 1;
@@ -251,7 +251,7 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, eliminated_indices: &[
             },
             &mut Call(ref mut call_index) => {
                 let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
-                println!("rewired call {} -> call {}", *call_index, *call_index - totalle as u32);
+                trace!("rewired call {} -> call {}", *call_index, *call_index - totalle as u32);
                 *call_index -= totalle as u32;
             },
             _ => { },
@@ -269,7 +269,7 @@ pub fn update_global_index(opcodes: &mut Vec<elements::Opcode>, eliminated_indic
             },
             &mut GetGlobal(ref mut index) | &mut SetGlobal(ref mut index) => {
                 let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *index).count();
-                println!("rewired global {} -> global {}", *index, *index - totalle as u32);
+                trace!("rewired global {} -> global {}", *index, *index - totalle as u32);
                 *index -= totalle as u32;
             },
             _ => { },

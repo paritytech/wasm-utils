@@ -75,7 +75,7 @@ pub fn expand_symbols(module: &elements::Module, set: &mut HashSet<Symbol>) {
             Some(s) => s,
             _ => { break; }
         };
-        println!("Processing symbol {:?}", next);
+        trace!("Processing symbol {:?}", next);
 
         match next {
             Export(idx) => {
