@@ -62,12 +62,14 @@ pub fn optimize(
 
     {
         loop {
-            if type_section(module).expect("Functons section to exist").types_mut().len() == index { break; }
+            if type_section(module).map(|section| section.types_mut().len()).unwrap_or(0) == index { break; }
 
             if stay.contains(&Symbol::Type(old_index)) {
                 index += 1;
             } else {
-                type_section(module).expect("Code section to exist").types_mut().remove(index);
+                type_section(module)
+                    .expect("If type section does not exists, the loop will break at the beginning of first iteration")
+                    .types_mut().remove(index);
                 eliminated_types.push(old_index);
                 trace!("Eliminated type({})", old_index);
             }
@@ -78,11 +80,10 @@ pub fn optimize(
     // Second, iterate through imports
     let mut top_funcs = 0;
     let mut top_globals = 0;
+    index = 0;
+    old_index = 0;
 
-    {
-        index = 0;
-        old_index = 0;
-        let imports = import_section(module).expect("Import section to exist");
+    if let Some(imports) = import_section(module) {
         loop {
             let mut remove = false;
             match imports.entries()[index].external() {
@@ -121,9 +122,7 @@ pub fn optimize(
     }
 
     // Third, iterate through globals
-    {
-        let globals = global_section(module).expect("Global section to exist");
-
+    if let Some(globals) = global_section(module) {
         index = 0;
         old_index = 0;
 
@@ -141,26 +140,28 @@ pub fn optimize(
     }
 
     // Forth, delete orphaned functions
-    index = 0;
-    old_index = 0;
+    if functions_section(module).is_some() && code_section(module).is_some() {
+        index = 0;
+        old_index = 0;
 
-    loop {
-        if functions_section(module).expect("Functons section to exist").entries_mut().len() == index { break; }
-        if stay.contains(&Symbol::Function(old_index)) {
-            index += 1;
-        } else {
-            functions_section(module).expect("Functons section to exist").entries_mut().remove(index);
-            code_section(module).expect("Code section to exist").bodies_mut().remove(index);
+        loop {
+            if functions_section(module).expect("Functons section to exist").entries_mut().len() == index { break; }
+            if stay.contains(&Symbol::Function(old_index)) {
+                index += 1;
+            } else {
+                functions_section(module).expect("Functons section to exist").entries_mut().remove(index);
+                code_section(module).expect("Code section to exist").bodies_mut().remove(index);
 
-            eliminated_funcs.push(top_funcs + old_index);
-            trace!("Eliminated function({})", top_funcs + old_index);
+                eliminated_funcs.push(top_funcs + old_index);
+                trace!("Eliminated function({})", top_funcs + old_index);
+            }
+            old_index += 1;
         }
-        old_index += 1;
     }
 
-    // Fivth, eliminate unused exports
+    // Fifth, eliminate unused exports
     {
-        let exports = export_section(module).expect("Export section to exist");
+        let exports = export_section(module).ok_or(Error::NoExportSection)?;
 
         index = 0;
         old_index = 0;
