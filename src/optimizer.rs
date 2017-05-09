@@ -380,4 +380,33 @@ mod tests {
 
         assert!(result.is_err());
     }
+
+    #[test]
+    fn minimal() {
+        let mut module = builder::module()
+            .function()
+                .signature().param().i32().build()
+                .body().build()
+                .build()
+            .function()
+                .signature().param().i32().param().i32().build()
+                .body().build()
+                .build()
+            .export()
+                .field("_call")
+                .internal().func(0).build()
+            .export()
+                .field("_random")
+                .internal().func(1).build()
+            .build();
+        assert_eq!(module.export_section().expect("export section to be generated").entries().len(), 2);
+
+        optimize(&mut module, vec!["_call"]).expect("optimizer to succeed");
+
+        assert_eq!(
+            1,
+            module.export_section().expect("export section to be generated").entries().len(),
+            "There should only 1 (one) export entry in the optimized module"
+        ); 
+    }
 }

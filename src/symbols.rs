@@ -12,15 +12,17 @@ pub enum Symbol {
 
 pub fn resolve_function(module: &elements::Module, index: u32) -> Symbol {
     let mut functions = 0;
-    for (item_index, item) in module.import_section().expect("Functions section to exist").entries().iter().enumerate() {
-        match item.external() {
-            &elements::External::Function(_) => {
-                if functions == index {
-                    return Symbol::Import(item_index as usize);
-                }
-                functions += 1;
-            },
-            _ => {}
+    if let Some(import_section) = module.import_section() {
+        for (item_index, item) in import_section.entries().iter().enumerate() {
+            match item.external() {
+                &elements::External::Function(_) => {
+                    if functions == index {
+                        return Symbol::Import(item_index as usize);
+                    }
+                    functions += 1;
+                },
+                _ => {}
+            }
         }
     }
 
@@ -29,15 +31,17 @@ pub fn resolve_function(module: &elements::Module, index: u32) -> Symbol {
 
 pub fn resolve_global(module: &elements::Module, index: u32) -> Symbol {
     let mut globals = 0;
-    for (item_index, item) in module.import_section().expect("Functions section to exist").entries().iter().enumerate() {
-        match item.external() {
-            &elements::External::Global(_) => {
-                if globals == index {
-                    return Symbol::Import(item_index as usize);
-                }
-                globals += 1;
-            },
-            _ => {}
+    if let Some(import_section) = module.import_section() {
+        for (item_index, item) in import_section.entries().iter().enumerate() {
+            match item.external() {
+                &elements::External::Global(_) => {
+                    if globals == index {
+                        return Symbol::Import(item_index as usize);
+                    }
+                    globals += 1;
+                },
+                _ => {}
+            }
         }
     }
 
