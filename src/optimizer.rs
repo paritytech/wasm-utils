@@ -187,13 +187,13 @@ pub fn optimize(
 
         for section in module.sections_mut() {
             match section {
-                &mut elements::Section::Function(ref mut function_section) => {
+                &mut elements::Section::Function(ref mut function_section) if eliminated_types.len() > 0 => {
                     for ref mut func_signature in function_section.entries_mut() {
                         let totalle = eliminated_types.iter().take_while(|i| (**i as u32) < func_signature.type_ref()).count();
                         *func_signature.type_ref_mut() -= totalle as u32;                        
                     }                    
                 },
-                &mut elements::Section::Import(ref mut import_section) => {
+                &mut elements::Section::Import(ref mut import_section) if eliminated_types.len() > 0 => {
                     for ref mut import_entry in import_section.entries_mut() {
                         if let &mut elements::External::Function(ref mut type_ref) = import_entry.external_mut() { 
                             let totalle = eliminated_types.iter().take_while(|i| (**i as u32) < *type_ref).count();
@@ -201,10 +201,14 @@ pub fn optimize(
                         }        
                     }                     
                 },
-                &mut elements::Section::Code(ref mut code_section) => {
+                &mut elements::Section::Code(ref mut code_section) if eliminated_globals.len() > 0 || eliminated_funcs.len() > 0 => {
                     for ref mut func_body in code_section.bodies_mut() {
-                        update_call_index(func_body.code_mut(), &eliminated_funcs);
-                        update_global_index(func_body.code_mut().elements_mut(), &eliminated_globals)
+                        if eliminated_funcs.len() > 0 {
+                            update_call_index(func_body.code_mut(), &eliminated_funcs);
+                        }
+                        if eliminated_globals.len() > 0 {
+                            update_global_index(func_body.code_mut().elements_mut(), &eliminated_globals)
+                        }
                     }
                 },
                 &mut elements::Section::Export(ref mut export_section) => {
