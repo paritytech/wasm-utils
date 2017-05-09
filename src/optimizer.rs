@@ -415,6 +415,12 @@ mod tests {
             1,
             module.export_section().expect("export section to be generated").entries().len(),
             "There should only 1 (one) export entry in the optimized module"
+        );
+
+        assert_eq!(
+            1,
+            module.functions_section().expect("functions section to be generated").entries().len(),
+            "There should 2 (two) functions in the optimized module"
         ); 
     }
 
@@ -495,4 +501,52 @@ mod tests {
         );         
     }
 
+    /// @spec 3
+    /// Imagine the unoptimized module has two own functions, `_call` and `_random`
+    /// and exports both of them in the export section. Function `_call` also calls `_random`
+    /// in its function body. The optimization should kick `_random` function from the export section
+    /// but preserve it's body.
+    #[test]
+    fn call_ref() {
+        let mut module = builder::module()
+            .function()
+                .signature().param().i32().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::Call(1),
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+                .build()
+            .function()
+                .signature()
+                    .param().i32()
+                    .param().i32()
+                    .build()
+                .build()
+            .export()
+                .field("_call")
+                .internal().func(0).build()
+            .export()
+                .field("_random")
+                .internal().func(1).build()
+            .build();
+        assert_eq!(module.export_section().expect("export section to be generated").entries().len(), 2);
+
+        optimize(&mut module, vec!["_call"]).expect("optimizer to succeed");
+
+        assert_eq!(
+            1,
+            module.export_section().expect("export section to be generated").entries().len(),
+            "There should only 1 (one) export entry in the optimized module"
+        );
+
+        assert_eq!(
+            2,
+            module.functions_section().expect("functions section to be generated").entries().len(),
+            "There should 2 (two) functions in the optimized module"
+        );
+    }
 }
