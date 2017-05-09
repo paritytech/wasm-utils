@@ -18,7 +18,7 @@ fn main() {
     // Invoke optimizer
     //   Contract is supposed to have only these functions as public api
     //   All other symbols not usable by this list is optimized away
-    wasm_utils::optimize(&mut module, vec!["_call"]);    
+    wasm_utils::optimize(&mut module, vec!["_call"]).expect("Optimizer to finish without errors");
 
     parity_wasm::serialize_to_file(&args[2], module).unwrap();    
 }

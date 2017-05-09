@@ -3,17 +3,24 @@ use parity_wasm::elements;
 
 use symbols::{Symbol, expand_symbols, push_code_symbols, resolve_function};
 
+#[derive(Debug)]
+pub enum Error {
+    /// Since optimizer starts with export entries, export
+    ///   section is supposed to exist.
+    NoExportSection,
+}
+
 pub fn optimize(
     module: &mut elements::Module, // Module to optimize
     used_exports: Vec<&str>,       // List of only exports that will be usable after optimization
-) {
+) -> Result<(), Error> {
     // WebAssembly exports optimizer
     // Motivation: emscripten compiler backend compiles in many unused exports
     //   which in turn compile in unused imports and leaves unused functions
 
     // Algo starts from the top, listing all items that should stay
     let mut stay = HashSet::new();
-    for (index, entry) in module.export_section().expect("Export section to exist").entries().iter().enumerate() {
+    for (index, entry) in module.export_section().ok_or(Error::NoExportSection)?.entries().iter().enumerate() {
         if used_exports.iter().find(|e| **e == entry.field()).is_some() {
             stay.insert(Symbol::Export(index));
         } 
@@ -239,6 +246,7 @@ pub fn optimize(
         }
     }
 
+    Ok(())
 }
 
 
@@ -355,11 +363,16 @@ mod tests {
     use parity_wasm::builder;
     use super::*;
 
+    /// @spec
+    /// Optimizer presumes that export section exists and contains
+    /// all symbols passed as a second parameter. Since empty module
+    /// obviously contains no export section, optimizer should return
+    /// error on it. 
     #[test]
     fn empty() {
         let mut module = builder::module().build();
-        optimize(&mut module, vec!["_call"]);
+        let result = optimize(&mut module, vec!["_call"]);
 
-        assert!(module.type_section().is_none());
+        assert!(result.is_err());
     }
 }
