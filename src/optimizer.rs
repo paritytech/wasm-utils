@@ -348,3 +348,18 @@ pub fn type_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elem
     }
     None
 }
+
+#[cfg(test)]
+mod tests {
+
+    use parity_wasm::builder;
+    use super::*;
+
+    #[test]
+    fn empty() {
+        let mut module = builder::module().build();
+        optimize(&mut module, vec!["_call"]);
+
+        assert!(module.type_section().is_none());
+    }
+}
