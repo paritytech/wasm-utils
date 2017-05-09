@@ -452,4 +452,47 @@ mod tests {
             "There should 1 (one) global entry in the optimized module, since _call function uses it"
         );         
     }
+
+    /// @spec 2
+    /// Imagine there is one exported function in unoptimized module, `_call`, that we specify as the one
+    /// to stay during the optimization. The code of this function uses one global during the execution,
+    /// but we have a bunch of other unused globals in the code. Last globals should not survive the optimization,
+    /// while the former should. 
+    #[test]
+    fn globals_2() {
+        let mut module = builder::module()
+            .global()
+                .value_type().i32()
+                .build()
+            .global()
+                .value_type().i64()
+                .build()
+            .global()
+                .value_type().f32()
+                .build()                                
+            .function()
+                .signature().param().i32().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::GetGlobal(1),
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+                .build()
+            .export()
+                .field("_call")
+                .internal().func(0).build()
+            .build();
+
+        optimize(&mut module, vec!["_call"]).expect("optimizer to succeed");
+
+        assert_eq!(
+            1,
+            module.global_section().expect("global section to be generated").entries().len(),
+            "There should 1 (one) global entry in the optimized module, since _call function uses only one"
+        );         
+    }
+
 }
