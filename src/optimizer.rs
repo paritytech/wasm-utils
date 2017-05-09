@@ -365,10 +365,10 @@ pub fn type_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elem
 #[cfg(test)]
 mod tests {
 
-    use parity_wasm::builder;
+    use parity_wasm::{builder, elements};
     use super::*;
 
-    /// @spec
+    /// @spec 0
     /// Optimizer presumes that export section exists and contains
     /// all symbols passed as a second parameter. Since empty module
     /// obviously contains no export section, optimizer should return
@@ -381,6 +381,11 @@ mod tests {
         assert!(result.is_err());
     }
 
+    /// @spec 1
+    /// Imagine the unoptimized module has two own functions, `_call` and `_random`
+    /// and exports both of them in the export section. During optimization, the `_random`
+    /// function should vanish completely, given we pass `_call` as the only function to stay
+    /// in the module.
     #[test]
     fn minimal() {
         let mut module = builder::module()
@@ -389,7 +394,10 @@ mod tests {
                 .body().build()
                 .build()
             .function()
-                .signature().param().i32().param().i32().build()
+                .signature()
+                    .param().i32()
+                    .param().i32()
+                    .build()
                 .body().build()
                 .build()
             .export()
@@ -408,5 +416,40 @@ mod tests {
             module.export_section().expect("export section to be generated").entries().len(),
             "There should only 1 (one) export entry in the optimized module"
         ); 
+    }
+
+    /// @spec 2
+    /// Imagine there is one exported function in unoptimized module, `_call`, that we specify as the one
+    /// to stay during the optimization. The code of this function uses global during the execution.
+    /// This sayed global should survive the optimization.
+    #[test]
+    fn globals() {
+        let mut module = builder::module()
+            .global()
+                .value_type().i32()
+                .build()
+            .function()
+                .signature().param().i32().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::GetGlobal(0),
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+                .build()
+            .export()
+                .field("_call")
+                .internal().func(0).build()
+            .build();
+
+        optimize(&mut module, vec!["_call"]).expect("optimizer to succeed");
+
+        assert_eq!(
+            1,
+            module.global_section().expect("global section to be generated").entries().len(),
+            "There should 1 (one) global entry in the optimized module, since _call function uses it"
+        );         
     }
 }
