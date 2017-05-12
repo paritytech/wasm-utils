@@ -2,7 +2,7 @@ use parity_wasm::interpreter::ModuleInstanceInterface;
 use parity_wasm::interpreter::ItemIndex;
 use std::sync::Arc;
 
-const DEFAULT_MEMORY_INDEX: ItemIndex = ItemIndex::Internal(0);
+use DEFAULT_MEMORY_INDEX;
 
 pub struct Storage {
     data: Vec<u8>,

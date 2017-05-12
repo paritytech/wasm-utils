@@ -9,9 +9,13 @@ extern crate wasm_utils;
 
 mod alloc;
 mod storage;
+mod call_args;
 
 use std::env;
-use parity_wasm::interpreter::ModuleInstanceInterface;
+use parity_wasm::interpreter::{self, ModuleInstanceInterface, RuntimeValue};
+
+pub const DEFAULT_MEMORY_INDEX: interpreter::ItemIndex = interpreter::ItemIndex::Internal(0);
+pub type WasmMemoryPtr = i32;
 
 fn main() {
     // First, load wasm contract as a module
@@ -34,8 +38,16 @@ fn main() {
     // Create allocator
     let mut allocator = alloc::Arena::new(5*1024*1024);
 
+    // Initialize call descriptor
+    let descriptor = call_args::init(
+        &*program.module("env").expect("env module to exist"), 
+        &mut allocator, 
+        &[], 
+        &[0u8; 128],
+    ).expect("call descriptor initialization to succeed");
+
     // Invoke _call method of the module
-    module_instance.execute_export("_call", vec![]).expect("_call to execute successfully");
+    module_instance.execute_export("_call", vec![descriptor.into()]).expect("_call to execute successfully");
 
     // ???
 }

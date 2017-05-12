@@ -4,6 +4,7 @@ pub struct Arena {
     dynamic_top: u32,
 }
 
+#[derive(Debug)]
 pub struct Error;
 
 impl Arena {
@@ -13,7 +14,7 @@ impl Arena {
         }
     }
 
-    fn alloc(&mut self, size: u32) -> Result<u32, Error> {
+    pub fn alloc(&mut self, size: u32) -> Result<u32, Error> {
         let previous_top = self.dynamic_top;
         self.dynamic_top += size;
         Ok(previous_top)
