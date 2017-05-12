@@ -2,7 +2,7 @@ use parity_wasm::interpreter::ModuleInstanceInterface;
 use parity_wasm::interpreter::ItemIndex;
 use std::sync::Arc;
 
-const DEFAULT_MEMORY_INDEX: ItemIndex = ItemIndex(0);
+const DEFAULT_MEMORY_INDEX: ItemIndex = ItemIndex::Internal(0);
 
 pub struct Storage {
     data: Vec<u8>,
@@ -21,7 +21,7 @@ impl Storage {
 
         match memory.set(dst, &self.data[offset as usize..offset as usize + len as usize]) {
             Err(_) => { return -1; }
-            Ok(_) => return len;
+            Ok(_) => { return len as i32; }
         }
     }
 
@@ -33,16 +33,18 @@ impl Storage {
 
         let slice = match memory.get(src, len as usize) {
             Err(_) => { return -1; }
-            Ok(slice) => return slice;
+            Ok(slice) => slice,
         };
 
-        if self.data.len() < offset as usize + slice.len {
-            self.data.reserve(offset as usize + slice.len);
+        if self.data.len() < offset as usize + slice.len() {
+            self.data.reserve(offset as usize + slice.len());
             unsafe {
-                self.data.set_len(offset as usize + slice.len);
+                self.data.set_len(offset as usize + slice.len());
             }
         }
-        self.data[offset as usize..offset as usize + slice.len].copy_from_slice(&slice[..]);
+        self.data[offset as usize..offset as usize + slice.len()].copy_from_slice(&slice[..]);
+
+        slice.len() as i32
     }
 
     pub fn size(&self) -> u32 { self.data.len() as u32 }

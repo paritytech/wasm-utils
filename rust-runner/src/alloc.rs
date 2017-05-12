@@ -8,8 +8,7 @@ pub struct Error;
 
 impl Arena {
     pub fn new(stack_top: u32) -> Self {
-        MemoryArenaAllocator {
-            module: module,
+        Arena {
             dynamic_top: stack_top,
         }
     }
