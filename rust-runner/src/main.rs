@@ -15,6 +15,7 @@ mod gas_counter;
 
 use std::env;
 use parity_wasm::interpreter::{self, ModuleInstanceInterface};
+use parity_wasm::elements;
 
 pub const DEFAULT_MEMORY_INDEX: interpreter::ItemIndex = interpreter::ItemIndex::Internal(0);
 pub type WasmMemoryPtr = i32;
@@ -31,14 +32,36 @@ fn main() {
 
     let module = parity_wasm::deserialize_file(&args[1]).expect("Module deserialization to succeed");
 
-    // Second, create program instance
-    let program = parity_wasm::interpreter::ProgramInstance::new().expect("Program instance to be created");
+    // Second, create runtime and program instance
+    let runtime = runtime::Runtime::with_params(
+        5*1024*1024,   // default stack space 
+        65536,         // runner arbitrary gas limit
+    );
+
+    let mut user_functions = interpreter::UserFunctions::new();
+    user_functions.insert("gas".to_owned(), 
+        interpreter::UserFunction {
+            params: vec![elements::ValueType::I32],
+            result: None,
+            closure: Box::new(runtime.gas_counter()),
+        }
+    );
+    user_functions.insert("_malloc".to_owned(), 
+        interpreter::UserFunction {
+            params: vec![elements::ValueType::I32],
+            result: Some(elements::ValueType::I32),
+            closure: Box::new(runtime.allocator()),
+        }
+    );
+    runtime::user_trap(&mut user_functions, "_emscripten_memcpy_big");
+
+    let program = parity_wasm::interpreter::ProgramInstance::with_functions(user_functions)
+        .expect("Program instance to be created");
 
     // Add module to the programm
     let module_instance = program.add_module("contract", module).expect("Module to be added successfully");
 
     // Create allocator
-    let runtime = runtime::Runtime::default();
     runtime.allocator().alloc(5*1024*1024).expect("to allocate 5mb successfully"); // reserve stack space
 
     // Initialize call descriptor
