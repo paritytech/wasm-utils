@@ -1,14 +1,15 @@
 use std::sync::Arc;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 
 use parity_wasm::{interpreter, elements};
-use {alloc, gas_counter};
+use {alloc, gas_counter, storage};
 
 #[derive(Default)]
 pub struct RuntimeEnv {
     pub gas_counter: Cell<u64>,
     pub gas_limit: u64,
     pub dynamic_top: Cell<u32>,
+    pub storage: RefCell<Vec<u8>>,
 }
 
 #[derive(Default, Clone)]
@@ -20,6 +21,7 @@ impl Runtime {
             gas_counter: Cell::new(0),
             gas_limit: gas_limit,
             dynamic_top: Cell::new(stack_space),
+            storage: Default::default(),
         }))
     }
 
@@ -35,6 +37,10 @@ impl Runtime {
         }
     }
 
+    pub fn storage(&self) -> storage::Storage {
+        storage::Storage::new(self.clone())
+    }
+
     pub fn env(&self) -> &RuntimeEnv {
         &*self.0
     }
@@ -44,7 +50,7 @@ pub fn user_trap(funcs: &mut interpreter::UserFunctions, func_name: &str) {
     let func_str = func_name.to_owned();
     funcs.insert(func_str.clone(), 
         interpreter::UserFunction {
-            params: vec![elements::ValueType::I32],
+            params: vec![],
             result: Some(elements::ValueType::I32),
             closure: Box::new(UserTrap(func_str)),
         }
@@ -54,7 +60,32 @@ pub fn user_trap(funcs: &mut interpreter::UserFunctions, func_name: &str) {
 struct UserTrap(String);
 
 impl interpreter::UserFunctionInterface for UserTrap {
-    fn call(&mut self, context: interpreter::CallerContext) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> {
+    fn call(&mut self, 
+        _module: &interpreter::ModuleInstance, 
+        _context: interpreter::CallerContext
+    ) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> {
         Err(interpreter::Error::Trap(self.0.clone()))
+    }
+}
+
+struct UserNoop;
+
+pub fn user_noop(funcs: &mut interpreter::UserFunctions, func_name: &str) {
+    let func_str = func_name.to_owned();
+    funcs.insert(func_str.clone(), 
+        interpreter::UserFunction {
+            params: vec![],
+            result: None,
+            closure: Box::new(UserNoop),
+        }
+    );
+}
+
+impl interpreter::UserFunctionInterface for UserNoop {
+    fn call(&mut self, 
+        _module: &interpreter::ModuleInstance, 
+        _context: interpreter::CallerContext
+    ) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> {
+        Ok(None)
     }
 }

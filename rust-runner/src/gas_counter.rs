@@ -1,4 +1,4 @@
-use parity_wasm::interpreter;
+use parity_wasm::interpreter::{self, ModuleInstance};
 use runtime::Runtime;
 
 pub struct GasCounter {
@@ -6,7 +6,7 @@ pub struct GasCounter {
 }
 
 impl interpreter::UserFunctionInterface for GasCounter {
-    fn call(&mut self, context: interpreter::CallerContext) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> {
+    fn call(&mut self, _module: &ModuleInstance, context: interpreter::CallerContext) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> {
         let prev = self.runtime.env().gas_counter.get();
         let update = context.value_stack.pop_as::<i32>()? as u64;
         if prev + update > self.runtime.env().gas_limit {

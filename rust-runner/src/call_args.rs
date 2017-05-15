@@ -60,6 +60,7 @@ pub fn init(
         write_u32(&mut input_length, input.len() as u32);
         memory.set(input_ptr, input)?;
         println!("input_ptr: {}", input_ptr);
+        println!("input: {:?}", memory.get(input_ptr, input.len()));
     }
 
     memory.set(descriptor_ptr, &context_ptr_slc)?;

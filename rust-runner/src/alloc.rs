@@ -1,4 +1,4 @@
-use parity_wasm::interpreter;
+use parity_wasm::interpreter::{self, ModuleInstance};
 use runtime::Runtime;
 
 pub struct Arena {
@@ -18,7 +18,7 @@ impl Arena {
 }
 
 impl interpreter::UserFunctionInterface for Arena {
-    fn call(&mut self, context: interpreter::CallerContext) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> {
+    fn call(&mut self, _module: &ModuleInstance, context: interpreter::CallerContext) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> {
         let amount = context.value_stack.pop_as::<i32>()?;
         self.alloc(amount as u32)
             .map(|val| Some((val as i32).into()))
