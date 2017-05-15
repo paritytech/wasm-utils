@@ -1,5 +1,5 @@
 use parity_wasm::interpreter::{self, ModuleInstanceInterface};
-use alloc;
+use {alloc, runtime};
 
 use {DEFAULT_MEMORY_INDEX, WasmMemoryPtr};
 
@@ -30,7 +30,7 @@ impl From<interpreter::Error> for Error {
 
 pub fn init(
     env: &interpreter::ModuleInstanceInterface, 
-    allocator: &mut alloc::Arena,
+    runtime: &runtime::Runtime,
     context: &[u8], 
     input: &[u8],
 ) -> Result<WasmMemoryPtr, Error> {
@@ -38,6 +38,8 @@ pub fn init(
     let mut context_length = [0u8; 4];
     let mut input_ptr_slc = [0u8; 4];
     let mut input_length = [0u8; 4];
+
+    let allocator = runtime.allocator();
 
     let descriptor_ptr = allocator.alloc(16)?;
     let context_ptr = allocator.alloc(context.len() as u32)?;

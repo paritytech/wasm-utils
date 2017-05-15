@@ -1,22 +1,27 @@
-use parity_wasm::interpreter::ModuleInstanceInterface;
+use parity_wasm::interpreter;
+use runtime::Runtime;
 
 pub struct Arena {
-    dynamic_top: u32,
+    pub runtime: Runtime,
 }
 
 #[derive(Debug)]
 pub struct Error;
 
 impl Arena {
-    pub fn new(stack_top: u32) -> Self {
-        Arena {
-            dynamic_top: stack_top,
-        }
-    }
-
-    pub fn alloc(&mut self, size: u32) -> Result<u32, Error> {
-        let previous_top = self.dynamic_top;
-        self.dynamic_top += size;
+    pub fn alloc(&self, size: u32) -> Result<u32, Error> {
+        // todo: maybe use unsafe cell since it has nothing to do with threads
+        let previous_top = self.runtime.env().dynamic_top.get();
+        self.runtime.env().dynamic_top.set(previous_top + size);
         Ok(previous_top)
     }
+}
+
+impl interpreter::UserFunctionInterface for Arena {
+    fn call(&mut self, context: interpreter::CallerContext) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> {
+        let amount = context.value_stack.pop_as::<i32>()?;
+        self.alloc(amount as u32)
+            .map(|val| Some((val as i32).into()))
+            .map_err(|e| interpreter::Error::Trap(format!("Allocator failure: {}", "todo: format arg")))
+    }    
 }
