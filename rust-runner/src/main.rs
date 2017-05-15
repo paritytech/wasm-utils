@@ -61,9 +61,6 @@ fn main() {
     // Add module to the programm
     let module_instance = program.add_module("contract", module).expect("Module to be added successfully");
 
-    // Create allocator
-    runtime.allocator().alloc(5*1024*1024).expect("to allocate 5mb successfully"); // reserve stack space
-
     // Initialize call descriptor
     let descriptor = call_args::init(
         &*program.module("env").expect("env module to exist"), 
