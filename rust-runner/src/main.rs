@@ -53,28 +53,22 @@ fn main() {
             closure: Box::new(runtime.allocator()),
         }
     );
-    user_functions.insert("_storage_size".to_owned(), 
-        interpreter::UserFunction {
-            params: vec![elements::ValueType::I32],
-            result: Some(elements::ValueType::I32),
-            closure: Box::new(runtime.storage().sizer()),
-        }
-    );
     user_functions.insert("_storage_read".to_owned(), 
         interpreter::UserFunction {
-            params: vec![elements::ValueType::I32],
+            params: vec![elements::ValueType::I32, elements::ValueType::I32],
             result: Some(elements::ValueType::I32),
             closure: Box::new(runtime.storage().reader()),
         }
     );
     user_functions.insert("_storage_write".to_owned(), 
         interpreter::UserFunction {
-            params: vec![elements::ValueType::I32],
+            params: vec![elements::ValueType::I32, elements::ValueType::I32],
             result: Some(elements::ValueType::I32),
             closure: Box::new(runtime.storage().writer()),
         }
     );
     runtime::user_trap(&mut user_functions, "_emscripten_memcpy_big");
+    runtime::user_trap(&mut user_functions, "invoke_vii");
     runtime::user_noop(&mut user_functions, "_free");
 
     let program = parity_wasm::interpreter::ProgramInstance::with_functions(user_functions)
@@ -87,12 +81,13 @@ fn main() {
     let descriptor = call_args::init(
         &*program.module("env").expect("env module to exist"), 
         &runtime, 
-        &[], 
-        &[0u8; 128],
+        &[3u8; 128],
     ).expect("call descriptor initialization to succeed");
 
     // Invoke _call method of the module
-    module_instance.execute_export("_call", vec![descriptor.into()]).expect("_call to execute successfully");
+    let return_ptr = module_instance.execute_export("_call", vec![descriptor.into()])
+        .expect("_call to execute successfully")
+        .expect("_call function to return result ptr");
 
     // ???
 }

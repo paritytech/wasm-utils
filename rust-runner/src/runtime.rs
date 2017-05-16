@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 
 use parity_wasm::{interpreter, elements};
 use {alloc, gas_counter, storage};
@@ -9,7 +10,7 @@ pub struct RuntimeEnv {
     pub gas_counter: Cell<u64>,
     pub gas_limit: u64,
     pub dynamic_top: Cell<u32>,
-    pub storage: RefCell<Vec<u8>>,
+    pub storage: RefCell<HashMap<storage::StorageKey, storage::StorageValue>>,
 }
 
 #[derive(Default, Clone)]
@@ -21,7 +22,7 @@ impl Runtime {
             gas_counter: Cell::new(0),
             gas_limit: gas_limit,
             dynamic_top: Cell::new(stack_space),
-            storage: Default::default(),
+            storage: RefCell::new(HashMap::new()),
         }))
     }
 

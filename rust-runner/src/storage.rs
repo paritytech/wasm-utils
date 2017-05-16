@@ -4,6 +4,37 @@ use std::sync::Arc;
 use DEFAULT_MEMORY_INDEX;
 use runtime::Runtime;
 
+#[derive(Hash, PartialEq, Eq, Debug)]
+pub struct StorageKey([u8; 32]);
+
+#[derive(Debug, Default)]
+pub struct StorageValue([u8; 32]);
+
+impl StorageKey {
+    // todo: deal with memory views
+    fn from_mem(vec: Vec<u8>) -> Result<Self, Error> {
+        if vec.len() != 32 { return Err(Error); }
+        let mut result = StorageKey([0u8; 32]);
+        result.0.copy_from_slice(&vec[0..32]);
+        Ok(result)
+    }
+}
+
+impl StorageValue {
+    // todo: deal with memory views
+    // todo: deal with variable-length values when it comes
+    fn from_mem(vec: Vec<u8>) -> Result<Self, Error> {
+        if vec.len() != 32 { return Err(Error); }
+        let mut result = StorageValue([0u8; 32]);
+        result.0.copy_from_slice(&vec[0..32]);
+        Ok(result)
+    }
+
+    fn as_slice(&self) -> &[u8] {
+        &self.0
+    }
+}
+
 pub struct Storage {
     runtime: Runtime,
 }
@@ -18,56 +49,12 @@ impl Storage {
         }
     }
 
-    pub fn read(&self, module: &interpreter::ModuleInstance, offset: u32, len: u32, dst: u32) -> i32 {
-        let data = self.runtime.env().storage.borrow();
-        
-        let memory = match module.memory(DEFAULT_MEMORY_INDEX) {
-            Err(_) => { return -1; },
-            Ok(memory) => memory,
-        };
-
-        match memory.set(dst, &data[offset as usize..offset as usize + len as usize]) {
-            Err(_) => { return -1; }
-            Ok(_) => { return len as i32; }
-        }
-    }
-
-    pub fn write(&mut self, module: &interpreter::ModuleInstance, offset: u32, len: u32, src: u32) -> i32 {
-        let mut data = self.runtime.env().storage.borrow_mut();
-
-        let memory = match module.memory(DEFAULT_MEMORY_INDEX) {
-            Err(_) => { return -1; },
-            Ok(memory) => memory,
-        };
-
-        let slice = match memory.get(src, len as usize) {
-            Err(_) => { return -1; }
-            Ok(slice) => slice,
-        };
-
-        if data.len() < offset as usize + slice.len() {
-            data.reserve(offset as usize + slice.len());
-            unsafe {
-                data.set_len(offset as usize + slice.len());
-            }
-        }
-        data[offset as usize..offset as usize + slice.len()].copy_from_slice(&slice[..]);
-
-        slice.len() as i32
-    }
-
-    pub fn size(&self, _module: &interpreter::ModuleInstance) -> u32 { self.runtime.env().storage.borrow().len() as u32 }
-
     pub fn writer(self) -> StorageWrite {
         StorageWrite(self)
     }
 
     pub fn reader(self) -> StorageRead {
         StorageRead(self)
-    }
-
-    pub fn sizer(self) -> StorageSize {
-        StorageSize(self)
     }
 }
 
@@ -78,11 +65,24 @@ impl interpreter::UserFunctionInterface for StorageWrite {
         module: &interpreter::ModuleInstance, 
         context: interpreter::CallerContext,
     ) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> {
-        let offset = context.value_stack.pop_as::<i32>()?;
-        let len = context.value_stack.pop_as::<i32>()?;
-        let ptr = context.value_stack.pop_as::<i32>()?;
 
-        Ok(Some(self.0.write(module, offset as u32, len as u32, ptr as u32).into()))
+        // arguments passed are in backward order (since it is stack)
+        let val_ptr = context.value_stack.pop_as::<i32>()?;
+        let key_ptr = context.value_stack.pop_as::<i32>()?;
+      
+        let memory = match module.memory(DEFAULT_MEMORY_INDEX) {
+            Err(_) => { return Ok(Some((-1i32).into())) },
+            Ok(memory) => memory,
+        };
+
+        let key = StorageKey::from_mem(memory.get(key_ptr as u32, 32)?)
+            .map_err(|_| interpreter::Error::Trap("Memory access violation".to_owned()))?;
+        let val = StorageValue::from_mem(memory.get(val_ptr as u32, 32)?)
+            .map_err(|_| interpreter::Error::Trap("Memory access violation".to_owned()))?;
+
+        println!("set storage {:?} = {:?}", key, val);
+
+        Ok(Some(0.into()))
     }    
 }
 
@@ -93,22 +93,26 @@ impl interpreter::UserFunctionInterface for StorageRead {
         module: &interpreter::ModuleInstance, 
         context: interpreter::CallerContext,
     ) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> {
-        let offset = context.value_stack.pop_as::<i32>()?;
-        let len = context.value_stack.pop_as::<i32>()?;
-        let ptr = context.value_stack.pop_as::<i32>()?;
 
-        Ok(Some(self.0.read(module, offset as u32, len as u32, ptr as u32).into()))
-    }    
-}
+        // arguments passed are in backward order (since it is stack)
+        let val_ptr = context.value_stack.pop_as::<i32>()?;
+        let key_ptr = context.value_stack.pop_as::<i32>()?;
+      
+        let memory = match module.memory(DEFAULT_MEMORY_INDEX) {
+            Err(_) => { return Ok(Some((-1i32).into())) },
+            Ok(memory) => memory,
+        };
 
-pub struct StorageSize(Storage);
+        let key = StorageKey::from_mem(memory.get(key_ptr as u32, 32)?)
+            .map_err(|_| interpreter::Error::Trap("Memory access violation".to_owned()))?;
+        let empty = StorageValue([0u8; 32]);
+        let storage = self.0.runtime.env().storage.borrow(); 
+        let val = storage.get(&key).unwrap_or(&empty);
 
-impl interpreter::UserFunctionInterface for StorageSize {
-    fn call(&mut self, 
-        module: &interpreter::ModuleInstance, 
-        context: interpreter::CallerContext,
-    ) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> 
-    {        
-        Ok(Some((self.0.size(module) as i32).into()))
+        memory.set(val_ptr as u32, val.as_slice());
+
+        println!("read storage {:?} (evaluated as {:?})", key, val);
+
+        Ok(Some(0.into()))
     }    
 }

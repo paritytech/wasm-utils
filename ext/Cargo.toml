@@ -5,4 +5,4 @@ authors = ["NikVolf <nikvolf@gmail.com>"]
 
 [dependencies]
 parity-wasm = { git="https://github.com/nikvolf/parity-wasm" }
-wasm_utils = { path = "../" }
+wasm-utils = { path = "../" }

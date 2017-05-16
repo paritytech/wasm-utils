@@ -9,52 +9,36 @@ use std::slice;
 #[link_args = "-s NO_EXIT_RUNTIME=1 -s NO_FILESYSTEM=1 -s"]
 extern {}
 
-/// Wrapper over storage read/write/size externs
-/// Storage api is a file-like with random reads/writes
+/// Wrapper over storage read/write externs
+/// Storage api is a key-value storage where both key and value are 32 bytes in len
 mod storage {
     pub struct Error;
 
     #[link(name = "env")]
     extern {
-        fn storage_read(offset: u32, len: u32, dst: *mut u8) -> i32;
-        fn storage_write(offset: u32, len: u32, src: *const u8) -> i32;
-        fn storage_size() -> u32;
+        fn storage_read(key: *const u8, dst: *mut u8) -> i32;
+        fn storage_write(key: *const u8, src: *const u8) -> i32;
     }
 
-    /// Performs read from storage to the specified slice `dst`, using all slice length
+    /// Performs read from storage to the specified slice `dst`
     /// Can return `Error` if data is read from outside of the storage boundaries
-    pub fn read(offset: u32, dst: &mut [u8]) -> Result<u32, Error> {
+    pub fn read(key: &[u8; 32], dst: &mut [u8; 32]) -> Result<(), Error> {
         match unsafe {
-            storage_read(offset, dst.len() as u32, dst.as_mut_ptr())
+            let mut dst = dst;
+            storage_read(key.as_ptr(), dst.as_mut_ptr())
         } {
             x if x < 0 => Err(Error),
-            x => Ok(x as u32),
+            _ => Ok(()),
         }
     }
 
-    /// Performs write to the storage from the specified slice `src`
-    pub fn write(offset: u32, src: &[u8]) -> Result<u32, Error> {
+    /// Performs write to the storage from the specified `src`
+    pub fn write(key: &[u8; 32], src: &[u8; 32]) -> Result<(), Error> {
         match unsafe {
-            storage_write(offset, src.len() as u32, src.as_ptr())
+            storage_write(key.as_ptr(), src.as_ptr())
         } {
             x if x < 0 => Err(Error),
-            x => Ok(x as u32),
-        }
-    }
-
-    /// Returns current length of the contract storage
-    pub fn size() -> u32 {
-        unsafe {
-            storage_size()
-        }
-    }
-
-    /// Appends the slice content to the end of the storage
-    pub fn append(src: &[u8]) -> Result<u32, Error> {
-        let sz = size();
-        match write(sz, src) {
-            Ok(_) => Ok(sz),
-            Err(e) => Err(e),
+            _ => Ok(()),
         }
     }
 }
@@ -136,8 +120,12 @@ pub fn call(descriptor: *mut u8) {
     // Copies all contract input data to the separate buffer
     let data = ctx.context().to_vec();
 
-    // Appends all input to the storage (as it is a logger contract)
-    let _ = storage::append(&data);
+    let storage_key = [1u8; 32];
+    let mut storage_val = [0u8; 32];
+    storage_val.copy_from_slice(&data[0..32]);
+
+    // Sets the key [1, 1, 1 ..., 1] to the first 32 bytes of passed input
+    let _ = storage::write(&storage_key, &mut storage_val);
 
     // Returns all that passed to this contract as an output
     *ctx.result_mut() = data;
