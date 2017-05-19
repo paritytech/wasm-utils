@@ -1,7 +1,7 @@
-use parity_wasm::interpreter::{self, ModuleInstanceInterface};
-use {alloc, runtime};
+use parity_wasm::interpreter;
+use runtime;
 
-use {DEFAULT_MEMORY_INDEX, WasmMemoryPtr};
+use WasmMemoryPtr;
 
 fn write_u32(dst: &mut [u8], val: u32) {
     dst[0] = (val & 0x000000ff) as u8;
@@ -17,7 +17,7 @@ pub enum Error {
 }
 
 impl From<runtime::ErrorAlloc> for Error {
-    fn from(err: alloc::ErrorAlloc) -> Self {
+    fn from(err: runtime::ErrorAlloc) -> Self {
         Error::Allocator(err)
     }
 }
@@ -29,7 +29,7 @@ impl From<interpreter::Error> for Error {
 }
 
 pub fn init(
-    memory: &interpreter::Memory, 
+    memory: &interpreter::MemoryInstance, 
     runtime: &mut runtime::Runtime,
     input: &[u8],
 ) -> Result<WasmMemoryPtr, Error> {
@@ -39,7 +39,6 @@ pub fn init(
     let descriptor_ptr = runtime.alloc(16)?;
 
     println!("descriptor_ptr: {}", descriptor_ptr);
-    let memory = env.memory(DEFAULT_MEMORY_INDEX)?;
 
     if input.len() > 0 {
         let input_ptr = runtime.alloc(input.len() as u32)?;
@@ -64,7 +63,7 @@ pub fn init(
     Ok(descriptor_ptr as i32)
 }
 
-fn read_u32(slc: &[u8]) -> u32 {
+fn _read_u32(slc: &[u8]) -> u32 {
     use std::ops::Shl;
     (slc[0] as u32) + (slc[1] as u32).shl(8) + (slc[2] as u32).shl(16) + (slc[3] as u32).shl(24)
 }

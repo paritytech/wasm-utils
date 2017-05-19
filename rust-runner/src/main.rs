@@ -7,13 +7,11 @@
 extern crate parity_wasm;
 extern crate wasm_utils;
 
-mod alloc;
-mod storage;
 mod call_args;
 mod runtime;
-mod gas_counter;
 
 use std::env;
+use std::sync::Arc;
 use parity_wasm::interpreter::{self, ModuleInstanceInterface};
 use parity_wasm::elements;
 
@@ -32,62 +30,70 @@ fn main() {
 
     let module = parity_wasm::deserialize_file(&args[1]).expect("Module deserialization to succeed");
 
-    // Second, create runtime and program instance
-    let runtime = runtime::Runtime::with_params(
-        5*1024*1024,   // default stack space 
-        65536,         // runner arbitrary gas limit
-    );
-
-    let mut user_functions = interpreter::UserFunctions::new();
-    user_functions.insert("gas".to_owned(), 
-        interpreter::UserFunction {
-            params: vec![elements::ValueType::I32],
-            result: None,
-            closure: Box::new(runtime.gas_counter()),
-        }
-    );
-    user_functions.insert("_malloc".to_owned(), 
-        interpreter::UserFunction {
-            params: vec![elements::ValueType::I32],
-            result: Some(elements::ValueType::I32),
-            closure: Box::new(runtime.allocator()),
-        }
-    );
-    user_functions.insert("_storage_read".to_owned(), 
-        interpreter::UserFunction {
-            params: vec![elements::ValueType::I32, elements::ValueType::I32],
-            result: Some(elements::ValueType::I32),
-            closure: Box::new(runtime.storage().reader()),
-        }
-    );
-    user_functions.insert("_storage_write".to_owned(), 
-        interpreter::UserFunction {
-            params: vec![elements::ValueType::I32, elements::ValueType::I32],
-            result: Some(elements::ValueType::I32),
-            closure: Box::new(runtime.storage().writer()),
-        }
-    );
-    runtime::user_trap(&mut user_functions, "_emscripten_memcpy_big");
-    runtime::user_trap(&mut user_functions, "invoke_vii");
-    runtime::user_noop(&mut user_functions, "_free");
-
-    let program = parity_wasm::interpreter::ProgramInstance::with_functions(user_functions)
+    let program = parity_wasm::interpreter::ProgramInstance::new()
         .expect("Program instance to be created");
 
     // Add module to the programm
     let module_instance = program.add_module("contract", module).expect("Module to be added successfully");
 
-    // Initialize call descriptor
-    let descriptor = call_args::init(
-        &*program.module("env").expect("env module to exist"), 
-        &runtime, 
-        &[3u8; 128],
-    ).expect("call descriptor initialization to succeed");
+	{
+	    let env_instance = program.module("env").expect("env module to exist");
+        let env_memory = env_instance.memory(interpreter::ItemIndex::Internal(0))
+            .expect("liner memory to exist");
 
-    // Invoke _call method of the module
-    let return_ptr = module_instance.execute_export("_call", vec![descriptor.into()])
-        .expect("_call to execute successfully")
-        .expect("_call function to return result ptr");
+        // Second, create runtime and program instance
+        let mut runtime = runtime::Runtime::with_params(
+            env_memory.clone(),  // memory shared ptr
+            5*1024*1024,         // default stack space 
+            65536,               // runner arbitrary gas limit
+        );
 
-    // ???
+        // Initialize call descriptor
+        let descriptor = call_args::init(
+            &*env_memory,
+            &mut runtime, 
+            &[3u8; 128],
+        ).expect("call descriptor initialization to succeed");                
+
+		// create native env module with native add && sub implementations
+		let functions = interpreter::UserFunctions {
+			executor: &mut runtime,
+			functions: vec![
+                interpreter::UserFunction {
+                    name: "_storage_read".to_owned(),
+                    params: vec![elements::ValueType::I32, elements::ValueType::I32],
+                    result: Some(elements::ValueType::I32),
+                },
+                interpreter::UserFunction {
+                    name: "_storage_write".to_owned(),
+                    params: vec![elements::ValueType::I32, elements::ValueType::I32],
+                    result: Some(elements::ValueType::I32),
+                },
+                interpreter::UserFunction {
+                    name: "_malloc".to_owned(),
+                    params: vec![elements::ValueType::I32],
+                    result: Some(elements::ValueType::I32),
+                },
+                interpreter::UserFunction {
+                    name: "gas".to_owned(),
+                    params: vec![elements::ValueType::I32],
+                    result: None,
+                },
+                interpreter::UserFunction {
+                    name: "_free".to_owned(),
+                    params: vec![elements::ValueType::I32],
+                    result: None,
+                },
+			],
+		};
+		let native_env_instance = Arc::new(interpreter::env_native_module(env_instance, functions).unwrap());
+
+        // Form ExecutionParams (payload + env link)
+		let params = interpreter::ExecutionParams::with_external("env".into(), native_env_instance)
+            .add_argument(interpreter::RuntimeValue::I32(descriptor));
+
+        module_instance.execute_export("_call", params)
+            .expect("_call to execute successfully")
+            .expect("_call function to return result ptr");        
+    }    
 }
