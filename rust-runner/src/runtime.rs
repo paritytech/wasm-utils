@@ -5,88 +5,107 @@ use std::collections::HashMap;
 use parity_wasm::{interpreter, elements};
 use {alloc, gas_counter, storage};
 
-#[derive(Default)]
-pub struct RuntimeEnv {
-    pub gas_counter: Cell<u64>,
-    pub gas_limit: u64,
-    pub dynamic_top: Cell<u32>,
-    pub storage: RefCell<HashMap<storage::StorageKey, storage::StorageValue>>,
+#[derive(Hash, PartialEq, Eq, Debug)]
+pub struct StorageKey([u8; 32]);
+
+#[derive(Debug, Default)]
+pub struct StorageValue([u8; 32]);
+
+pub struct Runtime {
+    gas_counter: u64,
+    gas_limit: u64,
+    dynamic_top: u32,
+    storage: HashMap<storage::StorageKey, storage::StorageValue>,
 }
 
-#[derive(Default, Clone)]
-pub struct Runtime(Arc<RuntimeEnv>);
+#[derive(Debug)]
+struct ErrorAlloc;
 
 impl Runtime {
     pub fn with_params(stack_space: u32, gas_limit: u64) -> Runtime {
         Runtime(Arc::new(RuntimeEnv { 
-            gas_counter: Cell::new(0),
+            gas_counter: 0,
             gas_limit: gas_limit,
-            dynamic_top: Cell::new(stack_space),
-            storage: RefCell::new(HashMap::new()),
+            dynamic_top: stack_space,
+            storage: HashMap::new(),
         }))
     }
 
-    pub fn allocator(&self) -> alloc::Arena {
-        alloc::Arena {
-            runtime: self.clone(),
+    pub fn storage_write(&mut self, memory: Arc<interpreter::Memory>, context: interpreter::CallerContext) 
+        -> Result<Option<interpreter::RuntimeValue>, interpreter::Error>
+    {
+        let val_ptr = context.value_stack.pop_as::<i32>()?;
+        let key_ptr = context.value_stack.pop_as::<i32>()?;
+
+        let key = StorageKey::from_mem(memory.get(key_ptr as u32, 32)?)
+            .map_err(|_| interpreter::Error::Trap("Memory access violation".to_owned()))?;
+        let val = StorageValue::from_mem(memory.get(val_ptr as u32, 32)?)
+            .map_err(|_| interpreter::Error::Trap("Memory access violation".to_owned()))?;
+
+        self.storage.insert(key, val);
+
+        Ok(0.into())
+    }
+
+    pub fn storage_write(&mut self, memory: Arc<interpreter::Memory>, context: interpreter::CallerContext) 
+        -> Result<Option<interpreter::RuntimeValue>, interpreter::Error>
+    {
+            // arguments passed are in backward order (since it is stack)
+        let val_ptr = context.value_stack.pop_as::<i32>()?;
+        let key_ptr = context.value_stack.pop_as::<i32>()?;
+
+        let key = StorageKey::from_mem(memory.get(key_ptr as u32, 32)?)
+            .map_err(|_| interpreter::Error::Trap("Memory access violation".to_owned()))?;
+        let empty = StorageValue([0u8; 32]);
+        let storage = self.0.runtime.env().storage.borrow(); 
+        let val = storage.get(&key).unwrap_or(&empty);
+
+        memory.set(val_ptr as u32, val.as_slice());
+
+        println!("read storage {:?} (evaluated as {:?})", key, val);
+
+        Ok(Some(0.into()))
+    }
+
+    pub fn malloc(&mut self, _memory: Arc<interpreter::Memory>, context: interpreter::CallerContext) 
+        -> Result<Option<interpreter::RuntimeValue>, interpreter::Error>
+    {
+        let amount = context.value_stack.pop_as::<i32>()? as u32;
+        let previous_top = self.dynamic_top;
+        self.dynamic_top = previous_top + size;
+        Ok(previous_top.into())
+    }
+
+    pub fn alloc(&mut self, amount: u32) -> Result<u32, ErrorAlloc> {
+        let previous_top = self.dynamic_top;
+        self.dynamic_top = previous_top + size;
+        Ok(previous_top.into())        
+    }
+
+    fn gas(&mut self, _memory: Arc<interpreter::Memory>, context: interpreter::CallerContext) 
+        -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> 
+    {
+        let prev = self.gas_counter;
+        let update = context.value_stack.pop_as::<i32>()? as u64;
+        if prev + update > self.gas_limit {
+            // exceeds gas
+            Err(interpreter::Error::Trap(format!("Gas exceeds limits of {}", self.runtime.env().gas_limit)))
+        } else {
+            self.gas_counter.set(prev + update);
+            Ok(None)
         }
     }
 
-    pub fn gas_counter(&self) -> gas_counter::GasCounter {
-        gas_counter::GasCounter {
-            runtime: self.clone(),
-        }
-    }
-
-    pub fn storage(&self) -> storage::Storage {
-        storage::Storage::new(self.clone())
-    }
-
-    pub fn env(&self) -> &RuntimeEnv {
-        &*self.0
-    }
-}
-
-pub fn user_trap(funcs: &mut interpreter::UserFunctions, func_name: &str) {
-    let func_str = func_name.to_owned();
-    funcs.insert(func_str.clone(), 
-        interpreter::UserFunction {
-            params: vec![],
-            result: Some(elements::ValueType::I32),
-            closure: Box::new(UserTrap(func_str)),
-        }
-    );    
-}
-
-struct UserTrap(String);
-
-impl interpreter::UserFunctionInterface for UserTrap {
-    fn call(&mut self, 
-        _module: &interpreter::ModuleInstance, 
-        _context: interpreter::CallerContext
-    ) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> {
+    fn user_trap(&mut self, _memory: Arc<interpreter::Memory>, _context: interpreter::CallerContext) 
+        -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> 
+    {
         Err(interpreter::Error::Trap(self.0.clone()))
     }
-}
 
-struct UserNoop;
-
-pub fn user_noop(funcs: &mut interpreter::UserFunctions, func_name: &str) {
-    let func_str = func_name.to_owned();
-    funcs.insert(func_str.clone(), 
-        interpreter::UserFunction {
-            params: vec![],
-            result: None,
-            closure: Box::new(UserNoop),
-        }
-    );
-}
-
-impl interpreter::UserFunctionInterface for UserNoop {
-    fn call(&mut self, 
-        _module: &interpreter::ModuleInstance, 
+    fn user_noop(&mut self, 
+        _memory: Arc<interpreter::Memory>, 
         _context: interpreter::CallerContext
     ) -> Result<Option<interpreter::RuntimeValue>, interpreter::Error> {
         Ok(None)
-    }
+    }    
 }

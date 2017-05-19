@@ -12,12 +12,12 @@ fn write_u32(dst: &mut [u8], val: u32) {
 
 #[derive(Debug)]
 pub enum Error {
-    Allocator(alloc::Error),
+    Allocator(runtime::ErrorAlloc),
     Interpreter(interpreter::Error),
 }
 
-impl From<alloc::Error> for Error {
-    fn from(err: alloc::Error) -> Self {
+impl From<runtime::ErrorAlloc> for Error {
+    fn from(err: alloc::ErrorAlloc) -> Self {
         Error::Allocator(err)
     }
 }
@@ -29,22 +29,20 @@ impl From<interpreter::Error> for Error {
 }
 
 pub fn init(
-    env: &interpreter::ModuleInstanceInterface, 
-    runtime: &runtime::Runtime,
+    memory: &interpreter::Memory, 
+    runtime: &mut runtime::Runtime,
     input: &[u8],
 ) -> Result<WasmMemoryPtr, Error> {
     let mut input_ptr_slc = [0u8; 4];
     let mut input_length = [0u8; 4];
 
-    let allocator = runtime.allocator();
-
-    let descriptor_ptr = allocator.alloc(16)?;
+    let descriptor_ptr = runtime.alloc(16)?;
 
     println!("descriptor_ptr: {}", descriptor_ptr);
     let memory = env.memory(DEFAULT_MEMORY_INDEX)?;
 
     if input.len() > 0 {
-        let input_ptr = allocator.alloc(input.len() as u32)?;
+        let input_ptr = runtime.alloc(input.len() as u32)?;
         write_u32(&mut input_ptr_slc, input_ptr);
         write_u32(&mut input_length, input.len() as u32);
         memory.set(input_ptr, input)?;
@@ -70,13 +68,3 @@ fn read_u32(slc: &[u8]) -> u32 {
     use std::ops::Shl;
     (slc[0] as u32) + (slc[1] as u32).shl(8) + (slc[2] as u32).shl(16) + (slc[3] as u32).shl(24)
 }
-
-// pub fn retrieve(env: 
-//     env: &interpreter::ModuleInstanceInterface, 
-//     runtime: &runtime::Runtime,
-//     descriptor_ptr: u32,
-//     result_ptr: u32,
-// ) -> Result<Vec<u8>, Error> {
-//     let memory = env.memory(DEFAULT_MEMORY_INDEX)?;
-
-// }
