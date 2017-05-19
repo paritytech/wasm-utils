@@ -69,6 +69,8 @@ impl Runtime {
         let val = StorageValue::from_mem(self.memory.get(val_ptr as u32, 32)?)
             .map_err(|_| interpreter::Error::Trap("Memory access violation".to_owned()))?;
 
+        println!("write storage {:?} = {:?}", key, val);
+
         self.storage.insert(key, val);
 
         Ok(Some(0i32.into()))
