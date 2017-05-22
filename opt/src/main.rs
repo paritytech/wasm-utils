@@ -1,24 +1,44 @@
 extern crate parity_wasm;
 extern crate wasm_utils;
+extern crate clap;
 
-use std::env;
+use clap::{App, Arg};
 
 fn main() {
+    wasm_utils::init_log();
 
-	wasm_utils::init_log();
+    let matches = App::new("wasm-opt")
+                        .arg(Arg::with_name("input")
+                            .index(1)
+                            .required(true)
+                            .help("Input WASM file"))
+                        .arg(Arg::with_name("output")
+                            .index(2)
+                            .required(true)
+                            .help("Output WASM file"))
+                        .arg(Arg::with_name("exports")
+                            .long("exports")
+                            .short("e")
+                            .takes_value(true)
+                            .value_name("functions")
+                            .help("Comma-separated list of exported functions to keep. Default: _call"))
+                        .get_matches();
 
-	let args = env::args().collect::<Vec<_>>();
-	if args.len() < 3 {
-		println!("Usage: {} input_file.wasm output_file.wasm", args[0]);
-		return;
-	}
+    let exports = matches
+                    .value_of("exports")
+                    .unwrap_or("_call")
+                    .split(',')
+                    .collect();
 
-	let mut module = parity_wasm::deserialize_file(&args[1]).unwrap();
+    let input = matches.value_of("input").expect("is required; qed");
+    let output = matches.value_of("output").expect("is required; qed");
 
-	// Invoke optimizer
-	//   Contract is supposed to have only these functions as public api
-	//   All other symbols not usable by this list is optimized away
-	wasm_utils::optimize(&mut module, vec!["_call"]).expect("Optimizer to finish without errors");
+    let mut module = parity_wasm::deserialize_file(&input).unwrap();
 
-	parity_wasm::serialize_to_file(&args[2], module).unwrap();    
+    // Invoke optimizer
+    //   Contract is supposed to have only these functions as public api
+    //   All other symbols not usable by this list is optimized away
+    wasm_utils::optimize(&mut module, exports).expect("Optimizer to finish without errors");
+
+    parity_wasm::serialize_to_file(&output, module).unwrap();
 }
