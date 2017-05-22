@@ -13,15 +13,15 @@ pub fn call() {
 
 /* This produces the following code (after injecting gas counter & optimizing)
 (module
-  (type (;0;) (func))
-  (type (;1;) (func (param i32)))
-  (import "env" "memory" (memory (;0;) 256 256))
-  (import "env" "table" (table (;0;) 0 0 anyfunc))
-  (import "env" "gas" (func (;0;) (type 1)))
-  (func (;1;) (type 0)
-    i32.const 2
-    call 0
-    nop)
-  (export "_call" (func 1))
-  (data (i32.const 1212) "\1c\05"))
+	(type (;0;) (func))
+	(type (;1;) (func (param i32)))
+	(import "env" "memory" (memory (;0;) 256 256))
+	(import "env" "table" (table (;0;) 0 0 anyfunc))
+	(import "env" "gas" (func (;0;) (type 1)))
+	(func (;1;) (type 0)
+		i32.const 2
+		call 0
+		nop)
+	(export "_call" (func 1))
+	(data (i32.const 1212) "\1c\05"))
 */
