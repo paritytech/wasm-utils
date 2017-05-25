@@ -6,3 +6,4 @@ authors = ["NikVolf <nikvolf@gmail.com>"]
 [dependencies]
 parity-wasm = { git="https://github.com/nikvolf/parity-wasm" }
 wasm-utils = { path = "../" }
+clap = "2.24"
