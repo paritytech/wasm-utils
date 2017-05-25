@@ -52,8 +52,6 @@ pub fn inject_gas_counter(module: elements::Module) -> elements::Module {
 	// back to plain module
 	let mut module = mbuilder.build();
 
-	assert!(module.global_section().is_some());
-
 	// calculate actual function index of the imported definition
 	//    (substract all imports that are NOT functions)
 
