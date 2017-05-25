@@ -14,7 +14,7 @@ lazy_static! {
 		}
 
 		if let Ok(_) = builder.init() {
-			println!("logger initialized");
+			trace!("logger initialized");
 		}
 		true
 	};
