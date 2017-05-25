@@ -75,6 +75,11 @@ fn main() {
 					result: Some(elements::ValueType::I32),
 				},
 				interpreter::UserFunction {
+					name: "_debug".to_owned(),
+					params: vec![elements::ValueType::I32, elements::ValueType::I32],
+					result: None,
+				},				
+				interpreter::UserFunction {
 					name: "gas".to_owned(),
 					params: vec![elements::ValueType::I32],
 					result: None,
@@ -93,7 +98,6 @@ fn main() {
 			.add_argument(interpreter::RuntimeValue::I32(descriptor));
 
 		module_instance.execute_export("_call", params)
-			.expect("_call to execute successfully")
-			.expect("_call function to return result ptr");        
+			.expect("_call to execute successfully");
 	}
 }

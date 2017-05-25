@@ -124,6 +124,18 @@ impl Runtime {
 		}
 	}
 
+	fn debug(&mut self, context: interpreter::CallerContext) 
+			-> Result<Option<interpreter::RuntimeValue>, interpreter::Error> 
+	{
+		let msg_len = context.value_stack.pop_as::<i32>()? as u32;
+		let msg_ptr = context.value_stack.pop_as::<i32>()? as u32;
+		
+		let msg = unsafe { String::from_utf8_unchecked(self.memory.get(msg_ptr, msg_len as usize)?) };
+		println!("DEBUG: {}", msg);
+
+		Ok(None)
+	}
+
 	fn user_trap(&mut self, _context: interpreter::CallerContext) 
 		-> Result<Option<interpreter::RuntimeValue>, interpreter::Error> 
 	{
@@ -156,6 +168,9 @@ impl interpreter::UserFunctionExecutor for Runtime {
 			},
 			"gas" => {
 				self.gas(context)
+			},
+			"_debug" => {
+				self.debug(context)
 			},
 			_ => {
 				self.user_trap(context)
