@@ -28,4 +28,4 @@ cargo run --release --bin wasm-ext -- <input_binary.wasm> <output_binary.wasm>
 
 ## API
 
-All executables use corresponding api methods in the root crate and can be combined in other build tools.
+All executables use corresponding api methods of the root crate and can be combined in other build tools.
