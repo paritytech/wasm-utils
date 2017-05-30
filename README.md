@@ -20,7 +20,7 @@ cargo run --release --bin wasm-gas -- <input_binary.wasm> <output_binary.wasm>
 
 ## Allocators substiution (wasm-ext)
 
-Parity WASM runtime provides simple memory allocators, if contract requires. When relied on this allocators, WASM binary size can be greatly reduced. This utility scans for `_malloc`, `_free` invokes inside the WASM binary and substitutes it with invokes of the imported `_malloc`, `_free`. Should be run before `wasm-opt` for better results.
+Parity WASM runtime provides simple memory allocators, if contract requires. When relied on this allocators, WASM binary size can be greatly reduced. This utility scans for `_malloc`, `_free` invokes inside the WASM binary and substitutes them with invokes of the imported `_malloc`, `_free`. Should be run before `wasm-opt` for better results.
 
 ```
 cargo run --release --bin wasm-ext -- <input_binary.wasm> <output_binary.wasm>
