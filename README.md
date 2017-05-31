@@ -8,7 +8,7 @@ Collection of WASM utilities used in Parity and WASM contract devepment
 cargo run --release --bin wasm-opt -- <input_binary.wasm> <output_binary.wasm>
 ```
 
-This will optimize WASM symbols tree to leave only those elements that are used by contract `call` function entry.
+This will optimize WASM symbols tree to leave only those elements that are used by contract `_call` function entry.
 
 ## Gas counter (wasm-gas)
 
