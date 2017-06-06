@@ -1,21 +1,31 @@
-# wasm-tools
+# wasm-utils
 
-Boilerplate code to test Parity WASM tools and compile rust/c/c++ code to wasm-contracts
+Collection of WASM utilities used in Parity and WASM contract devepment
 
-## How to compile contract
+## Symbols optimizer (wasm-opt)
 
 ```
-git clone https://github.com/NikVolf/wasm-tools
-cd wasm-tools/runner
-./build.sh <PATH TO C/C++/Rust source file>
-./start.sh
+cargo run --release --bin wasm-opt -- <input_binary.wasm> <output_binary.wasm>
 ```
 
-and then open `http://localhost:8000`, specify input stream in `Input` input, press `Execute call` to run a contract `call` function, see storage update (if contract produced any) as well as `Result` stream (again, if contract produced any).
+This will optimize WASM symbols tree to leave only those elements that are used by contract `_call` function entry.
 
-see `/samples` directory for sample contracts that are compiled this way
+## Gas counter (wasm-gas)
 
-## Prerequisites 
+For development puposes, raw WASM contract can be injected with gas counters (the same way as it done by Parity runtime when running contracts)
 
-- Emscripiten for C/C++ (see [this page](http://kripken.github.io/emscripten-site/docs/getting_started/downloads.html), `emcc` should be in the `PATH`)
-- Rust with `wasm32-unknown-emscripten` target (see [this instruction](https://hackernoon.com/compiling-rust-to-webassembly-guide-411066a69fde) to setup)
+```
+cargo run --release --bin wasm-gas -- <input_binary.wasm> <output_binary.wasm>
+```
+
+## Allocators substiution (wasm-ext)
+
+Parity WASM runtime provides simple memory allocators, if contract requires. When relied on this allocators, WASM binary size can be greatly reduced. This utility scans for `_malloc`, `_free` invokes inside the WASM binary and substitutes them with invokes of the imported `_malloc`, `_free`. Should be run before `wasm-opt` for better results.
+
+```
+cargo run --release --bin wasm-ext -- <input_binary.wasm> <output_binary.wasm>
+```
+
+## API
+
+All executables use corresponding api methods of the root crate and can be combined in other build tools.
