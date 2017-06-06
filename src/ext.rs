@@ -46,7 +46,7 @@ pub fn externalize(
 
 			if let &elements::Internal::Function(func_idx) = export.1.internal() {
 				let type_ref = module
-					.functions_section().expect("Functions section to exist")
+					.function_section().expect("Functions section to exist")
 					.entries()[func_idx as usize - import_funcs_total]
 					.type_ref();
 

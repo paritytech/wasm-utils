@@ -140,16 +140,16 @@ pub fn optimize(
 	}
 
 	// Forth, delete orphaned functions
-	if functions_section(module).is_some() && code_section(module).is_some() {
+	if function_section(module).is_some() && code_section(module).is_some() {
 		index = 0;
 		old_index = 0;
 
 		loop {
-			if functions_section(module).expect("Functons section to exist").entries_mut().len() == index { break; }
+			if function_section(module).expect("Functons section to exist").entries_mut().len() == index { break; }
 			if stay.contains(&Symbol::Function(old_index)) {
 				index += 1;
 			} else {
-				functions_section(module).expect("Functons section to exist").entries_mut().remove(index);
+				function_section(module).expect("Functons section to exist").entries_mut().remove(index);
 				code_section(module).expect("Code section to exist").bodies_mut().remove(index);
 
 				eliminated_funcs.push(top_funcs + old_index);
@@ -314,7 +314,7 @@ pub fn global_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut el
 	None
 }
 
-pub fn functions_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::FunctionsSection> {
+pub fn function_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::FunctionSection> {
    for section in module.sections_mut() {
 		match section {
 			&mut elements::Section::Function(ref mut sect) => {
@@ -417,7 +417,7 @@ mod tests {
 
 		assert_eq!(
 			1,
-			module.functions_section().expect("functions section to be generated").entries().len(),
+			module.function_section().expect("functions section to be generated").entries().len(),
 			"There should 2 (two) functions in the optimized module"
 		); 
 	}
@@ -543,7 +543,7 @@ mod tests {
 
 		assert_eq!(
 			2,
-			module.functions_section().expect("functions section to be generated").entries().len(),
+			module.function_section().expect("functions section to be generated").entries().len(),
 			"There should 2 (two) functions in the optimized module"
 		);
 	}

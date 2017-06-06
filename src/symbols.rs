@@ -126,7 +126,7 @@ pub fn expand_symbols(module: &elements::Module, set: &mut HashSet<Symbol>) {
 					set.insert(symbol);
 				}
 
-				let signature = &module.functions_section().expect("Functions section to exist").entries()[idx];
+				let signature = &module.function_section().expect("Functions section to exist").entries()[idx];
 				let type_symbol = Symbol::Type(signature.type_ref() as usize);
 				if !stop.contains(&type_symbol) {
 					fringe.push(type_symbol);
