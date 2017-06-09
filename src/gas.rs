@@ -1,6 +1,5 @@
 use parity_wasm::{elements, builder};
 
-
 pub fn update_call_index(opcodes: &mut elements::Opcodes, inserted_index: u32) {
 	use parity_wasm::elements::Opcode::*;
 	for opcode in opcodes.elements_mut().iter_mut() {

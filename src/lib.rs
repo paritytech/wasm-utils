@@ -8,8 +8,10 @@ mod gas;
 mod symbols;
 mod logger;
 mod ext;
+mod pack;
 
 pub use optimizer::{optimize, Error as OptimizerError};
 pub use gas::inject_gas_counter;
 pub use logger::init_log;
 pub use ext::externalize;
+pub use pack::pack_instance;
