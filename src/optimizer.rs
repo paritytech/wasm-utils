@@ -209,6 +209,9 @@ pub fn optimize(
 						if eliminated_globals.len() > 0 {
 							update_global_index(func_body.code_mut().elements_mut(), &eliminated_globals)
 						}
+						if eliminated_types.len() > 0 {
+							update_type_index(func_body.code_mut(), &eliminated_types)
+						}
 					}
 				},
 				&mut elements::Section::Export(ref mut export_section) => {
@@ -284,6 +287,24 @@ pub fn update_global_index(opcodes: &mut Vec<elements::Opcode>, eliminated_indic
 				let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *index).count();
 				trace!("rewired global {} -> global {}", *index, *index - totalle as u32);
 				*index -= totalle as u32;
+			},
+			_ => { },
+		}
+	}
+}
+
+/// Updates global references considering the _ordered_ list of eliminated indices
+pub fn update_type_index(opcodes: &mut elements::Opcodes, eliminated_indices: &[usize]) {
+	use parity_wasm::elements::Opcode::*;
+	for opcode in opcodes.elements_mut().iter_mut() {
+		match opcode {
+			&mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
+				update_call_index(block, eliminated_indices)
+			},
+			&mut CallIndirect(ref mut call_index, _) => {
+				let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
+				trace!("rewired call_indrect {} -> call_indirect {}", *call_index, *call_index - totalle as u32);
+				*call_index -= totalle as u32;
 			},
 			_ => { },
 		}
@@ -547,4 +568,53 @@ mod tests {
 			"There should 2 (two) functions in the optimized module"
 		);
 	}
+
+	/// @spec 4
+	/// Imagine the unoptimized module has an indirect call to function of type 1
+	/// The type should persist so that indirect call would work
+	#[test]
+	fn call_indirect() {
+		let mut module = builder::module()
+			.function()
+				.signature().param().i32().param().i32().build()
+				.build()
+			.function()
+				.signature().param().i32().param().i32().build()
+				.build()				
+			.function()
+				.signature().param().i32().build()
+				.body()
+					.with_opcodes(elements::Opcodes::new(
+						vec![
+							elements::Opcode::CallIndirect(1, false),
+							elements::Opcode::End
+						]
+					))
+					.build()
+				.build()
+			.export()
+				.field("_call")
+				.internal().func(2).build()
+			.build();
+
+		optimize(&mut module, vec!["_call"]).expect("optimizer to succeed");
+
+		assert_eq!(
+			2,
+			module.type_section().expect("type section to be generated").types().len(),
+			"There should 2 (two) types left in the module, 1 for indirect call and one for _call"
+		);
+
+		let indirect_opcode = &module.code_section().expect("code section to be generated").bodies()[0].code().elements()[0];
+		match *indirect_opcode {
+			elements::Opcode::CallIndirect(0, false) => {},
+			_ => {
+				panic!(
+					"Expected call_indirect to use index 0 after optimization, since previois 0th was eliminated, but got {:?}", 
+					indirect_opcode
+				);
+			}
+		}
+	}
+
 }

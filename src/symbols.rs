@@ -56,6 +56,9 @@ pub fn push_code_symbols(module: &elements::Module, opcodes: &[elements::Opcode]
 			&Call(idx) => {
 				dest.push(resolve_function(module, idx));
 			},
+			&CallIndirect(idx, _) => {
+				dest.push(Symbol::Type(idx as usize));
+			},
 			&GetGlobal(idx) | &SetGlobal(idx) => {
 				dest.push(resolve_global(module, idx))
 			},
