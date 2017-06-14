@@ -299,7 +299,7 @@ pub fn update_type_index(opcodes: &mut elements::Opcodes, eliminated_indices: &[
 	for opcode in opcodes.elements_mut().iter_mut() {
 		match opcode {
 			&mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
-				update_call_index(block, eliminated_indices)
+				update_type_index(block, eliminated_indices)
 			},
 			&mut CallIndirect(ref mut call_index, _) => {
 				let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
