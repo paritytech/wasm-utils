@@ -215,13 +215,6 @@ mod tests {
 			.build();
 
 		let injected_module = inject_gas_counter(module);
-
-		assert_eq!(
-			12,
-			injected_module
-				.code_section().expect("function section should exist").bodies()[0]
-				.code().elements().len()
-		);
 		
 		assert_eq!(
 			&vec![
@@ -242,6 +235,126 @@ mod tests {
 				.code_section().expect("function section should exist").bodies()[0]
 				.code().elements()
 		);
+	}
+
+	#[test]
+	fn ifelse() {
+		use parity_wasm::elements::Opcode::*;
+
+		let module = builder::module()
+			.global()
+				.value_type().i32()
+				.build()
+			.function()
+				.signature().param().i32().build()
+				.body()
+					.with_opcodes(elements::Opcodes::new(
+						vec![
+							GetGlobal(0),
+							If(elements::BlockType::NoResult),
+								GetGlobal(0),
+								GetGlobal(0),
+								GetGlobal(0),
+							Else,
+								GetGlobal(0),
+								GetGlobal(0),							
+							End,
+							GetGlobal(0),							
+							End
+						]
+					))
+					.build()
+				.build()
+			.build();
+
+		let injected_module = inject_gas_counter(module);
+
+		assert_eq!(
+			&vec![
+				I32Const(4),
+				Call(0),
+				GetGlobal(0),
+				If(elements::BlockType::NoResult),
+					I32Const(4),
+					Call(0),
+					GetGlobal(0),
+					GetGlobal(0),
+					GetGlobal(0),
+				Else,
+					I32Const(3),
+					Call(0),
+					GetGlobal(0),
+					GetGlobal(0),
+				End,
+				GetGlobal(0),
+				End
+			][..],	
+			injected_module
+				.code_section().expect("function section should exist").bodies()[0]
+				.code().elements()
+		);
 	}	
+
+	#[test]
+	fn call_index() {
+		use parity_wasm::elements::Opcode::*;
+
+		let module = builder::module()
+			.global()
+				.value_type().i32()
+				.build()
+			.function()
+				.signature().param().i32().build()
+				.body().build()
+				.build()
+			.function()
+				.signature().param().i32().build()
+				.body()
+					.with_opcodes(elements::Opcodes::new(
+						vec![
+							Call(0),
+							If(elements::BlockType::NoResult),
+								Call(0),
+								Call(0),
+								Call(0),
+							Else,
+								Call(0),
+								Call(0),							
+							End,
+							Call(0),							
+							End
+						]
+					))
+					.build()
+				.build()
+			.build();
+
+		let injected_module = inject_gas_counter(module);
+
+		assert_eq!(
+			&vec![
+				I32Const(4),
+				Call(0),
+				Call(1),
+				If(elements::BlockType::NoResult),
+					I32Const(4),
+					Call(0),
+					Call(1),
+					Call(1),
+					Call(1),
+				Else,
+					I32Const(3),
+					Call(0),
+					Call(1),
+					Call(1),
+				End,
+				Call(1),
+				End
+			][..],	
+			injected_module
+				.code_section().expect("function section should exist").bodies()[1]
+				.code().elements()
+		);
+	}		
 
 }
