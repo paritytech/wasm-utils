@@ -6,9 +6,6 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, original_imports: usiz
 	use parity_wasm::elements::Opcode::*;
 	for opcode in opcodes.elements_mut().iter_mut() {
 		match opcode {
-			&mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
-				update_call_index(block, original_imports, inserts)
-			},
 			&mut Call(ref mut call_index) => {
 				if let Some(pos) = inserts.iter().position(|x| x.1 == *call_index) {
 					*call_index = (original_imports + pos) as u32; 

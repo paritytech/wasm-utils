@@ -262,9 +262,6 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, eliminated_indices: &[
 	use parity_wasm::elements::Opcode::*;
 	for opcode in opcodes.elements_mut().iter_mut() {
 		match opcode {
-			&mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
-				update_call_index(block, eliminated_indices)
-			},
 			&mut Call(ref mut call_index) => {
 				let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
 				trace!("rewired call {} -> call {}", *call_index, *call_index - totalle as u32);
@@ -280,9 +277,6 @@ pub fn update_global_index(opcodes: &mut Vec<elements::Opcode>, eliminated_indic
 	use parity_wasm::elements::Opcode::*;
 	for opcode in opcodes.iter_mut() {
 		match opcode {
-			&mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
-				update_global_index(block.elements_mut(), eliminated_indices)
-			},
 			&mut GetGlobal(ref mut index) | &mut SetGlobal(ref mut index) => {
 				let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *index).count();
 				trace!("rewired global {} -> global {}", *index, *index - totalle as u32);
@@ -298,9 +292,6 @@ pub fn update_type_index(opcodes: &mut elements::Opcodes, eliminated_indices: &[
 	use parity_wasm::elements::Opcode::*;
 	for opcode in opcodes.elements_mut().iter_mut() {
 		match opcode {
-			&mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
-				update_type_index(block, eliminated_indices)
-			},
 			&mut CallIndirect(ref mut call_index, _) => {
 				let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
 				trace!("rewired call_indrect {} -> call_indirect {}", *call_index, *call_index - totalle as u32);

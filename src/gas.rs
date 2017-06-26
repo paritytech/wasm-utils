@@ -4,31 +4,78 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, inserted_index: u32) {
 	use parity_wasm::elements::Opcode::*;
 	for opcode in opcodes.elements_mut().iter_mut() {
 		match opcode {
-			&mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
-				update_call_index(block, inserted_index)
-			},
 			&mut Call(ref mut call_index) => {
 				if *call_index >= inserted_index { *call_index += 1}
 			},
-			_ => { }
+			_ => { },
 		}
 	}
 }
 
+enum InjectAction {
+	Spawn,
+	Continue,
+	Increment,
+	IncrementSpawn,
+}
+
 pub fn inject_counter(opcodes: &mut elements::Opcodes, gas_func: u32) {
 	use parity_wasm::elements::Opcode::*;
-	for opcode in opcodes.elements_mut().iter_mut() {
-		match opcode {
-			&mut Block(_, ref mut block) | &mut If(_, ref mut block) | &mut Loop(_, ref mut block) => {
-				inject_counter(block, gas_func)
+
+	let mut stack: Vec<(usize, usize)> = Vec::new(); 
+	let mut cursor = 0;
+	stack.push((0, 1));
+
+	loop {
+		if cursor >= opcodes.elements().len() {
+			break;
+		}
+
+		let last_entry = stack.pop().expect("There should be at least one entry on stack");
+
+		let action = {
+			let opcode = &opcodes.elements()[cursor];
+			match *opcode {
+				Block(_) | If(_) | Loop(_) => {
+					InjectAction::Spawn
+				},
+				Else => {
+					InjectAction::IncrementSpawn
+				},
+				End => {
+					InjectAction::Increment
+				},
+				_ => {
+					InjectAction::Continue
+				}
+			}
+		};
+
+		match action {
+			InjectAction::Increment => {
+				let (pos, ops) = last_entry;
+				opcodes.elements_mut().insert(pos, I32Const(ops as i32));
+				opcodes.elements_mut().insert(pos, Call(gas_func));
+				cursor += 3;
 			},
-			_ => { }
+			InjectAction::IncrementSpawn => {
+				let (pos, ops) = last_entry;
+				opcodes.elements_mut().insert(pos, I32Const(ops as i32));
+				opcodes.elements_mut().insert(pos, Call(gas_func));
+				cursor += 3;
+				stack.push((cursor, 1));
+			},
+			InjectAction::Continue => {
+				cursor += 1;
+				let (pos, ops) = last_entry;
+				stack.push((pos, ops+1));
+			},
+			InjectAction::Spawn => {
+				cursor += 1;
+				stack.push((cursor, 1));
+			},
 		}
 	}
-
-	let ops = opcodes.elements_mut().len() as u32;
-	opcodes.elements_mut().insert(0, I32Const(ops as i32));
-	opcodes.elements_mut().insert(1, Call(gas_func));
 }
 
 pub fn inject_gas_counter(module: elements::Module) -> elements::Module {
