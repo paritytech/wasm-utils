@@ -55,13 +55,13 @@ pub fn inject_counter(opcodes: &mut elements::Opcodes, gas_func: u32) {
 			InjectAction::Increment => {
 				let (pos, ops) = last_entry;
 				opcodes.elements_mut().insert(pos, I32Const(ops as i32));
-				opcodes.elements_mut().insert(pos, Call(gas_func));
+				opcodes.elements_mut().insert(pos+1, Call(gas_func));
 				cursor += 3;
 			},
 			InjectAction::IncrementSpawn => {
 				let (pos, ops) = last_entry;
 				opcodes.elements_mut().insert(pos, I32Const(ops as i32));
-				opcodes.elements_mut().insert(pos, Call(gas_func));
+				opcodes.elements_mut().insert(pos+1, Call(gas_func));
 				cursor += 3;
 				stack.push((cursor, 1));
 			},
@@ -71,6 +71,9 @@ pub fn inject_counter(opcodes: &mut elements::Opcodes, gas_func: u32) {
 				stack.push((pos, ops+1));
 			},
 			InjectAction::Spawn => {
+				let (pos, ops) = last_entry;
+				stack.push((pos, ops+1));
+
 				cursor += 1;
 				stack.push((cursor, 1));
 			},
@@ -140,4 +143,105 @@ pub fn inject_gas_counter(module: elements::Module) -> elements::Module {
 	}
 
 	module
+}
+
+#[cfg(test)]
+mod tests {
+
+	use parity_wasm::{builder, elements};
+	use super::*;
+
+	#[test]
+	fn simple() {
+		use parity_wasm::elements::Opcode::*;
+
+		let module = builder::module()
+			.global()
+				.value_type().i32()
+				.build()
+			.function()
+				.signature().param().i32().build()
+				.body()
+					.with_opcodes(elements::Opcodes::new(
+						vec![
+							GetGlobal(0),
+							End
+						]
+					))
+					.build()
+				.build()
+			.build();
+
+		let injected_module = inject_gas_counter(module);
+
+		assert_eq!(
+			&vec![
+				I32Const(2),
+				Call(0),
+				GetGlobal(0),
+				End
+			][..],	
+			injected_module
+				.code_section().expect("function section should exist").bodies()[0]
+				.code().elements()
+		);		
+	}
+
+	#[test]
+	fn nested() {
+		use parity_wasm::elements::Opcode::*;
+
+		let module = builder::module()
+			.global()
+				.value_type().i32()
+				.build()
+			.function()
+				.signature().param().i32().build()
+				.body()
+					.with_opcodes(elements::Opcodes::new(
+						vec![
+							GetGlobal(0),
+							Block(elements::BlockType::NoResult),
+								GetGlobal(0),
+								GetGlobal(0),
+								GetGlobal(0),
+							End,
+							GetGlobal(0),							
+							End
+						]
+					))
+					.build()
+				.build()
+			.build();
+
+		let injected_module = inject_gas_counter(module);
+
+		assert_eq!(
+			12,
+			injected_module
+				.code_section().expect("function section should exist").bodies()[0]
+				.code().elements().len()
+		);
+		
+		assert_eq!(
+			&vec![
+				I32Const(4),
+				Call(0),
+				GetGlobal(0),
+				Block(elements::BlockType::NoResult),
+					I32Const(4),
+					Call(0),
+					GetGlobal(0),
+					GetGlobal(0),
+					GetGlobal(0),
+				End,
+				GetGlobal(0),
+				End
+			][..],	
+			injected_module
+				.code_section().expect("function section should exist").bodies()[0]
+				.code().elements()
+		);
+	}	
+
 }
