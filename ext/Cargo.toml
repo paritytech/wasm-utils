@@ -4,5 +4,5 @@ version = "0.1.0"
 authors = ["NikVolf <nikvolf@gmail.com>"]
 
 [dependencies]
-parity-wasm = { git="https://github.com/nikvolf/parity-wasm" }
+parity-wasm = "0.12"
 wasm-utils = { path = "../" }
