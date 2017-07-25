@@ -22,7 +22,7 @@ enum InjectAction {
 pub fn inject_counter(opcodes: &mut elements::Opcodes, gas_func: u32) {
 	use parity_wasm::elements::Opcode::*;
 
-	let mut stack: Vec<(usize, usize)> = Vec::new(); 
+	let mut stack: Vec<(usize, usize)> = Vec::new();
 	let mut cursor = 0;
 	stack.push((0, 1));
 
@@ -127,7 +127,7 @@ pub fn inject_gas_counter(module: elements::Module) -> elements::Module {
 							if *func_index >= gas_func { *func_index += 1}
 						},
 						_ => {}
-					} 
+					}
 				}
 			},
 			&mut elements::Section::Element(ref mut elements_section) => {
@@ -180,11 +180,11 @@ mod tests {
 				Call(0),
 				GetGlobal(0),
 				End
-			][..],	
+			][..],
 			injected_module
 				.code_section().expect("function section should exist").bodies()[0]
 				.code().elements()
-		);		
+		);
 	}
 
 	#[test]
@@ -206,7 +206,7 @@ mod tests {
 								GetGlobal(0),
 								GetGlobal(0),
 							End,
-							GetGlobal(0),							
+							GetGlobal(0),
 							End
 						]
 					))
@@ -215,7 +215,7 @@ mod tests {
 			.build();
 
 		let injected_module = inject_gas_counter(module);
-		
+
 		assert_eq!(
 			&vec![
 				I32Const(4),
@@ -230,7 +230,7 @@ mod tests {
 				End,
 				GetGlobal(0),
 				End
-			][..],	
+			][..],
 			injected_module
 				.code_section().expect("function section should exist").bodies()[0]
 				.code().elements()
@@ -257,9 +257,9 @@ mod tests {
 								GetGlobal(0),
 							Else,
 								GetGlobal(0),
-								GetGlobal(0),							
+								GetGlobal(0),
 							End,
-							GetGlobal(0),							
+							GetGlobal(0),
 							End
 						]
 					))
@@ -288,12 +288,12 @@ mod tests {
 				End,
 				GetGlobal(0),
 				End
-			][..],	
+			][..],
 			injected_module
 				.code_section().expect("function section should exist").bodies()[0]
 				.code().elements()
 		);
-	}	
+	}
 
 	#[test]
 	fn call_index() {
@@ -319,9 +319,9 @@ mod tests {
 								Call(0),
 							Else,
 								Call(0),
-								Call(0),							
+								Call(0),
 							End,
-							Call(0),							
+							Call(0),
 							End
 						]
 					))
@@ -350,11 +350,11 @@ mod tests {
 				End,
 				Call(1),
 				End
-			][..],	
+			][..],
 			injected_module
 				.code_section().expect("function section should exist").bodies()[1]
 				.code().elements()
 		);
-	}		
+	}
 
 }

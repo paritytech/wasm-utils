@@ -9,6 +9,7 @@ mod symbols;
 mod logger;
 mod ext;
 mod pack;
+mod rules;
 
 pub use optimizer::{optimize, Error as OptimizerError};
 pub use gas::inject_gas_counter;
