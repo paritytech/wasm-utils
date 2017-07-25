@@ -256,11 +256,11 @@ pub struct Set {
 }
 
 impl Set {
-    fn new(entries: HashMap<InstructionType, u32>) -> Self {
+    pub fn new(entries: HashMap<InstructionType, u32>) -> Self {
         Set { entries: entries }
     }
 
-    fn process(&self, opcode: &elements::Opcode) -> u32 {
+    pub fn process(&self, opcode: &elements::Opcode) -> u32 {
         self.entries.get(&InstructionType::op(opcode)).map(|x| *x).unwrap_or(1)
     }
 }

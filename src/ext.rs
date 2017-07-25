@@ -8,7 +8,7 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, original_imports: usiz
 		match opcode {
 			&mut Call(ref mut call_index) => {
 				if let Some(pos) = inserts.iter().position(|x| x.1 == *call_index) {
-					*call_index = (original_imports + pos) as u32; 
+					*call_index = (original_imports + pos) as u32;
 				} else if *call_index as usize > original_imports {
 					*call_index += inserts.len() as u32;
 				}
@@ -86,9 +86,17 @@ pub fn externalize(
 							if *func_index >= import_funcs_total as u32 { *func_index += replaces.len() as u32; }
 						},
 						_ => {}
-					} 
+					}
 				}
-			},            
+			},
+			&mut elements::Section::Element(ref mut elements_section) => {
+				for ref mut segment in elements_section.entries_mut() {
+					// update all indirect call addresses initial values
+					for func_index in segment.members_mut() {
+						if *func_index >= import_funcs_total as u32 { *func_index += replaces.len() as u32; }
+					}
+				}
+			},
 			_ => { }
 		}
 	}
