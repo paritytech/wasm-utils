@@ -3,7 +3,7 @@ use parity_wasm::elements;
 
 pub struct UnknownInstruction;
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
 pub enum InstructionType {
     Bit,
     Add,
