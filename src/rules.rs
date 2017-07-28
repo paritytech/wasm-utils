@@ -252,15 +252,27 @@ impl InstructionType {
 
 #[derive(Debug, Default)]
 pub struct Set {
+    default: u32,
     entries: HashMap<InstructionType, u32>,
 }
 
 impl Set {
-    pub fn new(entries: HashMap<InstructionType, u32>) -> Self {
-        Set { entries: entries }
+    pub fn new(entries: HashMap<InstructionType, u32>, default: u32) -> Self {
+        Set {
+            entries: entries,
+            default: default,
+        }
     }
 
     pub fn process(&self, opcode: &elements::Opcode) -> u32 {
-        self.entries.get(&InstructionType::op(opcode)).map(|x| *x).unwrap_or(1)
+        self.entries.get(&InstructionType::op(opcode)).map(|x| *x).unwrap_or(self.default)
     }
+}
+
+#[test]
+fn smoky() {
+    let set = Set::new(Default::default(), 10);
+    let cost = set.process(&elements::Opcode::I32DivU);
+
+    assert_eq!(cost, 10);
 }
