@@ -9,6 +9,7 @@ log = "0.3"
 env_logger = "0.4"
 lazy_static = "0.2"
 clap = "2.24"
+wasm-build = { path = "build" }
 
 [lib]
 
