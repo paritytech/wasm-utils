@@ -2,6 +2,14 @@
 
 Collection of WASM utilities used in Parity and WASM contract devepment
 
+## Build tools for cargo
+
+Easiest way to use is to install via `cargo install`:
+
+```
+cargo install --git https://github.com/paritytech/wasm-utils wasm-build
+```
+
 ## Symbols optimizer (wasm-opt)
 
 ```
