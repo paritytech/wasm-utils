@@ -78,11 +78,7 @@ fn main() {
 	process_output(target_dir, wasm_binary).expect("Failed to process cargo target directory");
 
 	let path = wasm_path(target_dir, wasm_binary);
-
-	let mut module = wasm_utils::externalize(
-		parity_wasm::deserialize_file(&path).unwrap(),
-		vec!["_free", "_malloc"],
-	);
+	let mut module =  parity_wasm::deserialize_file(&path).unwrap();
 
 	wasm_utils::optimize(&mut module, vec!["_call"]).expect("Optimizer to finish without errors");
 
