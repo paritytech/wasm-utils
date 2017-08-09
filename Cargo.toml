@@ -9,7 +9,7 @@ log = "0.3"
 env_logger = "0.4"
 lazy_static = "0.2"
 clap = "2.24"
-wasm-build = { path = "build" }
+glob = "0.2"
 
 [lib]
 
@@ -28,3 +28,7 @@ path = "gas/src/main.rs"
 [[bin]]
 name = "wasm-pack"
 path = "pack/src/main.rs"
+
+[[bin]]
+name = "wasm-build"
+path = "build/src/main.rs"
