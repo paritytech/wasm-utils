@@ -1,0 +1,12 @@
+[package]
+name = "wasm-build"
+version = "0.1.0"
+authors = ["NikVolf <nikvolf@gmail.com>"]
+
+[dependencies]
+glob = "0.2"
+wasm-utils = { path = "../" }
+clap = "2.24"
+
+[[bin]]
+name = "wasm-build"
