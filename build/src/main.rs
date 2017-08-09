@@ -3,6 +3,7 @@
 extern crate glob;
 extern crate wasm_utils;
 extern crate clap;
+extern crate parity_wasm;
 
 use std::{fs, io};
 use std::path::PathBuf;
@@ -21,6 +22,12 @@ impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
 		Error::Io(err)
 	}
+}
+
+pub fn wasm_path(target_dir: &str, bin_name: &str) -> String {
+	let mut path = PathBuf::from(target_dir);
+	path.push(format!("{}.wasm", bin_name));
+	path.to_string_lossy().to_string()
 }
 
 pub fn process_output(target_dir: &str, bin_name: &str) -> Result<(), Error> {
@@ -69,4 +76,15 @@ fn main() {
     let wasm_binary = matches.value_of("wasm").expect("is required; qed");
 
 	process_output(target_dir, wasm_binary).expect("Failed to process cargo target directory");
+
+	let path = wasm_path(target_dir, wasm_binary);
+
+	let mut module = wasm_utils::externalize(
+		parity_wasm::deserialize_file(&path).unwrap(),
+		vec!["_free", "_malloc"],
+	);
+
+	wasm_utils::optimize(&mut module, vec!["_call"]).expect("Optimizer to finish without errors");
+
+    parity_wasm::serialize_to_file(&path, module).unwrap();
 }
