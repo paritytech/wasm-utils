@@ -4,7 +4,7 @@ extern crate glob;
 extern crate wasm_utils;
 extern crate clap;
 
-use std::{env, fs, io};
+use std::{fs, io};
 use std::path::PathBuf;
 
 use clap::{App, Arg};
@@ -23,13 +23,11 @@ impl From<io::Error> for Error {
 	}
 }
 
-pub fn process_output(bin_name: &str) -> Result<(), Error> {
-	let out_dir = env::var("OUT_DIR").map_err(|_| Error::NoEnvVar)?;
-	let mut path = PathBuf::from(out_dir.clone());
+pub fn process_output(target_dir: &str, bin_name: &str) -> Result<(), Error> {
+	let mut path = PathBuf::from(target_dir);
 	let wasm_name = bin_name.to_string().replace("-", "_");
-	path.push("..");
-	path.push("..");
-	path.push("..");
+	path.push("wasm32-unknown-emscripten");
+	path.push("release");
 	path.push("deps");
 	path.push(format!("{}-*.wasm", wasm_name));
 
@@ -45,7 +43,7 @@ pub fn process_output(bin_name: &str) -> Result<(), Error> {
 		))
 	} else {
 		let file = files.drain(..).nth(0).expect("0th element exists").expect("glob err");
-		let mut path = PathBuf::from(out_dir.clone());
+		let mut path = PathBuf::from(target_dir);
 		path.push(format!("{}.wasm", bin_name));
 		fs::copy(file, path)?;
 	}
@@ -57,22 +55,18 @@ fn main() {
 	wasm_utils::init_log();
 
 	let matches = App::new("wasm-opt")
-		.arg(Arg::with_name("input")
+		.arg(Arg::with_name("target")
 			.index(1)
 			.required(true)
-			.help("Input WASM file"))
-		.arg(Arg::with_name("output")
+			.help("Cargo target directory"))
+		.arg(Arg::with_name("wasm")
 			.index(2)
 			.required(true)
-			.help("Output WASM file"))
-		.arg(Arg::with_name("exports")
-			.long("exports")
-			.short("e")
-			.takes_value(true)
-			.value_name("functions")
-			.help("Comma-separated list of exported functions to keep. Default: _call"))
+			.help("Wasm binary name"))
 		.get_matches();
 
+    let target_dir = matches.value_of("target").expect("is required; qed");
+    let wasm_binary = matches.value_of("wasm").expect("is required; qed");
 
-
+	process_output(target_dir, wasm_binary).expect("Failed to process cargo target directory");
 }
