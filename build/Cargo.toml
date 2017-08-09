@@ -7,6 +7,7 @@ authors = ["NikVolf <nikvolf@gmail.com>"]
 glob = "0.2"
 wasm-utils = { path = "../" }
 clap = "2.24"
+parity-wasm = "0.12"
 
 [[bin]]
 name = "wasm-build"
