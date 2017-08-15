@@ -70,6 +70,12 @@ fn main() {
 			.index(2)
 			.required(true)
 			.help("Wasm binary name"))
+		.arg(Arg::with_name("skip_optimization")
+			.help("Skip symbol optimization step producing final wasm")
+			.long("skip-optimization"))
+		.arg(Arg::with_name("skip_alloc")
+			.help("Skip allocator externalizer step producing final wasm")
+			.long("skip-externalize"))
 		.get_matches();
 
     let target_dir = matches.value_of("target").expect("is required; qed");
@@ -79,12 +85,18 @@ fn main() {
 
 	let path = wasm_path(target_dir, wasm_binary);
 
-	let mut module = wasm_utils::externalize(
-		parity_wasm::deserialize_file(&path).unwrap(),
-		vec!["_free", "_malloc"],
-	);
+	let mut module = parity_wasm::deserialize_file(&path).unwrap();
 
-	wasm_utils::optimize(&mut module, vec!["_call"]).expect("Optimizer to finish without errors");
+	if !matches.is_present("skip_alloc") {
+		module = wasm_utils::externalize(
+			module,
+			vec!["_free", "_malloc"],
+		);
+	}
 
-    parity_wasm::serialize_to_file(&path, module).unwrap();
+	if !matches.is_present("skip_optimization") {
+		wasm_utils::optimize(&mut module, vec!["_call"]).expect("Optimizer to finish without errors");
+	}
+
+	parity_wasm::serialize_to_file(&path, module).unwrap();
 }
