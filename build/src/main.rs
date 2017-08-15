@@ -95,7 +95,7 @@ fn main() {
 	}
 
 	if !matches.is_present("skip_optimization") {
-		wasm_utils::optimize(&mut module, vec!["_call"]).expect("Optimizer to finish without errors");
+		wasm_utils::optimize(&mut module, vec!["_call", "setTempRet0"]).expect("Optimizer to finish without errors");
 	}
 
 	parity_wasm::serialize_to_file(&path, module).unwrap();
