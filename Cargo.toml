@@ -14,8 +14,8 @@ glob = "0.2"
 [lib]
 
 [[bin]]
-name = "wasm-opt"
-path = "opt/src/main.rs"
+name = "wasm-prune"
+path = "prune/src/main.rs"
 
 [[bin]]
 name = "wasm-ext"
