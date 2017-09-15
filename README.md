@@ -10,10 +10,10 @@ Easiest way to use is to install via `cargo install`:
 cargo install --git https://github.com/paritytech/wasm-utils wasm-build
 ```
 
-## Symbols optimizer (wasm-opt)
+## Symbols pruning (wasm-prune)
 
 ```
-cargo run --release --bin wasm-opt -- <input_binary.wasm> <output_binary.wasm>
+cargo run --release --bin wasm-prune -- <input_binary.wasm> <output_binary.wasm>
 ```
 
 This will optimize WASM symbols tree to leave only those elements that are used by contract `_call` function entry.
