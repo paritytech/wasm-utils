@@ -11,11 +11,11 @@ mod symbols;
 mod logger;
 mod ext;
 mod pack;
-mod non_determinism_checker;
+mod indeterminism_check;
 
 pub use optimizer::{optimize, Error as OptimizerError};
 pub use gas::inject_gas_counter;
 pub use logger::init_log;
 pub use ext::externalize;
 pub use pack::pack_instance;
-pub use non_determinism_checker::have_non_determinism;
+pub use indeterminism_check::have_indeterminism;

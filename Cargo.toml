@@ -32,3 +32,7 @@ path = "pack/src/main.rs"
 [[bin]]
 name = "wasm-build"
 path = "build/src/main.rs"
+
+[[bin]]
+name = "indeterminism-check"
+path = "indeterminism_check/src/main.rs"
