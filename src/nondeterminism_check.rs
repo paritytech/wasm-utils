@@ -2,7 +2,7 @@ use parity_wasm::{elements};
 use parity_wasm::elements::{ Section, Opcode };
 use parity_wasm::elements::Opcode::*;
 
-fn check_opcodes (opcodes: &[Opcode]) -> bool {
+fn have_nondeterministic_opcodes (opcodes: &[Opcode]) -> bool {
 	for opcode in opcodes {
 		match *opcode {
 			F32Abs |
@@ -77,34 +77,34 @@ fn check_opcodes (opcodes: &[Opcode]) -> bool {
 
 
 
-pub fn have_indeterminism(module: elements::Module) -> bool {
+pub fn is_deterministic(module: elements::Module) -> bool {
 	for section in module.sections() {
 		match *section {
 			Section::Code(ref cs) => {
 				for body in cs.bodies() {
-					if check_opcodes(body.code().elements()) {
-						return true;
+					if have_nondeterministic_opcodes(body.code().elements()) {
+						return false;
 					}
 				}
 			},
 			Section::Global(ref global) => {
 				for entry in global.entries() {
-					if check_opcodes(entry.init_expr().code()) {
-						return true;
+					if have_nondeterministic_opcodes(entry.init_expr().code()) {
+						return false;
 					}
 				}
 			},
 			Section::Element(ref element) => {
 				for entry in element.entries() {
-					if check_opcodes(entry.offset().code()) {
-						return true;
+					if have_nondeterministic_opcodes(entry.offset().code()) {
+						return false;
 					}
 				}
 			}
 			_ => continue
 			}
 		}
-	false
+	true
 }
 
 #[cfg(test)]
@@ -113,7 +113,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn indeterminism_found() {
+	fn nondeterminism_found() {
 		let module = builder::module()
 			.function().signature().return_type().f32().build()
 			.body()
@@ -128,11 +128,11 @@ mod tests {
 				.build()
 			.build()
 		.build();
-		assert_eq!(true, have_indeterminism(module));
+		assert_eq!(false, is_deterministic(module));
 	}
 
 	#[test]
-	fn indeterminism_not() {
+	fn nondeterminism_not() {
 		let module = builder::module()
 			.function().signature().return_type().f32().build()
 			.body()
@@ -147,6 +147,6 @@ mod tests {
 				.build()
 			.build()
 		.build();
-		assert_eq!(false, have_indeterminism(module));
+		assert_eq!(true, is_deterministic(module));
 	}
 }

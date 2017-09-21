@@ -17,10 +17,10 @@ fn main() {
 	// Loading module
 	let module = parity_wasm::deserialize_file(&args[1]).expect("Module deserialization to succeed");
 
-	if wasm_utils::have_indeterminism(module) {
-		println!("Non-determinism found");
+	if wasm_utils::is_deterministic(module) {
+		println!("Module is deterministic");
 	} else {
-		println!("Non-determinism not found");
+		println!("Module is not deterministic");
 	}
 
 }

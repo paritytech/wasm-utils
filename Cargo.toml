@@ -34,5 +34,5 @@ name = "wasm-build"
 path = "build/src/main.rs"
 
 [[bin]]
-name = "indeterminism-check"
-path = "indeterminism_check/src/main.rs"
+name = "nondeterminism-check"
+path = "nondeterminism_check/src/main.rs"
