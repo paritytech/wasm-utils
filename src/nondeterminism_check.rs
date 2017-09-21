@@ -87,20 +87,6 @@ pub fn is_deterministic(module: elements::Module) -> bool {
 					}
 				}
 			},
-			Section::Global(ref global) => {
-				for entry in global.entries() {
-					if have_nondeterministic_opcodes(entry.init_expr().code()) {
-						return false;
-					}
-				}
-			},
-			Section::Element(ref element) => {
-				for entry in element.entries() {
-					if have_nondeterministic_opcodes(entry.offset().code()) {
-						return false;
-					}
-				}
-			}
 			_ => continue
 			}
 		}
