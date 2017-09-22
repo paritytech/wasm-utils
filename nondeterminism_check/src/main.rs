@@ -17,7 +17,7 @@ fn main() {
 	// Loading module
 	let module = parity_wasm::deserialize_file(&args[1]).expect("Module deserialization to succeed");
 
-	if wasm_utils::is_deterministic(module) {
+	if wasm_utils::is_deterministic(&module) {
 		println!("Module is deterministic");
 	} else {
 		println!("Module is not deterministic");
