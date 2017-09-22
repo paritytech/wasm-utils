@@ -77,7 +77,7 @@ fn have_nondeterministic_opcodes (opcodes: &[Opcode]) -> bool {
 
 
 
-pub fn is_deterministic(module: elements::Module) -> bool {
+pub fn is_deterministic(module: &elements::Module) -> bool {
 	for section in module.sections() {
 		match *section {
 			Section::Code(ref cs) => {
@@ -114,7 +114,7 @@ mod tests {
 				.build()
 			.build()
 		.build();
-		assert_eq!(false, is_deterministic(module));
+		assert_eq!(false, is_deterministic(&module));
 	}
 
 	#[test]
@@ -133,6 +133,6 @@ mod tests {
 				.build()
 			.build()
 		.build();
-		assert_eq!(true, is_deterministic(module));
+		assert_eq!(true, is_deterministic(&module));
 	}
 }
