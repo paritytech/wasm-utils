@@ -120,7 +120,7 @@ mod tests {
 	#[test]
 	fn nondeterminism_not() {
 		let module = builder::module()
-			.function().signature().return_type().f32().build()
+			.function().signature().return_type().i32().build()
 			.body()
 				.with_opcodes(elements::Opcodes::new(
 					vec![
