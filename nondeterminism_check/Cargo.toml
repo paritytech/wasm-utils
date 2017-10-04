@@ -1,13 +1,9 @@
 [package]
-name = "wasm-build"
+name = "nondeterminism_check"
 version = "0.1.0"
 authors = ["NikVolf <nikvolf@gmail.com>"]
 
 [dependencies]
-glob = "0.2"
+parity-wasm = "0.14"
 wasm-utils = { path = "../" }
 clap = "2.24"
-parity-wasm = "0.14"
-
-[[bin]]
-name = "wasm-build"

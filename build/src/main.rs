@@ -76,6 +76,14 @@ fn main() {
 		.arg(Arg::with_name("skip_alloc")
 			.help("Skip allocator externalizer step producing final wasm")
 			.long("skip-externalize"))
+		.arg(Arg::with_name("runtime_type")
+			.help("Injects RUNTIME_TYPE global export")
+			.takes_value(true)
+			.long("runtime-type"))
+		.arg(Arg::with_name("runtime_version")
+			.help("Injects RUNTIME_VERSION global export")
+			.takes_value(true)
+			.long("runtime-version"))
 		.get_matches();
 
     let target_dir = matches.value_of("target").expect("is required; qed");
@@ -96,6 +104,16 @@ fn main() {
 
 	if !matches.is_present("skip_optimization") {
 		wasm_utils::optimize(&mut module, vec!["_call", "setTempRet0"]).expect("Optimizer to finish without errors");
+	}
+
+	if let Some(runtime_type) = matches.value_of("runtime_type") {
+		let runtime_type: &[u8] = runtime_type.as_bytes();
+		if runtime_type.len() != 4 {
+			panic!("--runtime-type should be equal to 4 bytes");
+		}
+		let runtime_version: u32 = matches.value_of("runtime_version").unwrap_or("1").parse()
+			.expect("--runtime-version should be a positive integer");
+		module = wasm_utils::inject_runtime_type(module, &runtime_type, runtime_version);
 	}
 
 	parity_wasm::serialize_to_file(&path, module).unwrap();
