@@ -1,4 +1,5 @@
 use parity_wasm::{elements, builder};
+use rules;
 
 pub fn update_call_index(opcodes: &mut elements::Opcodes, inserted_index: u32) {
 	use parity_wasm::elements::Opcode::*;
@@ -13,13 +14,13 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, inserted_index: u32) {
 }
 
 enum InjectAction {
-	Spawn,
-	Continue,
+	Spawn(u32),
+	Continue(u32),
 	Increment,
 	IncrementSpawn,
 }
 
-pub fn inject_counter(opcodes: &mut elements::Opcodes, gas_func: u32) {
+pub fn inject_counter(opcodes: &mut elements::Opcodes, rules: &rules::Set, gas_func: u32) {
 	use parity_wasm::elements::Opcode::*;
 
 	let mut stack: Vec<(usize, usize)> = Vec::new();
@@ -37,7 +38,7 @@ pub fn inject_counter(opcodes: &mut elements::Opcodes, gas_func: u32) {
 			let opcode = &opcodes.elements()[cursor];
 			match *opcode {
 				Block(_) | If(_) | Loop(_) => {
-					InjectAction::Spawn
+					InjectAction::Spawn(rules.process(opcode))
 				},
 				Else => {
 					InjectAction::IncrementSpawn
@@ -46,7 +47,7 @@ pub fn inject_counter(opcodes: &mut elements::Opcodes, gas_func: u32) {
 					InjectAction::Increment
 				},
 				_ => {
-					InjectAction::Continue
+					InjectAction::Continue(rules.process(opcode))
 				}
 			}
 		};
@@ -65,14 +66,14 @@ pub fn inject_counter(opcodes: &mut elements::Opcodes, gas_func: u32) {
 				cursor += 3;
 				stack.push((cursor, 1));
 			},
-			InjectAction::Continue => {
+			InjectAction::Continue(val) => {
 				cursor += 1;
 				let (pos, ops) = last_entry;
-				stack.push((pos, ops+1));
+				stack.push((pos, ops + val as usize));
 			},
-			InjectAction::Spawn => {
+			InjectAction::Spawn(val) => {
 				let (pos, ops) = last_entry;
-				stack.push((pos, ops+1));
+				stack.push((pos, ops + val as usize));
 
 				cursor += 1;
 				stack.push((cursor, 1));
@@ -81,7 +82,7 @@ pub fn inject_counter(opcodes: &mut elements::Opcodes, gas_func: u32) {
 	}
 }
 
-pub fn inject_gas_counter(module: elements::Module) -> elements::Module {
+pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set) -> elements::Module {
 	// Injecting gas counting external
 	let mut mbuilder = builder::from_module(module);
 	let import_sig = mbuilder.push_signature(
@@ -117,7 +118,7 @@ pub fn inject_gas_counter(module: elements::Module) -> elements::Module {
 			&mut elements::Section::Code(ref mut code_section) => {
 				for ref mut func_body in code_section.bodies_mut() {
 					update_call_index(func_body.code_mut(), gas_func);
-					inject_counter(func_body.code_mut(), gas_func);
+					inject_counter(func_body.code_mut(), rules, gas_func);
 				}
 			},
 			&mut elements::Section::Export(ref mut export_section) => {
@@ -172,7 +173,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module);
+		let injected_module = inject_gas_counter(module, &Default::default());
 
 		assert_eq!(
 			&vec![
@@ -214,7 +215,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module);
+		let injected_module = inject_gas_counter(module, &Default::default());
 
 		assert_eq!(
 			&vec![
@@ -267,7 +268,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module);
+		let injected_module = inject_gas_counter(module, &Default::default());
 
 		assert_eq!(
 			&vec![
@@ -329,7 +330,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module);
+		let injected_module = inject_gas_counter(module, &Default::default());
 
 		assert_eq!(
 			&vec![
