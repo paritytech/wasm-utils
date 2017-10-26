@@ -136,12 +136,12 @@ fn main() {
 	// If module has an exported function with name=CREATE_SYMBOL
 	// build will pack the module (raw_module) into this funciton and export as CALL_SYMBOL.
 	// Otherwise it will just save an optimised raw_module
-	if !has_ctor(&ctor_module) {
+	if has_ctor(&ctor_module) {
 		if !matches.is_present("skip_optimization") {
 			wasm_utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL, "setTempRet0"]).expect("Optimizer to finish without errors");
 		}
 		wasm_utils::pack_instance(raw_module, &mut ctor_module);
-		parity_wasm::serialize_to_file(path, ctor_module).expect("Failed to serialize to file");
+		parity_wasm::serialize_to_file(&path, ctor_module).expect("Failed to serialize to file");
 	} else {
 		let mut file = fs::File::create(&path).expect("Failed to create file");
 		file.write_all(&raw_module).expect("Failed to write module to file");

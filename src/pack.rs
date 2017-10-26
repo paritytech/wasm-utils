@@ -42,7 +42,7 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
                     if let Opcode::I32Const(offst) = entry.offset().code()[0] {
                         let len = entry.value().len() as i32;
                         let offst = offst as i32;
-                        (entry.index(), offst + (len + 32) - len % 32)
+                        (entry.index(), offst + (len + 4) - len % 4)
                     } else {
                         (0, 0)
                     }
