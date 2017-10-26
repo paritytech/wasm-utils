@@ -1,20 +1,23 @@
 use parity_wasm::{serialize,elements, builder, deserialize_buffer};
 use self::elements::{ External, Section, ResizableLimits, Opcode, DataSegment, InitExpr, Internal };
 
-/// TODO: desc
-pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
-    let raw_len = raw_module.len();
-    let mem_required = (raw_len / (64 * 1024) + 1) as u32;
+use super::CREATE_SYMBOL;
+use super::CALL_SYMBOL;
 
-    // Func
+/// If module has an exported "_create" function we want to pack it into "constructor".
+/// `raw_module` is the actual contract code
+/// `ctor_module` is the constructor which should return `raw_module`
+pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
+
+    // We need to find an internal ID of function witch is exported as "_create"
+    // in order to find it in the Code section of the module
     let create_func_id = {
-        let export_section = ctor_module.export_section().expect("No export section found");
-        let found_entry = export_section.entries().iter()
-            .find(|entry| "_create" == entry.field()).expect("No export with name _create found");
+        let found_entry = ctor_module.export_section().expect("No export section found").entries().iter()
+            .find(|entry| CREATE_SYMBOL == entry.field()).expect("No export with name _create found");
 
         let function_index: usize = match found_entry.internal() {
             &Internal::Function(index) => index as usize,
-            _ => panic!("_create export is not a function"),
+            _ => panic!("export is not a function"),
         };
 
         let import_section_len: usize = match ctor_module.import_section() {
@@ -30,6 +33,7 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
         function_index - import_section_len
     };
 
+    // Code data address is an address where we put the contract's code (raw_module)
     let mut code_data_address = 0i32;
     for section in ctor_module.sections_mut() {
         match section {
@@ -38,14 +42,18 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
                     if let Opcode::I32Const(offst) = entry.offset().code()[0] {
                         let len = entry.value().len() as i32;
                         let offst = offst as i32;
-                        (entry.index(), offst + len + len % 32)
+                        (entry.index(), offst + (len + 32) - len % 32)
                     } else {
                         (0, 0)
                     }
                 } else {
                     (0, 0)
                 };
-                let code_data = DataSegment::new(index, InitExpr::new(vec![Opcode::I32Const(offset),Opcode::End]), raw_module.clone());
+                let code_data = DataSegment::new(
+                    index,
+                    InitExpr::new(vec![Opcode::I32Const(offset),Opcode::End]),
+                    raw_module.clone()
+                );
                 data_section.entries_mut().push(code_data);
                 code_data_address = offset;
             },
@@ -57,9 +65,9 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
         match section {
             &mut Section::Export(ref mut export_section) => {
                 for entry in export_section.entries_mut().iter_mut() {
-                    if "_create" == entry.field() {
+                    if CREATE_SYMBOL == entry.field() {
                         // change _create export name into default _call
-                        *entry.field_mut() = "_call".to_owned();
+                        *entry.field_mut() = CALL_SYMBOL.to_owned();
                     }
                 }
             }
@@ -72,7 +80,7 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
                     Opcode::I32Const(code_data_address),
                     Opcode::I32Store(0, 8),
                     Opcode::GetLocal(0),
-                    Opcode::I32Const(raw_len as i32),
+                    Opcode::I32Const(raw_module.len() as i32),
                     Opcode::I32Store(0, 12),
                     Opcode::End].iter().cloned());
             },

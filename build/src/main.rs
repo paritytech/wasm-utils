@@ -12,6 +12,9 @@ use std::path::PathBuf;
 use clap::{App, Arg};
 use parity_wasm::elements;
 
+use wasm_utils::CREATE_SYMBOL;
+use wasm_utils::CALL_SYMBOL;
+
 #[derive(Debug)]
 pub enum Error {
 	Io(io::Error),
@@ -62,7 +65,7 @@ pub fn process_output(target_dir: &str, bin_name: &str) -> Result<(), Error> {
 
 fn has_ctor(module: &elements::Module) -> bool {
 	if let Some(ref section) = module.export_section() {
-		section.entries().iter().find(|e| "_create" == e.field()).is_some()
+		section.entries().iter().any(|e| CALL_SYMBOL == e.field())
 	} else {
 		false
 	}
@@ -125,23 +128,23 @@ fn main() {
 	let mut ctor_module = module.clone();
 
 	if !matches.is_present("skip_optimization") {
-		wasm_utils::optimize(&mut module, vec!["_call", "setTempRet0"]).expect("Optimizer to finish without errors");
+		wasm_utils::optimize(&mut module, vec![CALL_SYMBOL, "setTempRet0"]).expect("Optimizer to finish without errors");
 	}
 
 	let raw_module = parity_wasm::serialize(module).expect("Failed to serialize module");
 
-	let mut file = fs::File::create(&path).expect("Failed to create file");;
-	file.write_all(&raw_module).expect("Failed to write module to file");
-
-	// will pack into constructor
-	if has_ctor(&ctor_module) {
+	// If module has an exported function with name=CREATE_SYMBOL
+	// build will pack the module (raw_module) into this funciton and export as CALL_SYMBOL.
+	// Otherwise it will just save an optimised raw_module
+	if !has_ctor(&ctor_module) {
 		if !matches.is_present("skip_optimization") {
-			wasm_utils::optimize(&mut ctor_module, vec!["_create", "setTempRet0"]).expect("Optimizer to finish without errors");
+			wasm_utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL, "setTempRet0"]).expect("Optimizer to finish without errors");
 		}
 		wasm_utils::pack_instance(raw_module, &mut ctor_module);
-
-		let ctor_path = wasm_path(target_dir, &format!("{}_ctor", wasm_binary));
-		parity_wasm::serialize_to_file(ctor_path, ctor_module);
+		parity_wasm::serialize_to_file(path, ctor_module).expect("Failed to serialize to file");
+	} else {
+		let mut file = fs::File::create(&path).expect("Failed to create file");
+		file.write_all(&raw_module).expect("Failed to write module to file");
 	}
 
 }
