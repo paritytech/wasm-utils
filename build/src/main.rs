@@ -12,8 +12,7 @@ use std::path::PathBuf;
 use clap::{App, Arg};
 use parity_wasm::elements;
 
-use wasm_utils::CREATE_SYMBOL;
-use wasm_utils::CALL_SYMBOL;
+use wasm_utils::{CREATE_SYMBOL, CALL_SYMBOL, SET_TEMP_RET_SYMBOL};
 
 #[derive(Debug)]
 pub enum Error {
@@ -65,7 +64,7 @@ pub fn process_output(target_dir: &str, bin_name: &str) -> Result<(), Error> {
 
 fn has_ctor(module: &elements::Module) -> bool {
 	if let Some(ref section) = module.export_section() {
-		section.entries().iter().any(|e| CALL_SYMBOL == e.field())
+		section.entries().iter().any(|e| CREATE_SYMBOL == e.field())
 	} else {
 		false
 	}
@@ -128,7 +127,7 @@ fn main() {
 	let mut ctor_module = module.clone();
 
 	if !matches.is_present("skip_optimization") {
-		wasm_utils::optimize(&mut module, vec![CALL_SYMBOL, "setTempRet0"]).expect("Optimizer to finish without errors");
+		wasm_utils::optimize(&mut module, vec![CALL_SYMBOL, SET_TEMP_RET_SYMBOL]).expect("Optimizer to finish without errors");
 	}
 
 	let raw_module = parity_wasm::serialize(module).expect("Failed to serialize module");
@@ -138,7 +137,7 @@ fn main() {
 	// Otherwise it will just save an optimised raw_module
 	if has_ctor(&ctor_module) {
 		if !matches.is_present("skip_optimization") {
-			wasm_utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL, "setTempRet0"]).expect("Optimizer to finish without errors");
+			wasm_utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL, SET_TEMP_RET_SYMBOL]).expect("Optimizer to finish without errors");
 		}
 		wasm_utils::pack_instance(raw_module, &mut ctor_module);
 		parity_wasm::serialize_to_file(&path, ctor_module).expect("Failed to serialize to file");

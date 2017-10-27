@@ -27,10 +27,6 @@ name = "wasm-gas"
 path = "gas/src/main.rs"
 
 [[bin]]
-name = "wasm-pack"
-path = "pack/src/main.rs"
-
-[[bin]]
 name = "wasm-build"
 path = "build/src/main.rs"
 

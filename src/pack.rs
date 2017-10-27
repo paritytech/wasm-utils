@@ -1,8 +1,7 @@
 use parity_wasm::{serialize,elements, builder, deserialize_buffer};
 use self::elements::{ External, Section, ResizableLimits, Opcode, DataSegment, InitExpr, Internal };
 
-use super::CREATE_SYMBOL;
-use super::CALL_SYMBOL;
+use super::{CREATE_SYMBOL, CALL_SYMBOL};
 
 /// If module has an exported "_create" function we want to pack it into "constructor".
 /// `raw_module` is the actual contract code
@@ -35,8 +34,10 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
 
     // Code data address is an address where we put the contract's code (raw_module)
     let mut code_data_address = 0i32;
+
     for section in ctor_module.sections_mut() {
         match section {
+            // TODO: add data section is there no one
             &mut Section::Data(ref mut data_section) => {
                 let (index, offset) = if let Some(ref entry) = data_section.entries().iter().last() {
                     if let Opcode::I32Const(offst) = entry.offset().code()[0] {
@@ -88,4 +89,84 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
             _ => {;},
         }
     };
+}
+
+#[cfg(test)]
+mod test {
+    extern crate parity_wasm;
+    use parity_wasm::interpreter;
+    use parity_wasm::ModuleInstanceInterface;
+    use super::*;
+    use super::super::optimize;
+    use super::super::SET_TEMP_RET_SYMBOL;
+
+    #[test]
+    fn call_returns_code() {
+        let mut module = builder::module()
+            .import()
+                .module("env")
+                .field("memory")
+                .external()
+                .memory(1 as u32, Some(1 as u32))
+            .build()
+            .data()
+                .offset(elements::Opcode::I32Const(16))
+                .value(vec![0u8])
+            .build()
+            .function()
+                .signature().param().i32().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+            .build()
+            .function()
+                .signature().param().i32().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+            .build()
+            .export()
+                .field("_call")
+                .internal().func(0)
+            .build()
+            .export()
+                .field("_create")
+                .internal().func(1)
+            .build()
+        .build();
+        let mut ctor_module = module.clone();
+        optimize(&mut module, vec![CALL_SYMBOL, SET_TEMP_RET_SYMBOL]).expect("Optimizer to finish without errors");
+        optimize(&mut ctor_module, vec![CREATE_SYMBOL, SET_TEMP_RET_SYMBOL]).expect("Optimizer to finish without errors");
+
+        let raw_module = parity_wasm::serialize(module).unwrap();
+        let raw_module_len = raw_module.len();
+        pack_instance(raw_module, &mut ctor_module);
+
+        let program = parity_wasm::DefaultProgramInstance::new().expect("Program instance to load");
+        let env_instance = program.module("env").expect("Wasm program to contain env module");
+        let env_memory = env_instance.memory(interpreter::ItemIndex::Internal(0)).expect("Linear memory to exist in wasm runtime");
+
+        let execution_params = interpreter::ExecutionParams::default();
+        let module = program.add_module("contract", ctor_module, None).expect("Failed to initialize module");
+
+        let _ = module.execute_export("_call", execution_params);
+
+        let result_code = env_memory.get(20, raw_module_len).expect("Failed to get code");
+
+        let result_module: elements::Module = parity_wasm::deserialize_buffer(result_code).expect("Result module is not valid");
+
+        let program = parity_wasm::DefaultProgramInstance::new().expect("Program2 instance to load");
+        let module = program.add_module("contract", result_module, None).expect("Failed to initialize module");
+        let execution_params = interpreter::ExecutionParams::default();
+
+        let _ = module.execute_export("_call", execution_params);
+    }
 }

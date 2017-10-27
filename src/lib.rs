@@ -6,6 +6,7 @@ extern crate byteorder;
 
 pub static CREATE_SYMBOL: &'static str = "_create";
 pub static CALL_SYMBOL: &'static str = "_call";
+pub static SET_TEMP_RET_SYMBOL: &'static str = "setTempRet0";
 
 pub mod rules;
 
