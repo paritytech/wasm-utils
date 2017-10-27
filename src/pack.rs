@@ -1,5 +1,5 @@
-use parity_wasm::{serialize,elements, builder, deserialize_buffer};
-use self::elements::{ External, Section, ResizableLimits, Opcode, DataSegment, InitExpr, Internal };
+use parity_wasm::{elements};
+use self::elements::{ External, Section, Opcode, DataSegment, InitExpr, Internal };
 
 use super::{CREATE_SYMBOL, CALL_SYMBOL};
 
@@ -96,6 +96,7 @@ mod test {
     extern crate parity_wasm;
     extern crate byteorder;
 
+    use parity_wasm::builder;
     use parity_wasm::interpreter;
     use parity_wasm::interpreter::RuntimeValue;
     use parity_wasm::ModuleInstanceInterface;
@@ -152,17 +153,16 @@ mod test {
         optimize(&mut ctor_module, vec![CREATE_SYMBOL, SET_TEMP_RET_SYMBOL]).expect("Optimizer to finish without errors");
 
         let raw_module = parity_wasm::serialize(module).unwrap();
-        let raw_module_len = raw_module.len();
         pack_instance(raw_module.clone(), &mut ctor_module);
 
         let program = parity_wasm::DefaultProgramInstance::new().expect("Program instance to load");
         let env_instance = program.module("env").expect("Wasm program to contain env module");
         let env_memory = env_instance.memory(interpreter::ItemIndex::Internal(0)).expect("Linear memory to exist in wasm runtime");
 
-        let mut execution_params = interpreter::ExecutionParams::default();
+        let execution_params = interpreter::ExecutionParams::default();
         let module = program.add_module("contract", ctor_module, None).expect("Failed to initialize module");
 
-        let _ = module.execute_export("_call", execution_params.add_argument(RuntimeValue::I32(1024)));
+        let _ = module.execute_export(CALL_SYMBOL, execution_params.add_argument(RuntimeValue::I32(1024)));
 
         let pointer = LittleEndian::read_u32(&env_memory.get(1024 + 8, 4).unwrap());
         let len = LittleEndian::read_u32(&env_memory.get(1024 + 12, 4).unwrap());
@@ -177,6 +177,6 @@ mod test {
         let module = program.add_module("contract", result_module, None).expect("Failed to initialize module");
         let execution_params = interpreter::ExecutionParams::default();
 
-        let _ = module.execute_export("_call", execution_params);
+        let _ = module.execute_export(CALL_SYMBOL, execution_params);
     }
 }
