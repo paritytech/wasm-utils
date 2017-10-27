@@ -94,11 +94,15 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
 #[cfg(test)]
 mod test {
     extern crate parity_wasm;
+    extern crate byteorder;
+
     use parity_wasm::interpreter;
+    use parity_wasm::interpreter::RuntimeValue;
     use parity_wasm::ModuleInstanceInterface;
     use super::*;
     use super::super::optimize;
     use super::super::SET_TEMP_RET_SYMBOL;
+    use byteorder::{ByteOrder, LittleEndian};
 
     #[test]
     fn call_returns_code() {
@@ -142,24 +146,30 @@ mod test {
                 .internal().func(1)
             .build()
         .build();
+
         let mut ctor_module = module.clone();
         optimize(&mut module, vec![CALL_SYMBOL, SET_TEMP_RET_SYMBOL]).expect("Optimizer to finish without errors");
         optimize(&mut ctor_module, vec![CREATE_SYMBOL, SET_TEMP_RET_SYMBOL]).expect("Optimizer to finish without errors");
 
         let raw_module = parity_wasm::serialize(module).unwrap();
         let raw_module_len = raw_module.len();
-        pack_instance(raw_module, &mut ctor_module);
+        pack_instance(raw_module.clone(), &mut ctor_module);
 
         let program = parity_wasm::DefaultProgramInstance::new().expect("Program instance to load");
         let env_instance = program.module("env").expect("Wasm program to contain env module");
         let env_memory = env_instance.memory(interpreter::ItemIndex::Internal(0)).expect("Linear memory to exist in wasm runtime");
 
-        let execution_params = interpreter::ExecutionParams::default();
+        let mut execution_params = interpreter::ExecutionParams::default();
         let module = program.add_module("contract", ctor_module, None).expect("Failed to initialize module");
 
-        let _ = module.execute_export("_call", execution_params);
+        let _ = module.execute_export("_call", execution_params.add_argument(RuntimeValue::I32(1024)));
 
-        let result_code = env_memory.get(20, raw_module_len).expect("Failed to get code");
+        let pointer = LittleEndian::read_u32(&env_memory.get(1024 + 8, 4).unwrap());
+        let len = LittleEndian::read_u32(&env_memory.get(1024 + 12, 4).unwrap());
+
+        let result_code = env_memory.get(pointer, len as usize).expect("Failed to get code");
+
+        assert_eq!(raw_module, result_code);
 
         let result_module: elements::Module = parity_wasm::deserialize_buffer(result_code).expect("Result module is not valid");
 
