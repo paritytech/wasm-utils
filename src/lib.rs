@@ -4,6 +4,10 @@ extern crate byteorder;
 #[macro_use] extern crate log;
 #[macro_use] extern crate lazy_static;
 
+pub static CREATE_SYMBOL: &'static str = "_create";
+pub static CALL_SYMBOL: &'static str = "_call";
+pub static SET_TEMP_RET_SYMBOL: &'static str = "setTempRet0";
+
 pub mod rules;
 
 mod optimizer;
@@ -22,3 +26,4 @@ pub use ext::externalize;
 pub use pack::pack_instance;
 pub use nondeterminism_check::is_deterministic;
 pub use runtime_type::inject_runtime_type;
+
