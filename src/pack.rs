@@ -52,7 +52,7 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
                 };
                 let code_data = DataSegment::new(
                     index,
-                    InitExpr::new(vec![Opcode::I32Const(offset),Opcode::End]),
+                    InitExpr::new(vec![Opcode::I32Const(offset), Opcode::End]),
                     raw_module.clone()
                 );
                 data_section.entries_mut().push(code_data);
@@ -76,14 +76,14 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
             &mut Section::Code(ref mut code_section) => {
                 let code = code_section.bodies_mut()[create_func_id].code_mut().elements_mut();
                 code.pop();
-                code.extend([
+                code.extend_from_slice(&[
                     Opcode::GetLocal(0),
                     Opcode::I32Const(code_data_address),
                     Opcode::I32Store(0, 8),
                     Opcode::GetLocal(0),
                     Opcode::I32Const(raw_module.len() as i32),
                     Opcode::I32Store(0, 12),
-                    Opcode::End].iter().cloned());
+                    Opcode::End]);
             },
 
             _ => {;},
@@ -119,7 +119,7 @@ mod test {
                 .value(vec![0u8])
             .build()
             .function()
-                .signature().param().i32().build()
+                .signature().build()
                 .body()
                     .with_opcodes(elements::Opcodes::new(
                         vec![
@@ -155,28 +155,28 @@ mod test {
         let raw_module = parity_wasm::serialize(module).unwrap();
         pack_instance(raw_module.clone(), &mut ctor_module);
 
-        let program = parity_wasm::DefaultProgramInstance::new().expect("Program instance to load");
+        let program = parity_wasm::DefaultProgramInstance::new().expect("Program instance failed to load");
         let env_instance = program.module("env").expect("Wasm program to contain env module");
         let env_memory = env_instance.memory(interpreter::ItemIndex::Internal(0)).expect("Linear memory to exist in wasm runtime");
 
         let execution_params = interpreter::ExecutionParams::default();
-        let module = program.add_module("contract", ctor_module, None).expect("Failed to initialize module");
+        let constructor_module = program.add_module("contract", ctor_module, None).expect("Failed to initialize module");
 
-        let _ = module.execute_export(CALL_SYMBOL, execution_params.add_argument(RuntimeValue::I32(1024)));
+        let _ = constructor_module.execute_export(CALL_SYMBOL, execution_params.add_argument(RuntimeValue::I32(1024)));
 
         let pointer = LittleEndian::read_u32(&env_memory.get(1024 + 8, 4).unwrap());
         let len = LittleEndian::read_u32(&env_memory.get(1024 + 12, 4).unwrap());
 
-        let result_code = env_memory.get(pointer, len as usize).expect("Failed to get code");
+        let contract_code = env_memory.get(pointer, len as usize).expect("Failed to get code");
 
-        assert_eq!(raw_module, result_code);
+        assert_eq!(raw_module, contract_code);
 
-        let result_module: elements::Module = parity_wasm::deserialize_buffer(result_code).expect("Result module is not valid");
+        let contract_module: elements::Module = parity_wasm::deserialize_buffer(contract_code).expect("Constructed contract module is not valid");
 
-        let program = parity_wasm::DefaultProgramInstance::new().expect("Program2 instance to load");
-        let module = program.add_module("contract", result_module, None).expect("Failed to initialize module");
+        let program = parity_wasm::DefaultProgramInstance::new().expect("Program2 instance failed to load");
+        let contract_module_instance = program.add_module("contract", contract_module, None).expect("Failed to initialize constructed contract module");
         let execution_params = interpreter::ExecutionParams::default();
 
-        let _ = module.execute_export(CALL_SYMBOL, execution_params);
+        contract_module_instance.execute_export(CALL_SYMBOL, execution_params).expect("Constructed contract failed to execute");
     }
 }
