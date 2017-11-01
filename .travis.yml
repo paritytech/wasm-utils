@@ -1,0 +1,9 @@
+dist: trusty
+sudo: required
+language:
+  - rust
+
+script:
+  - cargo build --release --verbose
+  - cargo test --verbose
+
