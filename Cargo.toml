@@ -29,7 +29,3 @@ path = "gas/src/main.rs"
 [[bin]]
 name = "wasm-build"
 path = "build/src/main.rs"
-
-[[bin]]
-name = "nondeterminism-check"
-path = "nondeterminism_check/src/main.rs"
