@@ -75,17 +75,18 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
 
             &mut Section::Code(ref mut code_section) => {
                 let code = code_section.bodies_mut()[create_func_id].code_mut().elements_mut();
-                code.pop();
-                code.extend_from_slice(&[
+                let init_result_code = &[
                     Opcode::GetLocal(0),
                     Opcode::I32Const(code_data_address),
                     Opcode::I32Store(0, 8),
                     Opcode::GetLocal(0),
                     Opcode::I32Const(raw_module.len() as i32),
-                    Opcode::I32Store(0, 12),
-                    Opcode::End]);
+                    Opcode::I32Store(0, 12)];
+                let mut updated_func_code = Vec::with_capacity(init_result_code.len() + code.len());
+                updated_func_code.extend_from_slice(init_result_code);
+                updated_func_code.extend_from_slice(&code);
+                *code = updated_func_code;
             },
-
             _ => {;},
         }
     };
