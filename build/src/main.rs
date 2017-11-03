@@ -35,29 +35,15 @@ pub fn wasm_path(target_dir: &str, bin_name: &str) -> String {
 }
 
 pub fn process_output(target_dir: &str, bin_name: &str) -> Result<(), Error> {
-	let mut path = PathBuf::from(target_dir);
+	let mut cargo_path = PathBuf::from(target_dir);
 	let wasm_name = bin_name.to_string().replace("-", "_");
-	path.push("wasm32-unknown-emscripten");
-	path.push("release");
-	path.push("deps");
-	path.push(format!("{}-*.wasm", wasm_name));
+	cargo_path.push("wasm32-unknown-emscripten");
+	cargo_path.push("release");
+	cargo_path.push(format!("{}.wasm", wasm_name));
 
-	let mut files = glob::glob(path.to_string_lossy().as_ref()).expect("glob err")
-		.collect::<Vec<Result<PathBuf, glob::GlobError>>>();
-
-	if files.len() == 0 {
-		return Err(Error::NoSuitableFile(path.to_string_lossy().to_string()));
-	} else if files.len() > 1 {
-		return Err(Error::TooManyFiles(
-			files.into_iter().map(|f| f.expect("glob err").to_string_lossy().to_string())
-				.fold(String::new(), |mut a, b| { a.push_str(", "); a.push_str(&b); a })
-		))
-	} else {
-		let file = files.drain(..).nth(0).expect("0th element exists").expect("glob err");
-		let mut path = PathBuf::from(target_dir);
-		path.push(format!("{}.wasm", bin_name));
-		fs::copy(file, path)?;
-	}
+	let mut target_path = PathBuf::from(target_dir);
+	target_path.push(format!("{}.wasm", bin_name));
+	fs::copy(cargo_path, target_path)?;
 
 	Ok(())
 }
@@ -73,7 +59,7 @@ fn has_ctor(module: &elements::Module) -> bool {
 fn main() {
 	wasm_utils::init_log();
 
-	let matches = App::new("wasm-opt")
+	let matches = App::new("wasm-build")
 		.arg(Arg::with_name("target")
 			.index(1)
 			.required(true)
@@ -144,6 +130,39 @@ fn main() {
 	} else {
 		let mut file = fs::File::create(&path).expect("Failed to create file");
 		file.write_all(&raw_module).expect("Failed to write module to file");
+	}
+
+}
+
+#[cfg(test)]
+mod tests {
+	extern crate tempdir;
+
+	use self::tempdir::TempDir;
+	use std::fs;
+
+	use super::process_output;
+
+	#[test]
+	fn processes_cargo_output() {
+    	let tmp_dir = TempDir::new("target").expect("temp dir failed");
+
+		let target_path = tmp_dir.path().join("wasm32-unknown-emscripten").join("release");
+		fs::create_dir_all(target_path.clone()).expect("create dir failed");
+
+		{
+			use std::io::Write;
+
+			let wasm_path = target_path.join("example_wasm.wasm");
+			let mut f = fs::File::create(wasm_path).expect("create fail failed");
+			f.write(b"\0asm").expect("write file failed");
+		}
+
+		process_output(&tmp_dir.path().to_string_lossy(), "example-wasm").expect("process output failed");
+
+		assert!(
+			fs::metadata(tmp_dir.path().join("example-wasm.wasm")).expect("metadata failed").is_file()
+		)
 	}
 
 }
