@@ -12,6 +12,9 @@ clap = "2.24"
 glob = "0.2"
 byteorder = "1"
 
+[dev-dependencies]
+tempdir = "0.3"
+
 [lib]
 
 [[bin]]
