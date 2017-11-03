@@ -8,3 +8,4 @@ script:
   - cargo build --manifest-path gas/Cargo.toml
   - cargo build --manifest-path ext/Cargo.toml
   - cargo test --verbose
+  - cargo test --verbose --manifest-path build/Cargo.toml
