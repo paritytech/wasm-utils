@@ -37,3 +37,10 @@ cargo run --release --bin wasm-ext -- <input_binary.wasm> <output_binary.wasm>
 ## API
 
 All executables use corresponding api methods of the root crate and can be combined in other build tools.
+
+# License
+
+`wasm-utils` is primarily distributed under the terms of both the MIT
+license and the Apache License (Version 2.0), at your choice.
+
+See LICENSE-APACHE, and LICENSE-MIT for details.
