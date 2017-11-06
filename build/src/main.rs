@@ -71,8 +71,8 @@ fn main() {
 		.arg(Arg::with_name("skip_optimization")
 			.help("Skip symbol optimization step producing final wasm")
 			.long("skip-optimization"))
-		.arg(Arg::with_name("skip_alloc")
-			.help("Skip allocator externalizer step producing final wasm")
+		.arg(Arg::with_name("skip_externalize")
+			.help("Skip externalizer step producing final wasm")
 			.long("skip-externalize"))
 		.arg(Arg::with_name("runtime_type")
 			.help("Injects RUNTIME_TYPE global export")
@@ -93,10 +93,10 @@ fn main() {
 
 	let mut module = parity_wasm::deserialize_file(&path).unwrap();
 
-	if !matches.is_present("skip_alloc") {
+	if !matches.is_present("skip_externalize") {
 		module = wasm_utils::externalize(
 			module,
-			vec!["_free", "_malloc"],
+			vec!["_free", "_malloc", "_memcpy", "_memset", "_memmove"],
 		);
 	}
 
