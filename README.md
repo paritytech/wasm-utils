@@ -26,9 +26,16 @@ For development puposes, raw WASM contract can be injected with gas counters (th
 cargo run --release --bin wasm-gas -- <input_binary.wasm> <output_binary.wasm>
 ```
 
-## Allocators substiution (wasm-ext)
+## Externalization (wasm-ext)
 
-Parity WASM runtime provides simple memory allocators, if contract requires. When relied on this allocators, WASM binary size can be greatly reduced. This utility scans for `_malloc`, `_free` invokes inside the WASM binary and substitutes them with invokes of the imported `_malloc`, `_free`. Should be run before `wasm-opt` for better results.
+Parity WASM runtime provides some library functions that can be commonly found in libc. WASM binary size can be reduced and performance may be improved if these functions are used. This utility scans for invocations of the following functions inside the WASM binary:
+- `_malloc`,
+- `_free`,
+- `_memcpy`,
+- `_memset`,
+- `_memmove`
+
+And then substitutes them with invocations of the imported ones. Should be run before `wasm-opt` for better results.
 
 ```
 cargo run --release --bin wasm-ext -- <input_binary.wasm> <output_binary.wasm>
