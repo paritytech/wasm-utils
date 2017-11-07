@@ -14,8 +14,8 @@ fn main() {
 	}
 
 	let module = wasm_utils::externalize(
-		parity_wasm::deserialize_file(&args[1]).expect("Module to deserialize ok"), 
-		vec!["_free", "_malloc"],
+		parity_wasm::deserialize_file(&args[1]).expect("Module to deserialize ok"),
+		vec!["_free", "_malloc", "_memcpy", "_memset", "_memmove"],
 	);
 
 	parity_wasm::serialize_to_file(&args[2], module).expect("Module to serialize ok");
