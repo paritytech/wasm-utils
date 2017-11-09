@@ -103,7 +103,6 @@ mod test {
     use parity_wasm::ModuleInstanceInterface;
     use super::*;
     use super::super::optimize;
-    use super::super::SET_TEMP_RET_SYMBOL;
     use byteorder::{ByteOrder, LittleEndian};
 
     #[test]
@@ -150,8 +149,8 @@ mod test {
         .build();
 
         let mut ctor_module = module.clone();
-        optimize(&mut module, vec![CALL_SYMBOL, SET_TEMP_RET_SYMBOL]).expect("Optimizer to finish without errors");
-        optimize(&mut ctor_module, vec![CREATE_SYMBOL, SET_TEMP_RET_SYMBOL]).expect("Optimizer to finish without errors");
+        optimize(&mut module, vec![CALL_SYMBOL]).expect("Optimizer to finish without errors");
+        optimize(&mut ctor_module, vec![CREATE_SYMBOL]).expect("Optimizer to finish without errors");
 
         let raw_module = parity_wasm::serialize(module).unwrap();
         pack_instance(raw_module.clone(), &mut ctor_module);
