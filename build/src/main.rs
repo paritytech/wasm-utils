@@ -71,9 +71,6 @@ fn main() {
 		.arg(Arg::with_name("skip_optimization")
 			.help("Skip symbol optimization step producing final wasm")
 			.long("skip-optimization"))
-		.arg(Arg::with_name("skip_externalize")
-			.help("Skip externalizer step producing final wasm")
-			.long("skip-externalize"))
 		.arg(Arg::with_name("runtime_type")
 			.help("Injects RUNTIME_TYPE global export")
 			.takes_value(true)
@@ -92,13 +89,6 @@ fn main() {
 	let path = wasm_path(target_dir, wasm_binary);
 
 	let mut module = parity_wasm::deserialize_file(&path).unwrap();
-
-	if !matches.is_present("skip_externalize") {
-		module = wasm_utils::externalize(
-			module,
-			vec!["_free", "_malloc", "_memcpy", "_memset", "_memmove"],
-		);
-	}
 
 	if let Some(runtime_type) = matches.value_of("runtime_type") {
 		let runtime_type: &[u8] = runtime_type.as_bytes();
@@ -145,7 +135,7 @@ mod tests {
 
 	#[test]
 	fn processes_cargo_output() {
-    	let tmp_dir = TempDir::new("target").expect("temp dir failed");
+		let tmp_dir = TempDir::new("target").expect("temp dir failed");
 
 		let target_path = tmp_dir.path().join("wasm32-unknown-emscripten").join("release");
 		fs::create_dir_all(target_path.clone()).expect("create dir failed");
