@@ -4,7 +4,7 @@ extern crate byteorder;
 #[macro_use] extern crate log;
 #[macro_use] extern crate lazy_static;
 
-pub static CREATE_SYMBOL: &'static str = "_create";
+pub static CREATE_SYMBOL: &'static str = "_deploy";
 pub static CALL_SYMBOL: &'static str = "_call";
 
 pub mod rules;
