@@ -12,7 +12,7 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
     // in order to find it in the Code section of the module
     let create_func_id = {
         let found_entry = ctor_module.export_section().expect("No export section found").entries().iter()
-            .find(|entry| CREATE_SYMBOL == entry.field()).expect("No export with name _create found");
+            .find(|entry| CREATE_SYMBOL == entry.field()).expect(&format!("No export with name {} found", CREATE_SYMBOL));
 
         let function_index: usize = match found_entry.internal() {
             &Internal::Function(index) => index as usize,
@@ -139,11 +139,11 @@ mod test {
                     .build()
             .build()
             .export()
-                .field("_call")
+                .field(CALL_SYMBOL)
                 .internal().func(0)
             .build()
             .export()
-                .field("_create")
+                .field(CREATE_SYMBOL)
                 .internal().func(1)
             .build()
         .build();
