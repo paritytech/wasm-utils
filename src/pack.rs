@@ -1,12 +1,14 @@
-use parity_wasm::{elements};
-use self::elements::{ External, Section, Opcode, DataSegment, InitExpr, Internal };
-
+use parity_wasm::elements::{self, Section, Opcode, DataSegment, InitExpr, Internal};
+use parity_wasm::builder;
 use super::{CREATE_SYMBOL, CALL_SYMBOL};
 
 /// If module has an exported "_create" function we want to pack it into "constructor".
 /// `raw_module` is the actual contract code
 /// `ctor_module` is the constructor which should return `raw_module`
-pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
+pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> elements::Module {
+
+    // Total number of constructor module import functions
+    let ctor_import_functions = ctor_module.import_section().map(|x| x.functions()).unwrap_or(0);
 
     // We need to find an internal ID of function witch is exported as "_create"
     // in order to find it in the Code section of the module
@@ -19,18 +21,13 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
             _ => panic!("export is not a function"),
         };
 
-        let import_section_len: usize = match ctor_module.import_section() {
-            Some(import) =>
-                import.entries().iter().filter(|entry| match entry.external() {
-                    &External::Function(_) => true,
-                    _ => false,
-                    }).count(),
-            None => 0,
-        };
-
         // Calculates a function index within module's function section
-        function_index - import_section_len
+        function_index - ctor_import_functions
     };
+
+    // If new function is put in ctor module, it will have this callable index
+    let last_function_index = ctor_module.function_section().map(|x| x.entries().len()).unwrap_or(0)
+        + ctor_import_functions;
 
     // Code data address is an address where we put the contract's code (raw_module)
     let mut code_data_address = 0i32;
@@ -62,34 +59,40 @@ pub fn pack_instance(raw_module: Vec<u8>, ctor_module: &mut elements::Module) {
         }
     }
 
-    for section in ctor_module.sections_mut() {
+    let mut new_module = builder::from_module(ctor_module)
+        .function()
+        .signature().param().i32().build()
+        .body().with_opcodes(elements::Opcodes::new(
+            vec![
+                Opcode::GetLocal(0),
+                Opcode::Call(create_func_id as u32),
+                Opcode::GetLocal(0),
+                Opcode::I32Const(code_data_address),
+                Opcode::I32Store(0, 8),
+                Opcode::GetLocal(0),
+                Opcode::I32Const(raw_module.len() as i32),
+                Opcode::I32Store(0, 12),
+                Opcode::End,
+            ])).build()
+            .build()
+        .build();
+
+    for section in new_module.sections_mut() {
         match section {
             &mut Section::Export(ref mut export_section) => {
                 for entry in export_section.entries_mut().iter_mut() {
                     if CREATE_SYMBOL == entry.field() {
                         // change _create export name into default _call
                         *entry.field_mut() = CALL_SYMBOL.to_owned();
+                        *entry.internal_mut() = elements::Internal::Function(last_function_index as u32);
                     }
                 }
-            }
-
-            &mut Section::Code(ref mut code_section) => {
-                let code = code_section.bodies_mut()[create_func_id].code_mut().elements_mut();
-                let init_result_code = &[
-                    Opcode::GetLocal(0),
-                    Opcode::I32Const(code_data_address),
-                    Opcode::I32Store(0, 8),
-                    Opcode::GetLocal(0),
-                    Opcode::I32Const(raw_module.len() as i32),
-                    Opcode::I32Store(0, 12)];
-                let mut updated_func_code = Vec::with_capacity(init_result_code.len() + code.len());
-                updated_func_code.extend_from_slice(init_result_code);
-                updated_func_code.extend_from_slice(&code);
-                *code = updated_func_code;
             },
-            _ => {;},
+            _ => { },
         }
     };
+
+    new_module
 }
 
 #[cfg(test)]
@@ -153,7 +156,7 @@ mod test {
         optimize(&mut ctor_module, vec![CREATE_SYMBOL]).expect("Optimizer to finish without errors");
 
         let raw_module = parity_wasm::serialize(module).unwrap();
-        pack_instance(raw_module.clone(), &mut ctor_module);
+        let ctor_module = pack_instance(raw_module.clone(), ctor_module);
 
         let program = parity_wasm::DefaultProgramInstance::new().expect("Program instance failed to load");
         let env_instance = program.module("env").expect("Wasm program to contain env module");
