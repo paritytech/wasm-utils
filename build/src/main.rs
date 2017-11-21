@@ -115,7 +115,7 @@ fn main() {
 		if !matches.is_present("skip_optimization") {
 			wasm_utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL]).expect("Optimizer to finish without errors");
 		}
-		let ctor_module = wasm_utils::pack_instance(raw_module, ctor_module);
+		let ctor_module = wasm_utils::pack_instance(raw_module, ctor_module).expect("Packing failed");
 		parity_wasm::serialize_to_file(&path, ctor_module).expect("Failed to serialize to file");
 	} else {
 		let mut file = fs::File::create(&path).expect("Failed to create file");

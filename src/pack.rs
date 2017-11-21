@@ -2,10 +2,25 @@ use parity_wasm::elements::{self, Section, Opcode, DataSegment, InitExpr, Intern
 use parity_wasm::builder;
 use super::{CREATE_SYMBOL, CALL_SYMBOL};
 
+/// Pack error.
+///
+/// Pack has number of assumptions of passed module structure.
+/// When they are violated, pack_instance returns one of these.
+#[derive(Debug)]
+pub enum Error {
+    MalformedModule,
+    NoTypeSection,
+    NoExportSection,
+    NoCodeSection,
+    InvalidCreateSignature,
+    NoCreateSymbol,
+    InvalidCreateMember,
+}
+
 /// If module has an exported "_create" function we want to pack it into "constructor".
 /// `raw_module` is the actual contract code
 /// `ctor_module` is the constructor which should return `raw_module`
-pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> elements::Module {
+pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> Result<elements::Module, Error> {
 
     // Total number of constructor module import functions
     let ctor_import_functions = ctor_module.import_section().map(|x| x.functions()).unwrap_or(0);
@@ -13,12 +28,30 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
     // We need to find an internal ID of function witch is exported as "_create"
     // in order to find it in the Code section of the module
     let create_func_id = {
-        let found_entry = ctor_module.export_section().expect("No export section found").entries().iter()
-            .find(|entry| CREATE_SYMBOL == entry.field()).expect(&format!("No export with name {} found", CREATE_SYMBOL));
+        let found_entry = ctor_module.export_section().ok_or(Error::NoExportSection)?.entries().iter()
+            .find(|entry| CREATE_SYMBOL == entry.field()).ok_or(Error::NoCreateSymbol)?;
 
         let function_index: usize = match found_entry.internal() {
             &Internal::Function(index) => index as usize,
-            _ => panic!("export is not a function"),
+            _ => { return Err(Error::InvalidCreateMember) },
+        };
+
+        // Constructor should be of signature `func(i32)` (void), fail otherwise
+        let type_id = ctor_module.function_section().ok_or(Error::NoCodeSection)?
+            .entries().get(function_index).ok_or(Error::MalformedModule)?
+            .type_ref();
+
+        match ctor_module.type_section().ok_or(Error::NoTypeSection)?
+            .types().get(type_id as usize).ok_or(Error::MalformedModule)?
+        {
+            &elements::Type::Function(ref f) => {
+                if f.params().len() != 1 || f.params()[0] != elements::ValueType::I32 {
+                    return Err(Error::InvalidCreateSignature);
+                }
+                if f.return_type().is_some() {
+                    return Err(Error::InvalidCreateSignature);
+                }
+            }
         };
 
         // Calculates a function index within module's function section
@@ -92,7 +125,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
         }
     };
 
-    new_module
+    Ok(new_module)
 }
 
 #[cfg(test)]
@@ -156,7 +189,7 @@ mod test {
         optimize(&mut ctor_module, vec![CREATE_SYMBOL]).expect("Optimizer to finish without errors");
 
         let raw_module = parity_wasm::serialize(module).unwrap();
-        let ctor_module = pack_instance(raw_module.clone(), ctor_module);
+        let ctor_module = pack_instance(raw_module.clone(), ctor_module).expect("Packing failed");
 
         let program = parity_wasm::DefaultProgramInstance::new().expect("Program instance failed to load");
         let env_instance = program.module("env").expect("Wasm program to contain env module");
