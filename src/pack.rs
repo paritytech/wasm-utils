@@ -97,7 +97,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
         .body().with_opcodes(elements::Opcodes::new(
             vec![
                 Opcode::GetLocal(0),
-                Opcode::Call(create_func_id as u32),
+                Opcode::Call((create_func_id + ctor_import_functions) as u32),
                 Opcode::GetLocal(0),
                 Opcode::I32Const(code_data_address),
                 Opcode::I32Store(0, 8),
