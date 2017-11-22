@@ -41,18 +41,15 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
             .entries().get(function_index).ok_or(Error::MalformedModule)?
             .type_ref();
 
-        match ctor_module.type_section().ok_or(Error::NoTypeSection)?
-            .types().get(type_id as usize).ok_or(Error::MalformedModule)?
-        {
-            &elements::Type::Function(ref f) => {
-                if f.params().len() != 1 || f.params()[0] != elements::ValueType::I32 {
-                    return Err(Error::InvalidCreateSignature);
-                }
-                if f.return_type().is_some() {
-                    return Err(Error::InvalidCreateSignature);
-                }
-            }
-        };
+        let &elements::Type::Function(ref func) = ctor_module.type_section().ok_or(Error::NoTypeSection)?
+            .types().get(type_id as usize).ok_or(Error::MalformedModule)?;
+
+        if func.params().len() != 1 || func.params()[0] != elements::ValueType::I32 {
+            return Err(Error::InvalidCreateSignature);
+        }
+        if func.return_type().is_some() {
+            return Err(Error::InvalidCreateSignature);
+        }
 
         // Calculates a function index within module's function section
         function_index - ctor_import_functions
