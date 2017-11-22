@@ -36,9 +36,12 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
             _ => { return Err(Error::InvalidCreateMember) },
         };
 
+        // Calculates a function index within module's function section
+        let function_internal_index = function_index - ctor_import_functions;
+
         // Constructor should be of signature `func(i32)` (void), fail otherwise
         let type_id = ctor_module.function_section().ok_or(Error::NoCodeSection)?
-            .entries().get(function_index).ok_or(Error::MalformedModule)?
+            .entries().get(function_index - ctor_import_functions).ok_or(Error::MalformedModule)?
             .type_ref();
 
         let &elements::Type::Function(ref func) = ctor_module.type_section().ok_or(Error::NoTypeSection)?
@@ -51,8 +54,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
             return Err(Error::InvalidCreateSignature);
         }
 
-        // Calculates a function index within module's function section
-        function_index - ctor_import_functions
+        function_internal_index
     };
 
     // If new function is put in ctor module, it will have this callable index
@@ -144,13 +146,17 @@ mod test {
             .import()
                 .module("env")
                 .field("memory")
-                .external()
-                .memory(1 as u32, Some(1 as u32))
-            .build()
+                .external().memory(1 as u32, Some(1 as u32))
+                .build()
             .data()
-                .offset(elements::Opcode::I32Const(16))
-                .value(vec![0u8])
-            .build()
+                .offset(elements::Opcode::I32Const(16)).value(vec![0u8])
+                .build()
+            .function()
+                .signature()
+                    .params().i32().i32().build()
+                        .build()
+                    .body().build()
+                    .build()
             .function()
                 .signature().build()
                 .body()
@@ -173,11 +179,11 @@ mod test {
             .build()
             .export()
                 .field(CALL_SYMBOL)
-                .internal().func(0)
+                .internal().func(1)
             .build()
             .export()
                 .field(CREATE_SYMBOL)
-                .internal().func(1)
+                .internal().func(2)
             .build()
         .build();
 
