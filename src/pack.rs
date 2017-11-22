@@ -44,7 +44,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
         let &elements::Type::Function(ref func) = ctor_module.type_section().ok_or(Error::NoTypeSection)?
             .types().get(type_id as usize).ok_or(Error::MalformedModule)?;
 
-        if func.params().len() != 1 || func.params()[0] != elements::ValueType::I32 {
+        if func.params() != &[elements::ValueType::I32] {
             return Err(Error::InvalidCreateSignature);
         }
         if func.return_type().is_some() {
