@@ -1,5 +1,5 @@
 [package]
-name = "wasm-opt"
+name = "wasm-prune"
 version = "0.1.0"
 authors = ["NikVolf <nikvolf@gmail.com>"]
 
