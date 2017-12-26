@@ -1,5 +1,8 @@
 //! Configuration of source binaries
 
+pub const UNKNOWN_PATH: &str = "wasm32-unknown-unknown";
+pub const EMSCRIPTEN_PATH: &str = "wasm32-unknown-emscripten";
+
 /// Target configiration of previous build step
 #[derive(Debug)]
 pub enum SourceTarget {

@@ -39,7 +39,7 @@ pub fn wasm_path(input: &source::SourceInput) -> String {
 pub fn process_output(input: &source::SourceInput) -> Result<(), Error> {
 	let mut cargo_path = PathBuf::from(input.target_dir());
 	let wasm_name = input.bin_name().to_string().replace("-", "_");
-	cargo_path.push("wasm32-unknown-emscripten");
+	cargo_path.push(source::EMSCRIPTEN_PATH);
 	cargo_path.push("release");
 	cargo_path.push(format!("{}.wasm", wasm_name));
 
@@ -91,13 +91,13 @@ fn main() {
     let wasm_binary = matches.value_of("wasm").expect("is required; qed");
 	let mut source_input = source::SourceInput::new(target_dir, wasm_binary);
 
-	let source_target_val = matches.value_of("source_target").unwrap_or_else(|| "wasm32-unknown-emscripten");
-	if source_target_val == "wasm32-unknown-unknown" {
+	let source_target_val = matches.value_of("source_target").unwrap_or_else(|| source::EMSCRIPTEN_PATH);
+	if source_target_val == source::UNKNOWN_PATH {
 		source_input = source_input.unknown()
-	} else if source_target_val == "wasm32-unknown-emscripten" {
+	} else if source_target_val == source::EMSCRIPTEN_PATH {
 		source_input = source_input.emscripten()
 	} else {
-		println!("--target can be: 'wasm32-unknown-emscripten' or 'wasm32-unknown-unknown'");
+		println!("--target can be: '{}' or '{}'", source::EMSCRIPTEN_PATH, source::UNKNOWN_PATH);
 		::std::process::exit(1);
 	}
 
@@ -138,7 +138,6 @@ fn main() {
 		let mut file = fs::File::create(&path).expect("Failed to create file");
 		file.write_all(&raw_module).expect("Failed to write module to file");
 	}
-
 }
 
 #[cfg(test)]
