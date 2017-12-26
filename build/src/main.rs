@@ -161,5 +161,4 @@ mod tests {
 			fs::metadata(tmp_dir.path().join("example-wasm.wasm")).expect("metadata failed").is_file()
 		)
 	}
-
 }
