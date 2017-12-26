@@ -81,11 +81,25 @@ fn main() {
 			.help("Injects RUNTIME_VERSION global export")
 			.takes_value(true)
 			.long("runtime-version"))
+		.arg(Arg::with_name("source_target")
+			.help("Skip symbol optimization step producing final wasm")
+			.takes_value(true)
+			.long("target"))
 		.get_matches();
 
     let target_dir = matches.value_of("target").expect("is required; qed");
     let wasm_binary = matches.value_of("wasm").expect("is required; qed");
-	let source_input = source::SourceInput::new(target_dir, wasm_binary);
+	let mut source_input = source::SourceInput::new(target_dir, wasm_binary);
+
+	let source_target_val = matches.value_of("source_target").unwrap_or_else(|| "wasm32-unknown-emscripten");
+	if source_target_val == "wasm32-unknown-unknown" {
+		source_input = source_input.unknown()
+	} else if source_target_val == "wasm32-unknown-emscripten" {
+		source_input = source_input.emscripten()
+	} else {
+		println!("--target can be: 'wasm32-unknown-emscripten' or 'wasm32-unknown-unknown'");
+		::std::process::exit(1);
+	}
 
 	process_output(&source_input).expect("Failed to process cargo target directory");
 

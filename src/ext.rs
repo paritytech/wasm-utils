@@ -18,6 +18,28 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, original_imports: usiz
 	}
 }
 
+pub fn memory_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::MemorySection> {
+   for section in module.sections_mut() {
+		match section {
+			&mut elements::Section::Memory(ref mut sect) => {
+				return Some(sect);
+			},
+			_ => { }
+		}
+	}
+	None
+}
+
+pub fn externalize_mem(mut module: elements::Module) -> elements::Module {
+	let entry = memory_section(&mut module)
+		.expect("Memory section to exist")
+		.entries_mut()
+		.pop()
+		.expect("Own memory entry to exist in memory section");
+
+	module
+}
+
 pub fn externalize(
 	module: elements::Module,
 	replaced_funcs: Vec<&str>,
