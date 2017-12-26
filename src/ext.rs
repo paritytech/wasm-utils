@@ -1,4 +1,5 @@
 use parity_wasm::{elements, builder};
+use optimizer::import_section;
 
 type Insertion = (usize, u32, u32, String);
 
@@ -36,6 +37,14 @@ pub fn externalize_mem(mut module: elements::Module) -> elements::Module {
 		.entries_mut()
 		.pop()
 		.expect("Own memory entry to exist in memory section");
+
+	import_section(&mut module).expect("Import section to exist").entries_mut().push(
+		elements::ImportEntry::new(
+			"env".to_owned(),
+			"memory".to_owned(),
+			elements::External::Memory(entry),
+		)
+	);
 
 	module
 }
