@@ -5,6 +5,8 @@ extern crate wasm_utils;
 extern crate clap;
 extern crate parity_wasm;
 
+mod source;
+
 use std::{fs, io};
 use std::io::Write;
 use std::path::PathBuf;
@@ -28,21 +30,21 @@ impl From<io::Error> for Error {
 	}
 }
 
-pub fn wasm_path(target_dir: &str, bin_name: &str) -> String {
-	let mut path = PathBuf::from(target_dir);
-	path.push(format!("{}.wasm", bin_name));
+pub fn wasm_path(input: &source::SourceInput) -> String {
+	let mut path = PathBuf::from(input.target_dir());
+	path.push(format!("{}.wasm", input.bin_name()));
 	path.to_string_lossy().to_string()
 }
 
-pub fn process_output(target_dir: &str, bin_name: &str) -> Result<(), Error> {
-	let mut cargo_path = PathBuf::from(target_dir);
-	let wasm_name = bin_name.to_string().replace("-", "_");
+pub fn process_output(input: &source::SourceInput) -> Result<(), Error> {
+	let mut cargo_path = PathBuf::from(input.target_dir());
+	let wasm_name = input.bin_name().to_string().replace("-", "_");
 	cargo_path.push("wasm32-unknown-emscripten");
 	cargo_path.push("release");
 	cargo_path.push(format!("{}.wasm", wasm_name));
 
-	let mut target_path = PathBuf::from(target_dir);
-	target_path.push(format!("{}.wasm", bin_name));
+	let mut target_path = PathBuf::from(input.target_dir());
+	target_path.push(format!("{}.wasm", input.bin_name()));
 	fs::copy(cargo_path, target_path)?;
 
 	Ok(())
@@ -83,10 +85,11 @@ fn main() {
 
     let target_dir = matches.value_of("target").expect("is required; qed");
     let wasm_binary = matches.value_of("wasm").expect("is required; qed");
+	let source_input = source::SourceInput::new(target_dir, wasm_binary);
 
-	process_output(target_dir, wasm_binary).expect("Failed to process cargo target directory");
+	process_output(&source_input).expect("Failed to process cargo target directory");
 
-	let path = wasm_path(target_dir, wasm_binary);
+	let path = wasm_path(&source_input);
 
 	let mut module = parity_wasm::deserialize_file(&path).unwrap();
 
@@ -132,6 +135,7 @@ mod tests {
 	use std::fs;
 
 	use super::process_output;
+	use super::source::SourceInput;
 
 	#[test]
 	fn processes_cargo_output() {
@@ -148,7 +152,10 @@ mod tests {
 			f.write(b"\0asm").expect("write file failed");
 		}
 
-		process_output(&tmp_dir.path().to_string_lossy(), "example-wasm").expect("process output failed");
+		let path = tmp_dir.path().to_string_lossy();
+		let input = SourceInput::new(&path, "example-wasm");
+
+		process_output(&input).expect("process output failed");
 
 		assert!(
 			fs::metadata(tmp_dir.path().join("example-wasm.wasm")).expect("metadata failed").is_file()
