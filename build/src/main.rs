@@ -41,8 +41,8 @@ pub fn process_output(input: &source::SourceInput) -> Result<(), Error> {
 	let wasm_name = input.bin_name().to_string().replace("-", "_");
 	cargo_path.push(
 		match input.target() {
-			source::SourceTarget::Emscripten => source::EMSCRIPTEN_PATH,
-			source::SourceTarget::Unknown => source::UNKNOWN_PATH,
+			source::SourceTarget::Emscripten => source::EMSCRIPTEN_TRIPLET,
+			source::SourceTarget::Unknown => source::UNKNOWN_TRIPLET,
 		}
 	);
 	cargo_path.push("release");
@@ -104,13 +104,13 @@ fn main() {
     let wasm_binary = matches.value_of("wasm").expect("is required; qed");
 	let mut source_input = source::SourceInput::new(target_dir, wasm_binary);
 
-	let source_target_val = matches.value_of("source_target").unwrap_or_else(|| source::EMSCRIPTEN_PATH);
-	if source_target_val == source::UNKNOWN_PATH {
+	let source_target_val = matches.value_of("source_target").unwrap_or_else(|| source::EMSCRIPTEN_TRIPLET);
+	if source_target_val == source::UNKNOWN_TRIPLET {
 		source_input = source_input.unknown()
-	} else if source_target_val == source::EMSCRIPTEN_PATH {
+	} else if source_target_val == source::EMSCRIPTEN_TRIPLET {
 		source_input = source_input.emscripten()
 	} else {
-		println!("--target can be: '{}' or '{}'", source::EMSCRIPTEN_PATH, source::UNKNOWN_PATH);
+		println!("--target can be: '{}' or '{}'", source::EMSCRIPTEN_TRIPLET, source::UNKNOWN_TRIPLET);
 		::std::process::exit(1);
 	}
 
