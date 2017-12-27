@@ -87,7 +87,7 @@ fn main() {
 			.takes_value(true)
 			.long("runtime-version"))
 		.arg(Arg::with_name("source_target")
-			.help("Skip symbol optimization step producing final wasm")
+			.help("Cargo target type kind (wasm32-unknown-unknown/emscripten)")
 			.takes_value(true)
 			.long("target"))
 		.arg(Arg::with_name("final_name")
