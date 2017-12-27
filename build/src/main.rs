@@ -94,6 +94,10 @@ fn main() {
 			.help("Final wasm binary name")
 			.takes_value(true)
 			.long("final"))
+		.arg(Arg::with_name("save_raw")
+			.help("Save intermediate raw bytecode to path")
+			.takes_value(true)
+			.long("save-raw"))
 		.get_matches();
 
     let target_dir = matches.value_of("target").expect("is required; qed");
@@ -138,6 +142,11 @@ fn main() {
 
 	if !matches.is_present("skip_optimization") {
 		wasm_utils::optimize(&mut module, vec![CALL_SYMBOL]).expect("Optimizer to finish without errors");
+	}
+
+	if let Some(save_raw_path) = matches.value_of("save_raw") {
+		parity_wasm::serialize_to_file(save_raw_path, module.clone())
+			.expect("Failed to write intermediate module");
 	}
 
 	let raw_module = parity_wasm::serialize(module).expect("Failed to serialize module");
