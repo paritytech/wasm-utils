@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use clap::{App, Arg};
 use parity_wasm::elements;
 
-use wasm_utils::{CREATE_SYMBOL, CALL_SYMBOL};
+use wasm_utils::{CREATE_SYMBOL, CALL_SYMBOL, underscore_funcs};
 
 #[derive(Debug)]
 pub enum Error {
@@ -32,19 +32,24 @@ impl From<io::Error> for Error {
 
 pub fn wasm_path(input: &source::SourceInput) -> String {
 	let mut path = PathBuf::from(input.target_dir());
-	path.push(format!("{}.wasm", input.bin_name()));
+	path.push(format!("{}.wasm", input.final_name()));
 	path.to_string_lossy().to_string()
 }
 
 pub fn process_output(input: &source::SourceInput) -> Result<(), Error> {
 	let mut cargo_path = PathBuf::from(input.target_dir());
 	let wasm_name = input.bin_name().to_string().replace("-", "_");
-	cargo_path.push(source::EMSCRIPTEN_PATH);
+	cargo_path.push(
+		match input.target() {
+			source::SourceTarget::Emscripten => source::EMSCRIPTEN_PATH,
+			source::SourceTarget::Unknown => source::UNKNOWN_PATH,
+		}
+	);
 	cargo_path.push("release");
 	cargo_path.push(format!("{}.wasm", wasm_name));
 
 	let mut target_path = PathBuf::from(input.target_dir());
-	target_path.push(format!("{}.wasm", input.bin_name()));
+	target_path.push(format!("{}.wasm", input.final_name()));
 	fs::copy(cargo_path, target_path)?;
 
 	Ok(())
@@ -85,6 +90,10 @@ fn main() {
 			.help("Skip symbol optimization step producing final wasm")
 			.takes_value(true)
 			.long("target"))
+		.arg(Arg::with_name("final_name")
+			.help("Final wasm binary name")
+			.takes_value(true)
+			.long("final"))
 		.get_matches();
 
     let target_dir = matches.value_of("target").expect("is required; qed");
@@ -101,11 +110,19 @@ fn main() {
 		::std::process::exit(1);
 	}
 
+	if let Some(final_name) = matches.value_of("final_name") {
+		source_input = source_input.with_final(final_name);
+	}
+
 	process_output(&source_input).expect("Failed to process cargo target directory");
 
 	let path = wasm_path(&source_input);
 
 	let mut module = parity_wasm::deserialize_file(&path).unwrap();
+
+	if let source::SourceTarget::Unknown = source_input.target() {
+		module = underscore_funcs(module)
+	}
 
 	if let Some(runtime_type) = matches.value_of("runtime_type") {
 		let runtime_type: &[u8] = runtime_type.as_bytes();

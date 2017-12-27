@@ -4,7 +4,7 @@ pub const UNKNOWN_PATH: &str = "wasm32-unknown-unknown";
 pub const EMSCRIPTEN_PATH: &str = "wasm32-unknown-emscripten";
 
 /// Target configiration of previous build step
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum SourceTarget {
 	Emscripten,
 	Unknown,
@@ -15,6 +15,7 @@ pub enum SourceTarget {
 pub struct SourceInput<'a> {
 	target_dir: &'a str,
 	bin_name: &'a str,
+	final_name: &'a str,
 	target: SourceTarget,
 }
 
@@ -23,6 +24,7 @@ impl<'a> SourceInput<'a> {
 		SourceInput {
 			target_dir: target_dir,
 			bin_name: bin_name,
+			final_name: bin_name,
 			target: SourceTarget::Emscripten,
 		}
 	}
@@ -37,11 +39,24 @@ impl<'a> SourceInput<'a> {
 		self
 	}
 
+	pub fn with_final(mut self, final_name: &'a str) -> Self {
+		self.final_name = final_name;
+		self
+	}
+
 	pub fn target_dir(&self) -> &str {
-		&self.target_dir
+		self.target_dir
 	}
 
 	pub fn bin_name(&self) -> &str {
-		&self.bin_name
+		self.bin_name
+	}
+
+	pub fn final_name(&self) -> &str {
+		self.final_name
+	}
+
+	pub fn target(&self) -> SourceTarget {
+		self.target
 	}
 }
