@@ -87,7 +87,7 @@ fn main() {
 			.takes_value(true)
 			.long("runtime-version"))
 		.arg(Arg::with_name("source_target")
-			.help("Cargo target type kind (wasm32-unknown-unknown/emscripten)")
+			.help("Cargo target type kind ('wasm32-unknown-unknown' or 'wasm32-unknown-emscripten'")
 			.takes_value(true)
 			.long("target"))
 		.arg(Arg::with_name("final_name")
