@@ -1,4 +1,5 @@
 use parity_wasm::{elements, builder};
+use optimizer::{import_section, export_section};
 
 type Insertion = (usize, u32, u32, String);
 
@@ -16,6 +17,50 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, original_imports: usiz
 			_ => { }
 		}
 	}
+}
+
+pub fn memory_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::MemorySection> {
+   for section in module.sections_mut() {
+		match section {
+			&mut elements::Section::Memory(ref mut sect) => {
+				return Some(sect);
+			},
+			_ => { }
+		}
+	}
+	None
+}
+
+pub fn externalize_mem(mut module: elements::Module) -> elements::Module {
+	let entry = memory_section(&mut module)
+		.expect("Memory section to exist")
+		.entries_mut()
+		.pop()
+		.expect("Own memory entry to exist in memory section");
+
+	import_section(&mut module).expect("Import section to exist").entries_mut().push(
+		elements::ImportEntry::new(
+			"env".to_owned(),
+			"memory".to_owned(),
+			elements::External::Memory(entry),
+		)
+	);
+
+	module
+}
+
+pub fn underscore_funcs(mut module: elements::Module) -> elements::Module {
+	for entry in import_section(&mut module).expect("Import section to exist").entries_mut() {
+		if let elements::External::Function(_) = *entry.external() {
+			entry.field_mut().insert(0, '_');
+		}
+	}
+	for entry in export_section(&mut module).expect("Import section to exist").entries_mut() {
+		if let elements::Internal::Function(_) = *entry.internal() {
+			entry.field_mut().insert(0, '_');
+		}
+	}
+	module
 }
 
 pub fn externalize(

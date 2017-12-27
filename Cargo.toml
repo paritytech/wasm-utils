@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["NikVolf <nikvolf@gmail.com>"]
 
 [dependencies]
-parity-wasm = "0.15"
+parity-wasm = "0.18"
 log = "0.3"
 env_logger = "0.4"
 lazy_static = "0.2"
@@ -14,6 +14,7 @@ byteorder = "1"
 
 [dev-dependencies]
 tempdir = "0.3"
+pwasm-emscripten = { git = "https://github.com/paritytech/parity-wasm", path = "pwasm-emscripten" }
 
 [lib]
 

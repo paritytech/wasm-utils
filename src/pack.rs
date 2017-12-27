@@ -129,8 +129,8 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
 
 #[cfg(test)]
 mod test {
+    extern crate pwasm_emscripten;
     extern crate parity_wasm;
-    extern crate byteorder;
 
     use parity_wasm::builder;
     use parity_wasm::interpreter;
@@ -139,6 +139,7 @@ mod test {
     use super::*;
     use super::super::optimize;
     use byteorder::{ByteOrder, LittleEndian};
+    use self::pwasm_emscripten::program_with_emscripten_env;
 
     #[test]
     fn call_returns_code() {
@@ -194,14 +195,13 @@ mod test {
         let raw_module = parity_wasm::serialize(module).unwrap();
         let ctor_module = pack_instance(raw_module.clone(), ctor_module).expect("Packing failed");
 
-        let program = parity_wasm::DefaultProgramInstance::new().expect("Program instance failed to load");
+        let program = program_with_emscripten_env(Default::default()).expect("Wasm program to be created");
         let env_instance = program.module("env").expect("Wasm program to contain env module");
         let env_memory = env_instance.memory(interpreter::ItemIndex::Internal(0)).expect("Linear memory to exist in wasm runtime");
 
-        let execution_params = interpreter::ExecutionParams::default();
         let constructor_module = program.add_module("contract", ctor_module, None).expect("Failed to initialize module");
 
-        let _ = constructor_module.execute_export(CALL_SYMBOL, execution_params.add_argument(RuntimeValue::I32(1024)));
+        let _ = constructor_module.execute_export(CALL_SYMBOL, vec![RuntimeValue::I32(1024)].into());
 
         let pointer = LittleEndian::read_u32(&env_memory.get(1024 + 8, 4).unwrap());
         let len = LittleEndian::read_u32(&env_memory.get(1024 + 12, 4).unwrap());
@@ -212,10 +212,9 @@ mod test {
 
         let contract_module: elements::Module = parity_wasm::deserialize_buffer(contract_code).expect("Constructed contract module is not valid");
 
-        let program = parity_wasm::DefaultProgramInstance::new().expect("Program2 instance failed to load");
+        let program = program_with_emscripten_env(Default::default()).expect("Wasm program to be created");
         let contract_module_instance = program.add_module("contract", contract_module, None).expect("Failed to initialize constructed contract module");
-        let execution_params = interpreter::ExecutionParams::default();
 
-        contract_module_instance.execute_export(CALL_SYMBOL, execution_params).expect("Constructed contract failed to execute");
+        contract_module_instance.execute_export(CALL_SYMBOL, Default::default()).expect("Constructed contract failed to execute");
     }
 }
