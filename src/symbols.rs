@@ -8,6 +8,7 @@ pub enum Symbol {
 	Global(usize),
 	Function(usize),
 	Export(usize),
+	IndirectCall,
 }
 
 pub fn resolve_function(module: &elements::Module, index: u32) -> Symbol {
@@ -58,12 +59,13 @@ pub fn push_code_symbols(module: &elements::Module, opcodes: &[elements::Opcode]
 			},
 			&CallIndirect(idx, _) => {
 				dest.push(Symbol::Type(idx as usize));
+				dest.push(Symbol::IndirectCall);
 			},
 			&GetGlobal(idx) | &SetGlobal(idx) => {
 				dest.push(resolve_global(module, idx))
 			},
 			_ => { },
-		} 
+		}
 	}
 }
 
@@ -75,7 +77,7 @@ pub fn expand_symbols(module: &elements::Module, set: &mut HashSet<Symbol>) {
 	let mut fringe = set.iter().cloned().collect::<Vec<Symbol>>();
 	loop {
 		let next = match fringe.pop() {
-			Some(s) if stop.contains(&s) => { continue; } 
+			Some(s) if stop.contains(&s) => { continue; }
 			Some(s) => s,
 			_ => { break; }
 		};
@@ -86,7 +88,7 @@ pub fn expand_symbols(module: &elements::Module, set: &mut HashSet<Symbol>) {
 				let entry = &module.export_section().expect("Export section to exist").entries()[idx];
 				match entry.internal() {
 					&elements::Internal::Function(func_idx) => {
-						let symbol = resolve_function(module, func_idx); 
+						let symbol = resolve_function(module, func_idx);
 						if !stop.contains(&symbol) {
 							fringe.push(symbol);
 						}
@@ -97,7 +99,7 @@ pub fn expand_symbols(module: &elements::Module, set: &mut HashSet<Symbol>) {
 						if !stop.contains(&symbol) {
 							fringe.push(symbol);
 						}
-						set.insert(symbol); 
+						set.insert(symbol);
 					},
 					_ => {}
 				}
@@ -110,9 +112,9 @@ pub fn expand_symbols(module: &elements::Module, set: &mut HashSet<Symbol>) {
 						if !stop.contains(&type_symbol) {
 							fringe.push(type_symbol);
 						}
-						set.insert(type_symbol);        
+						set.insert(type_symbol);
 					},
-					_ => {}                
+					_ => {}
 				}
 			},
 			Function(idx) => {
@@ -142,8 +144,17 @@ pub fn expand_symbols(module: &elements::Module, set: &mut HashSet<Symbol>) {
 						fringe.push(symbol);
 					}
 					set.insert(symbol);
-				}                
-			}
+				}
+			},
+			IndirectCall => {
+				for entry in module.elements_section().map(|s| s.entries()).unwrap_or(&[]) {
+					for func_index in entry.members() {
+						let symbol = resolve_function(&module, *func_index);
+						if !stop.contains(&symbol) { fringe.push(symbol); }
+						set.insert(symbol);
+					}
+				}
+			},
 			_ => {}
 		}
 

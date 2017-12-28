@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use parity_wasm::elements;
 
-use symbols::{Symbol, expand_symbols, push_code_symbols, resolve_function};
+use symbols::{Symbol, expand_symbols, push_code_symbols};
 
 #[derive(Debug)]
 pub enum Error {
@@ -23,7 +23,7 @@ pub fn optimize(
 	for (index, entry) in module.export_section().ok_or(Error::NoExportSection)?.entries().iter().enumerate() {
 		if used_exports.iter().find(|e| **e == entry.field()).is_some() {
 			stay.insert(Symbol::Export(index));
-		} 
+		}
 	}
 
 	// All symbols used in data/element segments are also should be preserved
@@ -33,14 +33,14 @@ pub fn optimize(
 			push_code_symbols(&module, segment.offset().code(), &mut init_symbols);
 		}
 	}
-	if let Some(elements_section) = module.elements_section() {
-		for segment in elements_section.entries() {
-			push_code_symbols(&module, segment.offset().code(), &mut init_symbols);
-			for func_index in segment.members() {
-				stay.insert(resolve_function(&module, *func_index));
-			}
-		}
-	}
+	// if let Some(elements_section) = module.elements_section() {
+	// 	for segment in elements_section.entries() {
+	// 		push_code_symbols(&module, segment.offset().code(), &mut init_symbols);
+	// 		for func_index in segment.members() {
+	// 			stay.insert(resolve_function(&module, *func_index));
+	// 		}
+	// 	}
+	// }
 	for symbol in init_symbols.drain(..) { stay.insert(symbol); }
 
 	// Call function which will traverse the list recursively, filling stay with all symbols
@@ -103,7 +103,7 @@ pub fn optimize(
 					} else {
 						remove = true;
 						eliminated_globals.push(top_globals);
-						trace!("Eliminated import({}) global({}, {})", old_index, top_globals, imports.entries()[index].field());                        
+						trace!("Eliminated import({}) global({}, {})", old_index, top_globals, imports.entries()[index].field());
 					}
 					top_globals += 1;
 				},
@@ -190,16 +190,16 @@ pub fn optimize(
 				&mut elements::Section::Function(ref mut function_section) if eliminated_types.len() > 0 => {
 					for ref mut func_signature in function_section.entries_mut() {
 						let totalle = eliminated_types.iter().take_while(|i| (**i as u32) < func_signature.type_ref()).count();
-						*func_signature.type_ref_mut() -= totalle as u32;                        
-					}                    
+						*func_signature.type_ref_mut() -= totalle as u32;
+					}
 				},
 				&mut elements::Section::Import(ref mut import_section) if eliminated_types.len() > 0 => {
 					for ref mut import_entry in import_section.entries_mut() {
-						if let &mut elements::External::Function(ref mut type_ref) = import_entry.external_mut() { 
+						if let &mut elements::External::Function(ref mut type_ref) = import_entry.external_mut() {
 							let totalle = eliminated_types.iter().take_while(|i| (**i as u32) < *type_ref).count();
-							*type_ref -= totalle as u32;                
-						}        
-					}                     
+							*type_ref -= totalle as u32;
+						}
+					}
 				},
 				&mut elements::Section::Code(ref mut code_section) if eliminated_globals.len() > 0 || eliminated_funcs.len() > 0 => {
 					for ref mut func_body in code_section.bodies_mut() {
@@ -226,7 +226,7 @@ pub fn optimize(
 								*global_index -= totalle as u32;
 							},
 							_ => {}
-						} 
+						}
 					}
 				},
 				&mut elements::Section::Global(ref mut global_section) => {
@@ -244,7 +244,7 @@ pub fn optimize(
 						update_global_index(segment.offset_mut().code_mut(), &eliminated_globals);
 						// update all indirect call addresses initial values
 						for func_index in segment.members_mut() {
-							let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < *func_index).count();     
+							let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < *func_index).count();
 							*func_index -= totalle as u32;
 						}
 					}
@@ -384,7 +384,7 @@ mod tests {
 	/// Optimizer presumes that export section exists and contains
 	/// all symbols passed as a second parameter. Since empty module
 	/// obviously contains no export section, optimizer should return
-	/// error on it. 
+	/// error on it.
 	#[test]
 	fn empty() {
 		let mut module = builder::module().build();
@@ -431,7 +431,7 @@ mod tests {
 			1,
 			module.function_section().expect("functions section to be generated").entries().len(),
 			"There should 2 (two) functions in the optimized module"
-		); 
+		);
 	}
 
 	/// @spec 2
@@ -466,14 +466,14 @@ mod tests {
 			1,
 			module.global_section().expect("global section to be generated").entries().len(),
 			"There should 1 (one) global entry in the optimized module, since _call function uses it"
-		);         
+		);
 	}
 
 	/// @spec 2
 	/// Imagine there is one exported function in unoptimized module, `_call`, that we specify as the one
 	/// to stay during the optimization. The code of this function uses one global during the execution,
 	/// but we have a bunch of other unused globals in the code. Last globals should not survive the optimization,
-	/// while the former should. 
+	/// while the former should.
 	#[test]
 	fn globals_2() {
 		let mut module = builder::module()
@@ -485,7 +485,7 @@ mod tests {
 				.build()
 			.global()
 				.value_type().f32()
-				.build()                                
+				.build()
 			.function()
 				.signature().param().i32().build()
 				.body()
@@ -508,7 +508,7 @@ mod tests {
 			1,
 			module.global_section().expect("global section to be generated").entries().len(),
 			"There should 1 (one) global entry in the optimized module, since _call function uses only one"
-		);         
+		);
 	}
 
 	/// @spec 3
@@ -571,7 +571,7 @@ mod tests {
 				.build()
 			.function()
 				.signature().param().i32().param().i32().build()
-				.build()				
+				.build()
 			.function()
 				.signature().param().i32().build()
 				.body()
@@ -601,7 +601,7 @@ mod tests {
 			elements::Opcode::CallIndirect(0, false) => {},
 			_ => {
 				panic!(
-					"Expected call_indirect to use index 0 after optimization, since previois 0th was eliminated, but got {:?}", 
+					"Expected call_indirect to use index 0 after optimization, since previois 0th was eliminated, but got {:?}",
 					indirect_opcode
 				);
 			}
