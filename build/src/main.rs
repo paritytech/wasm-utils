@@ -125,7 +125,15 @@ fn main() {
 	let mut module = parity_wasm::deserialize_file(&path).unwrap();
 
 	if let source::SourceTarget::Unknown = source_input.target() {
-		module = underscore_funcs(module)
+		module = underscore_funcs(module);
+		// Removes the start section for 'wasm32-unknown-unknown' target if exists
+		module.sections_mut().retain(|section| {
+			if let &elements::Section::Start(ref _a) = section {
+				false
+			} else {
+				true
+			}
+		});
 	}
 
 	if let Some(runtime_type) = matches.value_of("runtime_type") {
