@@ -124,7 +124,7 @@ fn main() {
 
 	let mut module = parity_wasm::deserialize_file(&path).unwrap();
 
-	if let source::SourceTarget::Unknown = source_input.target() {
+	if let source::SourceTarget::Emscripten = source_input.target() {
 		module = ununderscore_funcs(module);
 	}
 
