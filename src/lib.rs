@@ -4,8 +4,9 @@ extern crate byteorder;
 #[macro_use] extern crate log;
 #[macro_use] extern crate lazy_static;
 
-pub static CREATE_SYMBOL: &'static str = "_deploy";
-pub static CALL_SYMBOL: &'static str = "_call";
+pub static CREATE_SYMBOL: &'static str = "deploy";
+pub static CALL_SYMBOL: &'static str = "call";
+pub static MEMORY_SYMBOL: &'static str = "memory";
 
 pub mod rules;
 
@@ -21,8 +22,7 @@ mod runtime_type;
 pub use optimizer::{optimize, Error as OptimizerError};
 pub use gas::inject_gas_counter;
 pub use logger::init_log;
-pub use ext::{externalize, externalize_mem, underscore_funcs};
+pub use ext::{externalize, externalize_mem, underscore_funcs, ununderscore_funcs};
 pub use pack::pack_instance;
 pub use nondeterminism_check::is_deterministic;
 pub use runtime_type::inject_runtime_type;
-
