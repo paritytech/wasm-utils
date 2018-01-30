@@ -71,12 +71,12 @@ where F: Fn(&mut String)
 	module
 }
 
-pub fn underscore_funcs(mut module: elements::Module) -> elements::Module {
+pub fn underscore_funcs(module: elements::Module) -> elements::Module {
 	foreach_public_func_name(module, |n| n.insert(0, '_'))
 }
 
 
-pub fn ununderscore_funcs(mut module: elements::Module) -> elements::Module {
+pub fn ununderscore_funcs(module: elements::Module) -> elements::Module {
 	foreach_public_func_name(module, |n| { n.remove(0); })
 }
 
