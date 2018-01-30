@@ -220,7 +220,7 @@ impl InstructionType {
             F64Max => InstructionType::Numeric,
             F64Copysign => InstructionType::Numeric,
 
-            I32WarpI64 => InstructionType::Conversion,
+            I32WrapI64 => InstructionType::Conversion,
             I32TruncSF32 => InstructionType::Conversion,
             I32TruncUF32 => InstructionType::Conversion,
             I32TruncSF64 => InstructionType::Conversion,
