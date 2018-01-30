@@ -4,6 +4,6 @@ version = "0.1.0"
 authors = ["NikVolf <nikvolf@gmail.com>"]
 
 [dependencies]
-parity-wasm = "0.18"
+parity-wasm = "0.23"
 wasm-utils = { path = "../" }
 clap = "2.24"
