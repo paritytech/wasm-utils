@@ -190,6 +190,10 @@ pub fn optimize(
 
 		for section in module.sections_mut() {
 			match section {
+				&mut elements::Section::Start(ref mut func_index) if eliminated_funcs.len() > 0 => {
+					let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < *func_index).count();
+					*func_index -= totalle as u32;
+				},
 				&mut elements::Section::Function(ref mut function_section) if eliminated_types.len() > 0 => {
 					for ref mut func_signature in function_section.entries_mut() {
 						let totalle = eliminated_types.iter().take_while(|i| (**i as u32) < func_signature.type_ref()).count();
