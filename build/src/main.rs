@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use clap::{App, Arg};
 use parity_wasm::elements;
 
-use wasm_utils::{CREATE_SYMBOL, CALL_SYMBOL, MEMORY_SYMBOL, ununderscore_funcs};
+use wasm_utils::{CREATE_SYMBOL, CALL_SYMBOL, MEMORY_SYMBOL, ununderscore_funcs, externalize_mem};
 
 #[derive(Debug)]
 pub enum Error {
@@ -126,6 +126,10 @@ fn main() {
 
 	if let source::SourceTarget::Emscripten = source_input.target() {
 		module = ununderscore_funcs(module);
+	}
+
+	if let source::SourceTarget::Unknown = source_input.target() {
+		module = externalize_mem(module);
 	}
 
 	if let Some(runtime_type) = matches.value_of("runtime_type") {
