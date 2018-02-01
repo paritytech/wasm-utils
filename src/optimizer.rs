@@ -27,7 +27,7 @@ pub fn optimize(
 	}
 
 	// If there is start function in module, it should stary
-	module.start_section().map(|ss| stay.insert(Symbol::Function(ss as usize)));
+	module.start_section().map(|ss| stay.insert(resolve_function(&module, ss)));
 
 	// All symbols used in data/element segments are also should be preserved
 	let mut init_symbols = Vec::new();
