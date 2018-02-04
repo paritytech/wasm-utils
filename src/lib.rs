@@ -6,7 +6,6 @@ extern crate byteorder;
 
 pub static CREATE_SYMBOL: &'static str = "deploy";
 pub static CALL_SYMBOL: &'static str = "call";
-pub static MEMORY_SYMBOL: &'static str = "memory";
 
 pub mod rules;
 

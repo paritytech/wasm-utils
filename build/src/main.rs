@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use clap::{App, Arg};
 use parity_wasm::elements;
 
-use wasm_utils::{CREATE_SYMBOL, CALL_SYMBOL, MEMORY_SYMBOL, ununderscore_funcs, externalize_mem};
+use wasm_utils::{CREATE_SYMBOL, CALL_SYMBOL, ununderscore_funcs, externalize_mem};
 
 #[derive(Debug)]
 pub enum Error {
@@ -147,7 +147,7 @@ fn main() {
 	if !matches.is_present("skip_optimization") {
 		wasm_utils::optimize(
 			&mut module,
-			vec![CALL_SYMBOL, MEMORY_SYMBOL]
+			vec![CALL_SYMBOL]
 		).expect("Optimizer to finish without errors");
 	}
 
