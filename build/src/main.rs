@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use clap::{App, Arg};
 use parity_wasm::elements;
 
-use wasm_utils::{CREATE_SYMBOL, CALL_SYMBOL, underscore_funcs};
+use wasm_utils::{CREATE_SYMBOL, CALL_SYMBOL, ununderscore_funcs, externalize_mem};
 
 #[derive(Debug)]
 pub enum Error {
@@ -124,16 +124,12 @@ fn main() {
 
 	let mut module = parity_wasm::deserialize_file(&path).unwrap();
 
+	if let source::SourceTarget::Emscripten = source_input.target() {
+		module = ununderscore_funcs(module);
+	}
+
 	if let source::SourceTarget::Unknown = source_input.target() {
-		module = underscore_funcs(module);
-		// Removes the start section for 'wasm32-unknown-unknown' target if exists
-		module.sections_mut().retain(|section| {
-			if let &elements::Section::Start(ref _a) = section {
-				false
-			} else {
-				true
-			}
-		});
+		module = externalize_mem(module);
 	}
 
 	if let Some(runtime_type) = matches.value_of("runtime_type") {
@@ -149,7 +145,10 @@ fn main() {
 	let mut ctor_module = module.clone();
 
 	if !matches.is_present("skip_optimization") {
-		wasm_utils::optimize(&mut module, vec![CALL_SYMBOL]).expect("Optimizer to finish without errors");
+		wasm_utils::optimize(
+			&mut module,
+			vec![CALL_SYMBOL]
+		).expect("Optimizer to finish without errors");
 	}
 
 	if let Some(save_raw_path) = matches.value_of("save_raw") {

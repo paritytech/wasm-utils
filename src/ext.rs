@@ -49,18 +49,35 @@ pub fn externalize_mem(mut module: elements::Module) -> elements::Module {
 	module
 }
 
-pub fn underscore_funcs(mut module: elements::Module) -> elements::Module {
-	for entry in import_section(&mut module).expect("Import section to exist").entries_mut() {
-		if let elements::External::Function(_) = *entry.external() {
-			entry.field_mut().insert(0, '_');
+fn foreach_public_func_name<F>(mut module: elements::Module, f: F) -> elements::Module
+where F: Fn(&mut String)
+{
+	import_section(&mut module).map(|is| {
+		for entry in is.entries_mut() {
+			if let elements::External::Function(_) = *entry.external() {
+				f(entry.field_mut())
+			}
 		}
-	}
-	for entry in export_section(&mut module).expect("Import section to exist").entries_mut() {
-		if let elements::Internal::Function(_) = *entry.internal() {
-			entry.field_mut().insert(0, '_');
+	});
+
+	export_section(&mut module).map(|es| {
+		for entry in es.entries_mut() {
+			if let elements::Internal::Function(_) = *entry.internal() {
+				f(entry.field_mut())
+			}
 		}
-	}
+	});
+
 	module
+}
+
+pub fn underscore_funcs(module: elements::Module) -> elements::Module {
+	foreach_public_func_name(module, |n| n.insert(0, '_'))
+}
+
+
+pub fn ununderscore_funcs(module: elements::Module) -> elements::Module {
+	foreach_public_func_name(module, |n| { n.remove(0); })
 }
 
 pub fn externalize(
