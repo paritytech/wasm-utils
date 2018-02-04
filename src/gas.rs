@@ -53,6 +53,7 @@ fn add_grow_counter(module: elements::Module, rules: &rules::Set, gas_func: u32)
 					GetLocal(1),
 					GrowMemory(0),
 					GetLocal(0),
+					End,
 				]))
 				.build()
 			.build()
@@ -196,7 +197,9 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set) -> eleme
 #[cfg(test)]
 mod tests {
 
-	use parity_wasm::{builder, elements};
+	extern crate wabt;
+
+	use parity_wasm::{serialize, builder, elements};
 	use super::*;
 	use rules;
 
@@ -246,11 +249,15 @@ mod tests {
 				GetLocal(1),
 				GrowMemory(0),
 				GetLocal(0),
+				End,
 			][..],
 			injected_module
 				.code_section().expect("function section should exist").bodies()[1]
 				.code().elements()
 		);
+
+		let binary = serialize(injected_module).expect("serialization failed");
+		self::wabt::wasm2wat(&binary).unwrap();
 	}
 
 	#[test]
@@ -291,6 +298,9 @@ mod tests {
 		);
 
 		assert_eq!(injected_module.functions_space(), 2);
+
+		let binary = serialize(injected_module).expect("serialization failed");
+		self::wabt::wasm2wat(&binary).unwrap();
 	}
 
 	#[test]
