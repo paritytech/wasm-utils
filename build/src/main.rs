@@ -133,6 +133,7 @@ fn main() {
 	}
 
 	if let source::SourceTarget::Unknown = source_input.target() {
+		// 49152 is 48kb!
 		let stack_size: u32 = matches.value_of("shrink_stack").unwrap_or_else(|| "49152").parse().expect("New stack size is not valid u32");
 		assert!(stack_size <= 1024*1024);
 		let (new_module, new_stack_top) = shrink_unknown_stack(module, 1024 * 1024 - stack_size);
