@@ -32,7 +32,7 @@ pub fn memory_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut el
 	None
 }
 
-pub fn externalize_mem(mut module: elements::Module, adjust_pages: Option<u32>) -> elements::Module {
+pub fn externalize_mem(mut module: elements::Module, adjust_pages: Option<u32>, max_pages: u32) -> elements::Module {
 	let mut entry = memory_section(&mut module)
 		.expect("Memory section to exist")
 		.entries_mut()
@@ -40,7 +40,8 @@ pub fn externalize_mem(mut module: elements::Module, adjust_pages: Option<u32>) 
 		.expect("Own memory entry to exist in memory section");
 
 	if let Some(adjust_pages) = adjust_pages {
-		entry = elements::MemoryType::new(adjust_pages, None);
+		assert!(adjust_pages <= max_pages);
+		entry = elements::MemoryType::new(adjust_pages, Some(max_pages));
 	}
 
 	import_section(&mut module).expect("Import section to exist").entries_mut().push(
