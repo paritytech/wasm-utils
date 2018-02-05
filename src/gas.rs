@@ -20,7 +20,53 @@ enum InjectAction {
 	IncrementSpawn,
 }
 
-pub fn inject_counter(opcodes: &mut elements::Opcodes, rules: &rules::Set, gas_func: u32) {
+fn inject_grow_counter(opcodes: &mut elements::Opcodes, grow_counter_func: u32) -> usize {
+	use parity_wasm::elements::Opcode::*;
+	let mut counter = 0;
+	for opcode in opcodes.elements_mut() {
+		match *opcode {
+			GrowMemory(_) => {
+				*opcode = Call(grow_counter_func);
+				counter += 1;
+			},
+			_ => {}
+		}
+	}
+	counter
+}
+
+fn add_grow_counter(module: elements::Module, rules: &rules::Set, gas_func: u32) -> elements::Module {
+	use parity_wasm::elements::Opcode::*;
+
+	let mut b = builder::from_module(module);
+	b.push_function(
+		builder::function()
+			.signature().params().i32().i32().build().with_return_type(Some(elements::ValueType::I32)).build()
+			.body()
+				.with_opcodes(elements::Opcodes::new(vec![
+					GetLocal(0),
+					I32Const(rules.grow_cost() as i32),
+					I32Mul,
+					TeeLocal(1),
+					// todo: there should be strong guarantee that it does not return anything on stack?
+					Call(gas_func),
+					GetLocal(1),
+					GrowMemory(0),
+					GetLocal(0),
+					End,
+				]))
+				.build()
+			.build()
+	);
+
+	b.build()
+}
+
+pub fn inject_counter(
+	opcodes: &mut elements::Opcodes,
+	rules: &rules::Set,
+	gas_func: u32,
+) {
 	use parity_wasm::elements::Opcode::*;
 
 	let mut stack: Vec<(usize, usize)> = Vec::new();
@@ -91,7 +137,7 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set) -> eleme
 			.build_sig()
 		);
 
-	let mut gas_func = mbuilder.push_import(
+	mbuilder.push_import(
 		builder::import()
 			.module("env")
 			.field("gas")
@@ -105,12 +151,9 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set) -> eleme
 	// calculate actual function index of the imported definition
 	//    (substract all imports that are NOT functions)
 
-	for import_entry in module.import_section().expect("Builder should have insert the import section").entries() {
-		match *import_entry.external() {
-			elements::External::Function(_) => {},
-			_ => { gas_func -= 1; }
-		}
-	}
+	let gas_func = module.import_count(elements::ImportCountType::Function) as u32 - 1;
+	let total_func = module.functions_space() as u32;
+	let mut need_grow_counter = false;
 
 	// Updating calling addresses (all calls to function index >= `gas_func` should be incremented)
 	for section in module.sections_mut() {
@@ -119,6 +162,11 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set) -> eleme
 				for ref mut func_body in code_section.bodies_mut() {
 					update_call_index(func_body.code_mut(), gas_func);
 					inject_counter(func_body.code_mut(), rules, gas_func);
+					if rules.grow_cost() > 0 {
+						if inject_grow_counter(func_body.code_mut(), total_func) > 0 {
+							need_grow_counter = true;
+						}
+					}
 				}
 			},
 			&mut elements::Section::Export(ref mut export_section) => {
@@ -143,14 +191,117 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set) -> eleme
 		}
 	}
 
-	module
+	if need_grow_counter { add_grow_counter(module, rules, gas_func) } else { module }
 }
 
 #[cfg(test)]
 mod tests {
 
-	use parity_wasm::{builder, elements};
+	extern crate wabt;
+
+	use parity_wasm::{serialize, builder, elements};
 	use super::*;
+	use rules;
+
+	#[test]
+	fn simple_grow() {
+		use parity_wasm::elements::Opcode::*;
+
+		let module = builder::module()
+			.global()
+				.value_type().i32()
+				.build()
+			.function()
+				.signature().param().i32().build()
+				.body()
+					.with_opcodes(elements::Opcodes::new(
+						vec![
+							GetGlobal(0),
+							GrowMemory(0),
+							End
+						]
+					))
+					.build()
+				.build()
+			.build();
+
+		let injected_module = inject_gas_counter(module, &rules::Set::default().with_grow_cost(10000));
+
+		assert_eq!(
+			&vec![
+				I32Const(3),
+				Call(0),
+				GetGlobal(0),
+				Call(2),
+				End
+			][..],
+			injected_module
+				.code_section().expect("function section should exist").bodies()[0]
+				.code().elements()
+		);
+		assert_eq!(
+			&vec![
+				GetLocal(0),
+				I32Const(10000),
+				I32Mul,
+				TeeLocal(1),
+				Call(0),
+				GetLocal(1),
+				GrowMemory(0),
+				GetLocal(0),
+				End,
+			][..],
+			injected_module
+				.code_section().expect("function section should exist").bodies()[1]
+				.code().elements()
+		);
+
+		let binary = serialize(injected_module).expect("serialization failed");
+		self::wabt::wasm2wat(&binary).unwrap();
+	}
+
+	#[test]
+	fn grow_no_gas_no_track() {
+		use parity_wasm::elements::Opcode::*;
+
+		let module = builder::module()
+			.global()
+				.value_type().i32()
+				.build()
+			.function()
+				.signature().param().i32().build()
+				.body()
+					.with_opcodes(elements::Opcodes::new(
+						vec![
+							GetGlobal(0),
+							GrowMemory(0),
+							End
+						]
+					))
+					.build()
+				.build()
+			.build();
+
+		let injected_module = inject_gas_counter(module, &rules::Set::default());
+
+		assert_eq!(
+			&vec![
+				I32Const(3),
+				Call(0),
+				GetGlobal(0),
+				GrowMemory(0),
+				End
+			][..],
+			injected_module
+				.code_section().expect("function section should exist").bodies()[0]
+				.code().elements()
+		);
+
+		assert_eq!(injected_module.functions_space(), 2);
+
+		let binary = serialize(injected_module).expect("serialization failed");
+		self::wabt::wasm2wat(&binary).unwrap();
+	}
 
 	#[test]
 	fn simple() {

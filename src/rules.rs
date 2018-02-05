@@ -253,14 +253,24 @@ impl InstructionType {
 #[derive(Debug, Default)]
 pub struct Set {
     entries: HashMap<InstructionType, u32>,
+    grow: u32,
 }
 
 impl Set {
     pub fn new(entries: HashMap<InstructionType, u32>) -> Self {
-        Set { entries: entries }
+        Set { entries: entries, grow: 0, }
     }
 
     pub fn process(&self, opcode: &elements::Opcode) -> u32 {
         self.entries.get(&InstructionType::op(opcode)).map(|x| *x).unwrap_or(1)
+    }
+
+    pub fn grow_cost(&self) -> u32 {
+        self.grow
+    }
+
+    pub fn with_grow_cost(mut self, val: u32) -> Self {
+        self.grow = val;
+        self
     }
 }
