@@ -1,5 +1,6 @@
 use parity_wasm::{elements, builder};
 use optimizer::{import_section, export_section};
+use byteorder::{LittleEndian, ByteOrder};
 
 type Insertion = (usize, u32, u32, String);
 
@@ -31,12 +32,16 @@ pub fn memory_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut el
 	None
 }
 
-pub fn externalize_mem(mut module: elements::Module) -> elements::Module {
-	let entry = memory_section(&mut module)
+pub fn externalize_mem(mut module: elements::Module, adjust_pages: Option<u32>) -> elements::Module {
+	let mut entry = memory_section(&mut module)
 		.expect("Memory section to exist")
 		.entries_mut()
 		.pop()
 		.expect("Own memory entry to exist in memory section");
+
+	if let Some(adjust_pages) = adjust_pages {
+		entry = elements::MemoryType::new(adjust_pages, None);
+	}
 
 	import_section(&mut module).expect("Import section to exist").entries_mut().push(
 		elements::ImportEntry::new(
@@ -75,9 +80,33 @@ pub fn underscore_funcs(module: elements::Module) -> elements::Module {
 	foreach_public_func_name(module, |n| n.insert(0, '_'))
 }
 
-
 pub fn ununderscore_funcs(module: elements::Module) -> elements::Module {
 	foreach_public_func_name(module, |n| { n.remove(0); })
+}
+
+pub fn shrink_unknown_stack(
+	mut module: elements::Module,
+	// for example, `shrink_amount = (1MB - 64KB)` will limit stack to 64KB
+	shrink_amount: u32,
+) -> (elements::Module, u32) {
+	let mut new_stack_top = 0;
+	for section in module.sections_mut() {
+		match section {
+			&mut elements::Section::Data(ref mut data_section) => {
+				for ref mut data_segment in data_section.entries_mut() {
+					if data_segment.offset().code() == &[elements::Opcode::I32Const(4), elements::Opcode::End] {
+						assert_eq!(data_segment.value().len(), 4);
+						let current_val = LittleEndian::read_u32(data_segment.value());
+						let new_val = current_val - shrink_amount;
+						LittleEndian::write_u32(data_segment.value_mut(), new_val);
+						new_stack_top = new_val;
+					}
+				}
+			},
+			_ => continue
+		}
+	}
+	(module, new_stack_top)
 }
 
 pub fn externalize(

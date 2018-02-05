@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use clap::{App, Arg};
 use parity_wasm::elements;
 
-use wasm_utils::{CREATE_SYMBOL, CALL_SYMBOL, ununderscore_funcs, externalize_mem};
+use wasm_utils::{CREATE_SYMBOL, CALL_SYMBOL, ununderscore_funcs, externalize_mem, shrink_unknown_stack};
 
 #[derive(Debug)]
 pub enum Error {
@@ -98,6 +98,10 @@ fn main() {
 			.help("Save intermediate raw bytecode to path")
 			.takes_value(true)
 			.long("save-raw"))
+		.arg(Arg::with_name("shrink_stack")
+			.help("Shrinks the new stack size for wasm32-unknown-unknown")
+			.takes_value(true)
+			.long("shrink-stack"))
 		.get_matches();
 
     let target_dir = matches.value_of("target").expect("is required; qed");
@@ -129,7 +133,15 @@ fn main() {
 	}
 
 	if let source::SourceTarget::Unknown = source_input.target() {
-		module = externalize_mem(module);
+		// 49152 is 48kb!
+		let stack_size: u32 = matches.value_of("shrink_stack").unwrap_or_else(|| "49152").parse().expect("New stack size is not valid u32");
+		assert!(stack_size <= 1024*1024);
+		let (new_module, new_stack_top) = shrink_unknown_stack(module, 1024 * 1024 - stack_size);
+		module = new_module;
+		let mut stack_top_page = new_stack_top / 65536;
+		if new_stack_top % 65536 > 0 { stack_top_page += 1 };
+
+		module = externalize_mem(module, Some(stack_top_page));
 	}
 
 	if let Some(runtime_type) = matches.value_of("runtime_type") {
