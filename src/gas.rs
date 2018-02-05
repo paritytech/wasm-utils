@@ -41,16 +41,15 @@ fn add_grow_counter(module: elements::Module, rules: &rules::Set, gas_func: u32)
 	let mut b = builder::from_module(module);
 	b.push_function(
 		builder::function()
-			.signature().params().i32().i32().build().with_return_type(Some(elements::ValueType::I32)).build()
+			.signature().params().i32().build().with_return_type(Some(elements::ValueType::I32)).build()
 			.body()
 				.with_opcodes(elements::Opcodes::new(vec![
 					GetLocal(0),
+					GetLocal(0),
 					I32Const(rules.grow_cost() as i32),
 					I32Mul,
-					TeeLocal(1),
 					// todo: there should be strong guarantee that it does not return anything on stack?
 					Call(gas_func),
-					GetLocal(1),
 					GrowMemory(0),
 					GetLocal(0),
 					End,
@@ -242,11 +241,10 @@ mod tests {
 		assert_eq!(
 			&vec![
 				GetLocal(0),
+				GetLocal(0),
 				I32Const(10000),
 				I32Mul,
-				TeeLocal(1),
 				Call(0),
-				GetLocal(1),
 				GrowMemory(0),
 				GetLocal(0),
 				End,
