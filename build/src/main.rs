@@ -141,7 +141,7 @@ fn main() {
 		let mut stack_top_page = new_stack_top / 65536;
 		if new_stack_top % 65536 > 0 { stack_top_page += 1 };
 
-		module = externalize_mem(module, Some(stack_top_page));
+		module = externalize_mem(module, Some(stack_top_page), 16);
 	}
 
 	if let Some(runtime_type) = matches.value_of("runtime_type") {
