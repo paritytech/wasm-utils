@@ -1,6 +1,6 @@
-use parity_wasm::elements::{self, Section, Opcode, DataSegment, InitExpr, Internal};
+use parity_wasm::elements::{self, Section, Opcode, DataSegment, InitExpr, Internal, External};
 use parity_wasm::builder;
-use super::{CREATE_SYMBOL, CALL_SYMBOL};
+use super::{CREATE_SYMBOL, CALL_SYMBOL, RET_SYMBOL};
 
 /// Pack error.
 ///
@@ -15,6 +15,8 @@ pub enum Error {
     InvalidCreateSignature,
     NoCreateSymbol,
     InvalidCreateMember,
+    NoRetImported,
+    NoImportSection,
 }
 
 /// If module has an exported "_create" function we want to pack it into "constructor".
@@ -47,7 +49,8 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
         let &elements::Type::Function(ref func) = ctor_module.type_section().ok_or(Error::NoTypeSection)?
             .types().get(type_id as usize).ok_or(Error::MalformedModule)?;
 
-        if func.params() != &[elements::ValueType::I32] {
+        // Deploy should have no arguments and also should return nothing
+        if !func.params().is_empty() {
             return Err(Error::InvalidCreateSignature);
         }
         if func.return_type().is_some() {
@@ -55,6 +58,19 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
         }
 
         function_internal_index
+    };
+
+    let ret_function_id = {
+        let mut id = 0;
+        let mut found = false;
+        for entry in ctor_module.import_section().ok_or(Error::NoImportSection)?.entries().iter() {
+            if let External::Function(_) = *entry.external() {
+                if entry.field() == RET_SYMBOL { found = true; break; }
+                else { id += 1; }
+            }
+        }
+        if !found { return Err(Error::NoRetImported); }
+        else { id }
     };
 
     // If new function is put in ctor module, it will have this callable index
@@ -93,17 +109,13 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
 
     let mut new_module = builder::from_module(ctor_module)
         .function()
-        .signature().param().i32().build()
+        .signature().build()
         .body().with_opcodes(elements::Opcodes::new(
             vec![
-                Opcode::GetLocal(0),
                 Opcode::Call((create_func_id + ctor_import_functions) as u32),
-                Opcode::GetLocal(0),
                 Opcode::I32Const(code_data_address),
-                Opcode::I32Store(0, 8),
-                Opcode::GetLocal(0),
                 Opcode::I32Const(raw_module.len() as i32),
-                Opcode::I32Store(0, 12),
+                Opcode::Call(ret_function_id as u32),
                 Opcode::End,
             ])).build()
             .build()
