@@ -1,6 +1,10 @@
-use parity_wasm::elements::{self, Section, Opcode, DataSegment, InitExpr, Internal, External};
+use parity_wasm::elements::{
+    self, Section, Opcode, DataSegment, InitExpr, Internal, External,
+    ImportCountType,
+};
 use parity_wasm::builder;
 use super::{CREATE_SYMBOL, CALL_SYMBOL, RET_SYMBOL};
+use super::gas::update_call_index;
 
 /// Pack error.
 ///
@@ -29,7 +33,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
 
     // We need to find an internal ID of function witch is exported as "_create"
     // in order to find it in the Code section of the module
-    let create_func_id = {
+    let mut create_func_id = {
         let found_entry = ctor_module.export_section().ok_or(Error::NoExportSection)?.entries().iter()
             .find(|entry| CREATE_SYMBOL == entry.field()).ok_or(Error::NoCreateSymbol)?;
 
@@ -69,13 +73,63 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
                 else { id += 1; }
             }
         }
-        if !found { return Err(Error::NoRetImported); }
+        if !found {
+            let mut mbuilder = builder::from_module(ctor_module);
+            let import_sig = mbuilder.push_signature(
+                builder::signature()
+                    .param().i32().param().i32()
+                    .build_sig()
+                );
+
+            mbuilder.push_import(
+                builder::import()
+                    .module("env")
+                    .field("ret")
+                    .external().func(import_sig)
+                    .build()
+                );
+
+            ctor_module = mbuilder.build();
+
+            let ret_func = ctor_module.import_count(ImportCountType::Function) as u32 - 1;
+
+            for section in ctor_module.sections_mut() {
+                match section {
+                    &mut elements::Section::Code(ref mut code_section) => {
+                        for ref mut func_body in code_section.bodies_mut() {
+                            update_call_index(func_body.code_mut(), ret_func);
+                        }
+                    },
+                    &mut elements::Section::Export(ref mut export_section) => {
+                        for ref mut export in export_section.entries_mut() {
+                            match export.internal_mut() {
+                                &mut elements::Internal::Function(ref mut func_index) => {
+                                    if *func_index >= ret_func { *func_index += 1}
+                                },
+                                _ => {}
+                            }
+                        }
+                    },
+                    &mut elements::Section::Element(ref mut elements_section) => {
+                        for ref mut segment in elements_section.entries_mut() {
+                            // update all indirect call addresses initial values
+                            for func_index in segment.members_mut() {
+                                if *func_index >= ret_func { *func_index += 1}
+                            }
+                        }
+                    },
+                    _ => { }
+                }
+            }
+
+            create_func_id += 1;
+            ret_func
+         }
         else { id }
     };
 
     // If new function is put in ctor module, it will have this callable index
-    let last_function_index = ctor_module.function_section().map(|x| x.entries().len()).unwrap_or(0)
-        + ctor_import_functions;
+    let last_function_index = ctor_module.functions_space();
 
     // Code data address is an address where we put the contract's code (raw_module)
     let mut code_data_address = 0i32;
