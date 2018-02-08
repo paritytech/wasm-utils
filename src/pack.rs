@@ -94,13 +94,13 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
             let ret_func = ctor_module.import_count(ImportCountType::Function) as u32 - 1;
 
             for section in ctor_module.sections_mut() {
-                match section {
-                    &mut elements::Section::Code(ref mut code_section) => {
+                match *section {
+                    elements::Section::Code(ref mut code_section) => {
                         for ref mut func_body in code_section.bodies_mut() {
                             update_call_index(func_body.code_mut(), ret_func);
                         }
                     },
-                    &mut elements::Section::Export(ref mut export_section) => {
+                    elements::Section::Export(ref mut export_section) => {
                         for ref mut export in export_section.entries_mut() {
                             match export.internal_mut() {
                                 &mut elements::Internal::Function(ref mut func_index) => {
@@ -110,7 +110,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
                             }
                         }
                     },
-                    &mut elements::Section::Element(ref mut elements_section) => {
+                    elements::Section::Element(ref mut elements_section) => {
                         for ref mut segment in elements_section.entries_mut() {
                             // update all indirect call addresses initial values
                             for func_index in segment.members_mut() {
