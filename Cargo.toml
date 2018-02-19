@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["NikVolf <nikvolf@gmail.com>"]
 
 [dependencies]
-parity-wasm = "0.23"
+parity-wasm = "0.25"
 log = "0.3"
 env_logger = "0.4"
 lazy_static = "0.2"
