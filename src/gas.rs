@@ -65,7 +65,7 @@ pub fn inject_counter(
 	opcodes: &mut elements::Opcodes,
 	rules: &rules::Set,
 	gas_func: u32,
-) {
+) -> Result<(), ()> {
 	use parity_wasm::elements::Opcode::*;
 
 	let mut stack: Vec<(usize, usize)> = Vec::new();
@@ -83,7 +83,7 @@ pub fn inject_counter(
 			let opcode = &opcodes.elements()[cursor];
 			match *opcode {
 				Block(_) | If(_) | Loop(_) => {
-					InjectAction::Spawn(rules.process(opcode))
+					InjectAction::Spawn(rules.process(opcode)?)
 				},
 				Else => {
 					InjectAction::IncrementSpawn
@@ -92,7 +92,7 @@ pub fn inject_counter(
 					InjectAction::Increment
 				},
 				_ => {
-					InjectAction::Continue(rules.process(opcode))
+					InjectAction::Continue(rules.process(opcode)?)
 				}
 			}
 		};
@@ -125,9 +125,17 @@ pub fn inject_counter(
 			},
 		}
 	}
+
+	Ok(())
 }
 
-pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set) -> elements::Module {
+/// Injects gas counter.
+///
+/// Can only fail if encounters operation forbidden by gas rules,
+/// in this case it returns error with the original module.
+pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
+	-> Result<elements::Module, elements::Module>
+{
 	// Injecting gas counting external
 	let mut mbuilder = builder::from_module(module);
 	let import_sig = mbuilder.push_signature(
@@ -153,6 +161,7 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set) -> eleme
 	let gas_func = module.import_count(elements::ImportCountType::Function) as u32 - 1;
 	let total_func = module.functions_space() as u32;
 	let mut need_grow_counter = false;
+	let mut error = false;
 
 	// Updating calling addresses (all calls to function index >= `gas_func` should be incremented)
 	for section in module.sections_mut() {
@@ -160,7 +169,10 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set) -> eleme
 			&mut elements::Section::Code(ref mut code_section) => {
 				for ref mut func_body in code_section.bodies_mut() {
 					update_call_index(func_body.code_mut(), gas_func);
-					inject_counter(func_body.code_mut(), rules, gas_func);
+					if let Err(_) = inject_counter(func_body.code_mut(), rules, gas_func) {
+						error = true;
+						break;
+					}
 					if rules.grow_cost() > 0 {
 						if inject_grow_counter(func_body.code_mut(), total_func) > 0 {
 							need_grow_counter = true;
@@ -190,7 +202,9 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set) -> eleme
 		}
 	}
 
-	if need_grow_counter { add_grow_counter(module, rules, gas_func) } else { module }
+	if error { return Err(module); }
+
+	if need_grow_counter { Ok(add_grow_counter(module, rules, gas_func)) } else { Ok(module) }
 }
 
 #[cfg(test)]
@@ -224,7 +238,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module, &rules::Set::default().with_grow_cost(10000));
+		let injected_module = inject_gas_counter(module, &rules::Set::default().with_grow_cost(10000)).unwrap();
 
 		assert_eq!(
 			&vec![
@@ -280,7 +294,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module, &rules::Set::default());
+		let injected_module = inject_gas_counter(module, &rules::Set::default()).unwrap();
 
 		assert_eq!(
 			&vec![
@@ -322,7 +336,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module, &Default::default());
+		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
 
 		assert_eq!(
 			&vec![
@@ -364,7 +378,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module, &Default::default());
+		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
 
 		assert_eq!(
 			&vec![
@@ -417,7 +431,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module, &Default::default());
+		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
 
 		assert_eq!(
 			&vec![
@@ -479,7 +493,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module, &Default::default());
+		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
 
 		assert_eq!(
 			&vec![
@@ -505,6 +519,35 @@ mod tests {
 				.code_section().expect("function section should exist").bodies()[1]
 				.code().elements()
 		);
+	}
+
+
+	#[test]
+	fn forbidden() {
+		use parity_wasm::elements::Opcode::*;
+
+		let module = builder::module()
+			.global()
+				.value_type().i32()
+				.build()
+			.function()
+				.signature().param().i32().build()
+				.body()
+					.with_opcodes(elements::Opcodes::new(
+						vec![
+							F32Const(555555),
+							End
+						]
+					))
+					.build()
+				.build()
+			.build();
+
+		let rules = rules::Set::default().with_forbidden_floats();
+
+		if let Err(_) = inject_gas_counter(module, &rules) { }
+		else { panic!("Should be error because of the forbidden operation")}
+
 	}
 
 }

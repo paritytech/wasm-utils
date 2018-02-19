@@ -16,7 +16,9 @@ fn main() {
 	// Loading module
 	let module = parity_wasm::deserialize_file(&args[1]).expect("Module deserialization to succeed");
 
-	let result = wasm_utils::inject_gas_counter(module, &Default::default());
+	let result = wasm_utils::inject_gas_counter(
+		module, &Default::default()
+	).expect("Failed to inject gas. Some forbidden opcodes?");
 
 	parity_wasm::serialize_to_file(&args[2], result).expect("Module serialization to succeed")
 }
