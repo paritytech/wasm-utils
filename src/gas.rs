@@ -51,7 +51,6 @@ fn add_grow_counter(module: elements::Module, rules: &rules::Set, gas_func: u32)
 					// todo: there should be strong guarantee that it does not return anything on stack?
 					Call(gas_func),
 					GrowMemory(0),
-					GetLocal(0),
 					End,
 				]))
 				.build()
@@ -260,7 +259,6 @@ mod tests {
 				I32Mul,
 				Call(0),
 				GrowMemory(0),
-				GetLocal(0),
 				End,
 			][..],
 			injected_module
