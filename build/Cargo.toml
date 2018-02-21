@@ -7,7 +7,7 @@ authors = ["NikVolf <nikvolf@gmail.com>"]
 glob = "0.2"
 wasm-utils = { path = "../" }
 clap = "2.24"
-parity-wasm = "0.25"
+parity-wasm = "0.27"
 
 [dev-dependencies]
 tempdir = "0.3"
