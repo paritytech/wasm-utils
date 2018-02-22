@@ -93,10 +93,11 @@ pub fn inject_stack_counter(
 	let mut mbuilder = builder::from_module(module);
 	mbuilder = mbuilder
 		.global()
-			.value_type().i32()
-			.mutable()
-			.init_expr(elements::Opcode::I32Const(0))
-			.build();
+		.value_type()
+		.i32()
+		.mutable()
+		.init_expr(elements::Opcode::I32Const(0))
+		.build();
 
 	let mut module = mbuilder.build();
 
@@ -105,9 +106,14 @@ pub fn inject_stack_counter(
 
 	// Calculate stack costs for all original functions.
 	let funcs_stack_costs = {
+		let func_imports = module.import_count(elements::ImportCountType::Function);
 		let mut funcs_stack_costs = vec![0; module.functions_space()];
+		// TODO: optimize!
 		for (func_idx, func_stack_cost) in funcs_stack_costs.iter_mut().enumerate() {
-			*func_stack_cost = stack_cost(func_idx as u32, &module);
+			// We can't calculate stack_cost of the import functions.
+			if func_idx >= func_imports {
+				*func_stack_cost = stack_cost(func_idx as u32, &module);
+			}
 		}
 		funcs_stack_costs
 	};
@@ -142,20 +148,39 @@ pub fn inject_stack_counter(
 
 	// First, we need to collect all function indicies that should be replaced by thunks.
 	let mut replacement_map: HashMap<u32, Thunk> = {
-		let exports = module.export_section().map(|es| es.entries()).unwrap_or(&[]);
-		let elem_segments = module.elements_section().map(|es| es.entries()).unwrap_or(&[]);
-		let functions = module.function_section().map(|fs| fs.entries()).unwrap_or(&[]);
+		let func_imports = module.import_count(elements::ImportCountType::Function);
+		let exports = module
+			.export_section()
+			.map(|es| es.entries())
+			.unwrap_or(&[]);
+		let elem_segments = module
+			.elements_section()
+			.map(|es| es.entries())
+			.unwrap_or(&[]);
+		let functions = module
+			.function_section()
+			.map(|fs| fs.entries())
+			.unwrap_or(&[]);
 		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
 
 		let func_type = |idx: u32| -> FunctionType {
-			let type_idx = functions[idx as usize].type_ref();
+			let type_idx = if idx < func_imports as u32 {
+				if let elements::External::Function(ref idx) =
+					*module.import_section().unwrap().entries()[idx as usize].external()
+				{
+					*idx
+				} else {
+					panic!();
+				}
+			} else {
+				functions[idx as usize - func_imports].type_ref()
+			};
 			let Type::Function(ref ty) = types[type_idx as usize];
 			ty.clone()
 		};
 
 		// Replacement map is atleast export_section size.
-		let mut replacement_map: HashMap<u32, Thunk> =
-			HashMap::with_capacity(exports.len());
+		let mut replacement_map: HashMap<u32, Thunk> = HashMap::with_capacity(exports.len());
 
 		for entry in exports {
 			match *entry.internal() {
@@ -194,12 +219,22 @@ pub fn inject_stack_counter(
 	for (orig_func_idx, thunk) in &mut replacement_map {
 		let callee_stack_cost = funcs_stack_costs[*orig_func_idx as usize];
 
-		let mut thunk_body = instrument_call!(
+		// Thunk body consist of:
+		//  - argument pushing
+		//  - instrumented call
+		//  - end
+		let instrumented_call = instrument_call!(
 			*orig_func_idx,
 			stack_height_global_idx,
 			callee_stack_cost as i32,
 			rules.stack_limit() as i32
-		).to_vec();
+		);
+		let mut thunk_body: Vec<elements::Opcode> = Vec::with_capacity(instrumented_call.len() + 1);
+
+		for (arg_idx, _) in thunk.signature.params().iter().enumerate() {
+			thunk_body.push(elements::Opcode::GetLocal(arg_idx as u32));
+		}
+		thunk_body.extend(instrumented_call.iter().cloned());
 		thunk_body.push(elements::Opcode::End);
 
 		mbuilder = mbuilder.function()
@@ -306,7 +341,7 @@ fn instrument_function(
 					.count();
 
 				// Advance cursor to be after the inserted sequence.
-				cursor += seq_len;
+				cursor += new_seq.len();
 			}
 			// Do nothing for other instructions.
 			_ => {
@@ -316,17 +351,24 @@ fn instrument_function(
 	}
 }
 
-/// Stack cost of the given function is the sum of it's locals count (that is,
+/// Stack cost of the given *defined* function is the sum of it's locals count (that is,
 /// number of arguments plus number of local variables) and the maximal stack
 /// height.
 fn stack_cost(func_idx: u32, module: &elements::Module) -> u32 {
+	// To calculate the cost of a function we need to convert index from
+	// function index space to defined function spaces.
+	let func_imports = module.import_count(elements::ImportCountType::Function) as u32;
+	let defined_func_idx = func_idx
+		.checked_sub(func_imports)
+		.expect("This should be a index of a defined function");
+
 	let code_section = module
 		.code_section()
 		.expect("Due to validation code section should exists");
-	let body = &code_section.bodies()[func_idx as usize];
+	let body = &code_section.bodies()[defined_func_idx as usize];
 
 	let locals_count = body.locals().len() as u32;
-	let max_stack_height = max_height::max_stack_height(func_idx, module);
+	let max_stack_height = max_height::max_stack_height(defined_func_idx, module);
 
 	locals_count + max_stack_height
 }
@@ -364,5 +406,55 @@ mod tests {
 		// println!("{}", wat);
 		// panic!()
 	}
-}
 
+	#[test]
+	fn test_with_params_and_result() {
+		let module = parse_wat(
+			r#"
+(module
+  (func (export "i32.add") (param i32 i32) (result i32)
+    get_local 0
+	get_local 1
+	i32.add
+  )
+)
+"#,
+		);
+
+		let module = inject_stack_counter(module, &Default::default())
+			.expect("Failed to inject stack counter");
+		let binary = elements::serialize(module).expect("Failed to serialize");
+		wabt::Module::read_binary(&binary, &Default::default())
+			.expect("Wabt failed to read final binary")
+			.validate()
+			.expect("Invalid module");
+	}
+
+	#[test]
+	fn simple_test_2() {
+		let module = parse_wat(
+			r#"
+(module
+  (import "env" "foo" (func $foo))
+  (import "env" "boo" (func $boo))
+  (func (export "i32.add") (param i32 i32) (result i32)
+    call $foo
+	call $boo
+    get_local 0
+	get_local 1
+	i32.add
+  )
+)
+"#,
+		);
+
+		let module = inject_stack_counter(module, &Default::default()).unwrap();
+		elements::serialize_to_file("test.wasm", module).unwrap();
+
+		// let binary = elements::serialize(module).unwrap();
+		// let wat = wabt::wasm2wat(binary).unwrap();
+
+		// println!("{}", wat);
+		// panic!()
+	}
+}

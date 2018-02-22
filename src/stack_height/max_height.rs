@@ -1,5 +1,6 @@
-use parity_wasm::elements::{self, Type, BlockType};
+use parity_wasm::elements::{self, BlockType, Type};
 
+#[derive(Debug)]
 struct Frame {
 	/// Stack becomes polymorphic only after an instruction that
 	/// never passes control further was executed.
@@ -55,6 +56,7 @@ impl Context {
 	///
 	/// This effectively makes stack polymorphic.
 	fn mark_unreachable(&mut self) {
+		trace!("unreachable");
 		let top_frame = self.control_stack
 			.last_mut()
 			.expect("stack must be non-empty");
@@ -63,6 +65,7 @@ impl Context {
 
 	/// Push control frame into the control stack.
 	fn push_frame(&mut self, frame: Frame) {
+		trace!("push_frame: {:?}", frame);
 		self.control_stack.push(frame);
 	}
 
@@ -70,11 +73,13 @@ impl Context {
 	///
 	/// This function will panic if the control stack is empty.
 	fn pop_frame(&mut self) -> Frame {
+		trace!("pop_frame: {:?}", self.control_stack.last().unwrap());
 		self.control_stack.pop().expect("stack must be non-empty")
 	}
 
 	/// Truncate the height of value stack to the specified height.
 	fn trunc(&mut self, new_height: u32) {
+		trace!("trunc: {}", new_height);
 		self.height = new_height;
 	}
 
@@ -82,6 +87,7 @@ impl Context {
 	///
 	/// This will panic if the height overflow usize value.
 	fn push_values(&mut self, value_count: u32) {
+		trace!("push: {}", value_count);
 		self.height = self.height
 			.checked_add(value_count)
 			.expect("stack overflow");
@@ -92,6 +98,10 @@ impl Context {
 	/// This will panic if the stack happen to be negative value after
 	/// values popped.
 	fn pop_values(&mut self, value_count: u32) {
+		trace!("pop: {}", value_count);
+		if value_count == 0 {
+			return;
+		}
 		{
 			let top_frame = self.frame(0);
 			if self.height == top_frame.start_height {
@@ -125,6 +135,8 @@ pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> u32 {
 	let code_section = module
 		.code_section()
 		.expect("Due to validation code section should exists");
+
+	trace!("func_idx: {}", func_idx);
 
 	// Get a signature and a body of the specified function.
 	let func_sig_idx = func_section.entries()[func_idx as usize].type_ref();
@@ -163,6 +175,8 @@ pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> u32 {
 		}
 
 		let opcode = &opcodes.elements()[pc];
+		trace!("{:?}", opcode);
+
 		match *opcode {
 			Nop => {}
 			Block(ty) | Loop(ty) | If(ty) => {
@@ -204,6 +218,9 @@ pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> u32 {
 
 				// Pop condition value.
 				ctx.pop_values(1);
+
+				// Push values back.
+				ctx.push_values(target_arity);
 			}
 			BrTable(ref targets, default_target) => {
 				let arity_of_default = ctx.frame(default_target).branch_arity;
@@ -230,7 +247,33 @@ pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> u32 {
 				ctx.pop_values(func_arity);
 				ctx.mark_unreachable();
 			}
-			Call(x) | CallIndirect(x, _) => {
+			Call(idx) => {
+				let func_imports = module.import_count(elements::ImportCountType::Function);
+				let sig_idx = if idx < func_imports as u32 {
+					module
+						.import_section()
+						.unwrap()
+						.entries()
+						.iter()
+						.filter_map(|entry| match *entry.external() {
+							elements::External::Function(ref idx) => Some(*idx),
+							_ => None,
+						})
+						.nth(idx as usize)
+						.unwrap()
+				} else {
+					func_section.entries()[idx as usize - func_imports].type_ref()
+				};
+				let Type::Function(ref ty) = type_section.types()[sig_idx as usize];
+
+				// Pop values for arguments of the function.
+				ctx.pop_values(ty.params().len() as u32);
+
+				// Push result of the function execution to the stack.
+				let callee_arity = if ty.return_type().is_some() { 1 } else { 0 };
+				ctx.push_values(callee_arity);
+			}
+			CallIndirect(x, _) => {
 				let Type::Function(ref ty) = type_section.types()[x as usize];
 
 				// Pop values for arguments of the function.
