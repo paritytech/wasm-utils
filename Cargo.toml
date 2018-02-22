@@ -14,7 +14,7 @@ byteorder = "1"
 
 [dev-dependencies]
 tempdir = "0.3"
-wabt = "0.1"
+wabt = "0.2"
 
 [lib]
 

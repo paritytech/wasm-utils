@@ -267,6 +267,7 @@ pub struct Set {
     regular: u32,
     entries: HashMap<InstructionType, Metering>,
     grow: u32,
+	stack_limit: u32,
 }
 
 impl Default for Set {
@@ -275,13 +276,14 @@ impl Default for Set {
             regular: 1,
             entries: HashMap::new(),
             grow: 0,
+			stack_limit: 1024,
         }
     }
 }
 
 impl Set {
     pub fn new(regular: u32, entries: HashMap<InstructionType, Metering>) -> Self {
-        Set { regular: regular, entries: entries, grow: 0, }
+        Set { regular: regular, entries: entries, grow: 0, stack_limit: 1024 }
     }
 
     pub fn process(&self, opcode: &elements::Opcode) -> Result<u32, ()>  {
@@ -291,6 +293,10 @@ impl Set {
             Some(Metering::Fixed(val)) => Ok(val),
         }
     }
+
+	pub fn stack_limit(&self) -> u32 {
+		self.stack_limit
+	}
 
     pub fn grow_cost(&self) -> u32 {
         self.grow
