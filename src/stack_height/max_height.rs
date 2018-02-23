@@ -14,7 +14,7 @@ struct Frame {
 	/// this frame.
 	///
 	/// This might be diffirent from `end_arity` since branch
-	/// to loop header can't take any values.
+	/// to the loop header can't take any values.
 	branch_arity: u32,
 
 	/// Stack height before entering in the block.
@@ -106,7 +106,7 @@ impl Context {
 			let top_frame = self.frame(0);
 			if self.height == top_frame.start_height {
 				// It is an error to pop more values than was pushed in the current frame
-				// (ie pop values pushed in the parent frame), unless the frame become
+				// (ie pop values pushed in the parent frame), unless the frame became
 				// polymorphic.
 				if top_frame.is_polymorphic {
 					return;
@@ -252,7 +252,7 @@ pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> u32 {
 				let sig_idx = if idx < func_imports as u32 {
 					module
 						.import_section()
-						.unwrap()
+						.expect("function import count is not zero; function section must exists; qed")
 						.entries()
 						.iter()
 						.filter_map(|entry| match *entry.external() {

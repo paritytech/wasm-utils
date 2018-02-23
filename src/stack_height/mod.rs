@@ -1,30 +1,35 @@
 //! The pass that tries to make stack overflows deterministic, by introducing
 //! an upper bound of the stack size.
 //!
-//! This pass process introduces a global mutable variable to track stack height,
-//! and wraps each function with prolog and epilog.
+//! This pass introduces a global mutable variable to track stack height,
+//! and instruments all calls with preamble and postamble.
 //!
-//! The prolog is inserted before the original function code. It increments
+//! Stack height is increased prior the call. Otherwise, the check would
+//! be made after the stack frame is allocated.
+//!
+//! The preamble is inserted before the call. It increments
 //! the global stack height variable with statically determined "stack cost"
-//! of the current function. If after increment the stack height exceeds
-//! the limit (specified by the `rules`) execution traps.
-//! Otherwise, control flow proceeds to the original function body.
+//! of the callee. If after the increment the stack height exceeds
+//! the limit (specified by the `rules`) then execution traps.
+//! Otherwise, the call is executed.
 //!
-//! The epilog is inserted at the each return point of the function, namely:
-//!
-//! - explicit `return` instruction,
-//! - implicit return execution function scope `end` instruction.
-//!
-//! The purpose of the epilog is to decrease the stack height by the "stack cost"
-//! of the current function.
-//!
-//! As an optimization, we can wrap the whole body of the original function in
-//! block, put the single epilog after the block
-//! and replace all explicit `return` with unconditional branches to the end of that block.
+//! The postamble is inserted after the call. The purpose of the postamble is to decrease
+//! the stack height by the "stack cost" of the callee function.
 //!
 //! Note, that we can't instrument all possible ways to return from the function. The simplest
-//! example would be trap issued by the host function.
+//! example would be a trap issued by the host function.
 //! That means stack height global won't be equal to zero upon the next execution after such trap.
+//!
+//! # Thunks
+//!
+//! Because stack height is increased prior the call few problems arises:
+//!
+//! - Stack height isn't increased upon an entry to the first function, i.e. exported function.
+//! - It is statically unknown what function will be invoked in an indirect call.
+//!
+//! The solution for this problems is to generate a intermediate functions, called 'thunks', which
+//! will increase before and decrease the stack height after the call to original function, and
+//! then make exported function and table entries to point to a corresponding thunks.
 //!
 //! # Stack cost
 //!
@@ -37,9 +42,11 @@
 //!
 //! - values are implemented by a union, so each value takes a size equal to
 //!   the size of the largest possible value type this union can hold. (In MVP it is 8 bytes)
-//! - each local variable and function argument is placed on the stack.
+//! - each value from the value stack is placed on the native stack.
+//! - each local variable and function argument is placed on the native stack.
 //! - arguments pushed by the caller are copied into callee stack rather than shared
 //!   between the frames.
+//! - upon entry into the function entire stack frame is allocated.
 
 use parity_wasm::elements::{self, FunctionType, Internal, Type};
 use parity_wasm::builder;
@@ -335,7 +342,7 @@ fn instrument_function(
 				//
 				// To splice actually take a place, we need to consume iterator
 				// splice returns. So we just `count()` it.
-				let seq_len = opcodes
+				let _ = opcodes
 					.elements_mut()
 					.splice(cursor..(cursor + 1), new_seq.iter().cloned())
 					.count();
