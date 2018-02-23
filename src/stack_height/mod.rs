@@ -204,7 +204,9 @@ pub fn inject_stack_counter(
 	};
 
 	// Then, we create a thunk for each original function.
-	let mut func_idx = module.functions_space() as u32;
+
+	// Save current func_idx
+	let mut next_func_idx = module.functions_space() as u32;
 
 	let mut mbuilder = builder::from_module(module);
 	for (orig_func_idx, thunk) in &mut replacement_map {
@@ -240,7 +242,9 @@ pub fn inject_stack_counter(
 					))
 					.build()
 				.build();
-		thunk.idx = Some(func_idx);
+
+		thunk.idx = Some(next_func_idx);
+		next_func_idx += 1;
 	}
 	let mut module = mbuilder.build();
 
@@ -403,6 +407,14 @@ mod tests {
 			.expect("Failed to deserialize the module")
 	}
 
+	fn validate_module(module: elements::Module) {
+		let binary = elements::serialize(module).expect("Failed to serialize");
+		wabt::Module::read_binary(&binary, &Default::default())
+			.expect("Wabt failed to read final binary")
+			.validate()
+			.expect("Invalid module");
+	}
+
 	#[test]
 	fn simple_test() {
 		let module = parse_wat(
@@ -418,12 +430,6 @@ mod tests {
 
 		let module = inject_stack_counter(module, &Default::default()).unwrap();
 		elements::serialize_to_file("test.wasm", module).unwrap();
-
-		// let binary = elements::serialize(module).unwrap();
-		// let wat = wabt::wasm2wat(binary).unwrap();
-
-		// println!("{}", wat);
-		// panic!()
 	}
 
 	#[test]
@@ -442,15 +448,11 @@ mod tests {
 
 		let module = inject_stack_counter(module, &Default::default())
 			.expect("Failed to inject stack counter");
-		let binary = elements::serialize(module).expect("Failed to serialize");
-		wabt::Module::read_binary(&binary, &Default::default())
-			.expect("Wabt failed to read final binary")
-			.validate()
-			.expect("Invalid module");
+		validate_module(module);
 	}
 
 	#[test]
-	fn simple_test_2() {
+	fn simple_with_imports() {
 		let module = parse_wat(
 			r#"
 (module
@@ -468,12 +470,60 @@ mod tests {
 		);
 
 		let module = inject_stack_counter(module, &Default::default()).unwrap();
-		elements::serialize_to_file("test.wasm", module).unwrap();
+		validate_module(module);
+	}
 
-		// let binary = elements::serialize(module).unwrap();
-		// let wat = wabt::wasm2wat(binary).unwrap();
+	#[test]
+	fn simple_with_global() {
+		let module = parse_wat(
+			r#"
+(module
+  (import "env" "foo" (func $foo))
+  (global (mut i32) (i32.const 1))
+  (func $i32.add (export "i32.add") (param i32 i32) (result i32)
+    get_local 0
+	get_local 1
+	i32.add
+  )
+  (func (param i32)
+     get_local 0
+     i32.const 0
+     call $i32.add
+     drop
+  )
+)
+"#,
+		);
 
-		// println!("{}", wat);
-		// panic!()
+		let module = inject_stack_counter(module, &Default::default()).unwrap();
+		validate_module(module);
+	}
+
+	#[test]
+	fn simple_with_table() {
+		let module = parse_wat(
+			r#"
+(module
+  (import "env" "foo" (func $foo))
+  (global (mut i32) (i32.const 1))
+  (func $i32.add (export "i32.add") (param i32 i32) (result i32)
+    get_local 0
+	get_local 1
+	i32.add
+  )
+  (func (param i32)
+     get_local 0
+     i32.const 0
+     call $i32.add
+     drop
+  )
+  (table 10 anyfunc)
+  (elem (i32.const 0) 0 1 2)
+)
+"#,
+		);
+
+		let module = inject_stack_counter(module, &Default::default()).unwrap();
+		validate_module(module.clone());
 	}
 }
