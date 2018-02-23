@@ -48,22 +48,9 @@
 //!   between the frames.
 //! - upon entry into the function entire stack frame is allocated.
 
-use parity_wasm::elements::{self, FunctionType, Internal, Type};
+use parity_wasm::elements::{self, Type};
 use parity_wasm::builder;
 use rules;
-
-use std::collections::HashMap;
-
-mod max_height;
-
-#[derive(Debug)]
-pub struct Error(elements::Module);
-
-impl Error {
-	pub fn into_module(self) -> elements::Module {
-		self.0
-	}
-}
 
 macro_rules! instrument_call {
 	($callee_idx: expr, $stack_height_global_idx: expr, $callee_stack_cost: expr, $stack_limit: expr) => {{
@@ -76,7 +63,7 @@ macro_rules! instrument_call {
 			SetGlobal($stack_height_global_idx),
 			// if stack_counter > LIMIT: unreachable
 			GetGlobal($stack_height_global_idx),
-			I32Const($stack_limit),
+			I32Const($stack_limit as i32),
 			I32GtU,
 			If(elements::BlockType::NoResult),
 			Unreachable,
@@ -92,11 +79,79 @@ macro_rules! instrument_call {
 	}};
 }
 
+mod max_height;
+mod thunk;
+
+#[derive(Debug)]
+pub struct Error(elements::Module);
+
+impl Error {
+	pub fn into_module(self) -> elements::Module {
+		self.0
+	}
+}
+
+pub(crate) struct Context {
+	stack_height_global_idx: Option<u32>,
+	func_stack_costs: Option<Vec<u32>>,
+	stack_limit: u32,
+}
+
+impl Context {
+	/// Returns index in a global index space of a stack_height global variable.
+	///
+	/// Panics if it haven't generated yet.
+	fn stack_height_global_idx(&self) -> u32 {
+		self.stack_height_global_idx
+			.expect(
+				"stack_height_global_idx isn't yet generated;
+				Did you call `inject_stack_counter_global`"
+			)
+	}
+
+	/// Returns `stack_cost` for `func_idx`.
+	///
+	/// Panics if stack costs haven't computed yet or `func_idx` is greater
+	/// than the last function index.
+	fn stack_cost(&self, func_idx: u32) -> u32 {
+		*self.func_stack_costs
+			.as_ref()
+			.expect(
+				"func_stack_costs isn't yet computed;
+				Did you call `compute_stack_costs`?"
+			)
+			.get(func_idx as usize)
+			.expect(
+				"func_idx is out of bounds"
+			)
+	}
+
+	/// Returns stack limit specified by the rules.
+	fn stack_limit(&self) -> u32 {
+		self.stack_limit
+	}
+}
+
 #[allow(unused)]
 pub fn inject_stack_counter(
 	module: elements::Module,
 	rules: &rules::Set,
 ) -> Result<elements::Module, Error> {
+	let mut ctx = Context {
+		stack_height_global_idx: None,
+		func_stack_costs: None,
+		stack_limit: rules.stack_limit(),
+	};
+
+	let mut module = inject_stack_counter_global(&mut ctx, module);
+	let funcs_stack_costs = compute_stack_costs(&mut ctx, &module);
+	instrument_functions(&mut ctx, &mut module);
+	let module = thunk::generate_thunks(&mut ctx, module);
+
+	Ok(module)
+}
+
+fn inject_stack_counter_global(ctx: &mut Context, module: elements::Module) -> elements::Module {
 	let mut mbuilder = builder::from_module(module);
 	mbuilder = mbuilder
 		.global()
@@ -105,189 +160,73 @@ pub fn inject_stack_counter(
 		.mutable()
 		.init_expr(elements::Opcode::I32Const(0))
 		.build();
+	let module = mbuilder.build();
 
-	let mut module = mbuilder.build();
-
-	// Save index of `stack_height` global variable.
 	let stack_height_global_idx = (module.globals_space() as u32) - 1;
+	ctx.stack_height_global_idx = Some(stack_height_global_idx);
 
-	// Calculate stack costs for all original functions.
-	let funcs_stack_costs = {
-		let func_imports = module.import_count(elements::ImportCountType::Function);
-		let mut funcs_stack_costs = vec![0; module.functions_space()];
-		// TODO: optimize!
-		for (func_idx, func_stack_cost) in funcs_stack_costs.iter_mut().enumerate() {
-			// We can't calculate stack_cost of the import functions.
-			if func_idx >= func_imports {
-				*func_stack_cost = stack_cost(func_idx as u32, &module);
-			}
+	module
+}
+
+/// Calculate stack costs for all functions.
+///
+/// Returns a vector with a stack cost for each function, including imports.
+fn compute_stack_costs(ctx: &mut Context, module: &elements::Module) {
+	let func_imports = module.import_count(elements::ImportCountType::Function);
+	let mut func_stack_costs = vec![0; module.functions_space()];
+	// TODO: optimize!
+	for (func_idx, func_stack_cost) in func_stack_costs.iter_mut().enumerate() {
+		// We can't calculate stack_cost of the import functions.
+		if func_idx >= func_imports {
+			*func_stack_cost = compute_stack_cost(func_idx as u32, &module);
 		}
-		funcs_stack_costs
-	};
+	}
 
-	// Instrument functions.
+	ctx.func_stack_costs = Some(func_stack_costs)
+}
+
+/// Stack cost of the given *defined* function is the sum of it's locals count (that is,
+/// number of arguments plus number of local variables) and the maximal stack
+/// height.
+fn compute_stack_cost(func_idx: u32, module: &elements::Module) -> u32 {
+	// To calculate the cost of a function we need to convert index from
+	// function index space to defined function spaces.
+	let func_imports = module.import_count(elements::ImportCountType::Function) as u32;
+	let defined_func_idx = func_idx
+		.checked_sub(func_imports)
+		.expect("This should be a index of a defined function");
+
+	let code_section = module
+		.code_section()
+		.expect("Due to validation code section should exists");
+	let body = &code_section.bodies()[defined_func_idx as usize];
+
+	let locals_count = body.locals().len() as u32;
+	let max_stack_height = max_height::max_stack_height(defined_func_idx, module);
+
+	locals_count + max_stack_height
+}
+
+fn instrument_functions(ctx: &mut Context, module: &mut elements::Module) {
 	for section in module.sections_mut() {
 		match *section {
 			elements::Section::Code(ref mut code_section) => {
 				for func_body in code_section.bodies_mut() {
 					let mut opcodes = func_body.code_mut();
 					instrument_function(
+						ctx,
 						opcodes,
-						stack_height_global_idx,
-						&funcs_stack_costs,
-						rules.stack_limit(),
 					);
 				}
 			}
 			_ => {}
 		}
 	}
-
-	//
-	// Generate thunks for exports and tables.
-	//
-
-	struct Thunk {
-		signature: FunctionType,
-		// Index in function space of this thunk.
-		idx: Option<u32>,
-		original_func_idx: u32,
-		callee_stack_cost: u32,
-	}
-
-	// First, we need to collect all function indicies that should be replaced by thunks.
-	let mut replacement_map: Vec<Option<Thunk>> = {
-		let func_imports = module.import_count(elements::ImportCountType::Function);
-		let exports = module
-			.export_section()
-			.map(|es| es.entries())
-			.unwrap_or(&[]);
-		let elem_segments = module
-			.elements_section()
-			.map(|es| es.entries())
-			.unwrap_or(&[]);
-		let functions = module
-			.function_section()
-			.map(|fs| fs.entries())
-			.unwrap_or(&[]);
-		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
-
-		let exported_func_indecies = exports.iter().filter_map(|entry| match *entry.internal() {
-			Internal::Function(ref function_idx) => Some(*function_idx),
-			_ => None,
-		});
-		let table_func_indicies = elem_segments.iter().flat_map(|segment| segment.members()).cloned();
-
-
-		// Replacement map is at least export section size. The other component
-		let mut replacement_map: Vec<Option<Thunk>> = Vec::new();
-
-		for func_idx in exported_func_indecies.chain(table_func_indicies) {
-			let callee_stack_cost = funcs_stack_costs[func_idx as usize];
-			let thunk = if callee_stack_cost == 0 {
-				// Don't generate a thunk if stack_cost of a callee is zero.
-				None
-			} else {
-				Some(Thunk {
-					signature: resolve_func_type(func_idx, &module).clone(),
-					idx: None,
-					callee_stack_cost,
-					original_func_idx: func_idx,
-				})
-			};
-			replacement_map.push(thunk);
-		}
-
-		replacement_map
-	};
-
-	// Then, we generate a thunk for each original function.
-
-	// Save current func_idx
-	let mut next_func_idx = module.functions_space() as u32;
-
-	let mut mbuilder = builder::from_module(module);
-	for thunk in replacement_map.iter_mut() {
-		let mut thunk = if let Some(ref mut thunk) = *thunk { thunk } else { continue; };
-
-		// Thunk body consist of:
-		//  - argument pushing
-		//  - instrumented call
-		//  - end
-		let instrumented_call = instrument_call!(
-			thunk.original_func_idx as u32,
-			stack_height_global_idx,
-			thunk.callee_stack_cost as i32,
-			rules.stack_limit() as i32
-		);
-		let mut thunk_body: Vec<elements::Opcode> = Vec::with_capacity(instrumented_call.len() + 1);
-
-		for (arg_idx, _) in thunk.signature.params().iter().enumerate() {
-			thunk_body.push(elements::Opcode::GetLocal(arg_idx as u32));
-		}
-		thunk_body.extend(instrumented_call.iter().cloned());
-		thunk_body.push(elements::Opcode::End);
-
-		mbuilder = mbuilder.function()
-				// Signature of the thunk should match the original function signature.
-				.signature()
-					.with_params(thunk.signature.params().to_vec())
-					.with_return_type(thunk.signature.return_type().clone())
-					.build()
-				.body()
-					.with_opcodes(elements::Opcodes::new(
-						thunk_body
-					))
-					.build()
-				.build();
-
-		thunk.idx = Some(next_func_idx);
-		next_func_idx += 1;
-	}
-	let mut module = mbuilder.build();
-
-	// And finally, fixup thunks in export and table sections.
-
-	// Fixup original function index to a index of a thunk generated earlier.
-	let fixup = |function_idx: &mut u32| {
-		// Check whether this function is in replacement_map, since
-		// we can skip thunk generation (e.g. if stack_cost of function is 0).
-		if let Some(&Some(ref thunk)) = replacement_map.get(*function_idx as usize) {
-			*function_idx = thunk
-				.idx
-				.expect("At this point an index must be assigned to each thunk");
-		}
-	};
-
-	for section in module.sections_mut() {
-		match *section {
-			elements::Section::Export(ref mut export_section) => {
-				for entry in export_section.entries_mut() {
-					match *entry.internal_mut() {
-						Internal::Function(ref mut function_idx) => fixup(function_idx),
-						_ => {}
-					}
-				}
-			}
-			elements::Section::Element(ref mut elem_section) => {
-				for segment in elem_section.entries_mut() {
-					for function_idx in segment.members_mut() {
-						fixup(function_idx)
-					}
-				}
-			}
-			_ => {}
-		}
-	}
-
-	Ok(module)
 }
 
 fn instrument_function(
+	ctx: &mut Context,
 	opcodes: &mut elements::Opcodes,
-	stack_height_global_idx: u32,
-	funcs_stack_costs: &[u32],
-	stack_limit: u32,
 ) {
 	use parity_wasm::elements::Opcode::*;
 
@@ -315,13 +254,13 @@ fn instrument_function(
 			// with a code that adjusts stack height counter
 			// and then restores it.
 			Action::InstrumentCall(callee_idx) => {
-				let callee_stack_cost = funcs_stack_costs[callee_idx as usize];
+				let callee_stack_cost = ctx.stack_cost(callee_idx);
 
 				let new_seq = instrument_call!(
 					callee_idx,
-					stack_height_global_idx,
+					ctx.stack_height_global_idx(),
 					callee_stack_cost as i32,
-					stack_limit as i32
+					ctx.stack_limit()
 				);
 
 				// Replace the original `call idx` instruction with
@@ -343,28 +282,6 @@ fn instrument_function(
 			}
 		}
 	}
-}
-
-/// Stack cost of the given *defined* function is the sum of it's locals count (that is,
-/// number of arguments plus number of local variables) and the maximal stack
-/// height.
-fn stack_cost(func_idx: u32, module: &elements::Module) -> u32 {
-	// To calculate the cost of a function we need to convert index from
-	// function index space to defined function spaces.
-	let func_imports = module.import_count(elements::ImportCountType::Function) as u32;
-	let defined_func_idx = func_idx
-		.checked_sub(func_imports)
-		.expect("This should be a index of a defined function");
-
-	let code_section = module
-		.code_section()
-		.expect("Due to validation code section should exists");
-	let body = &code_section.bodies()[defined_func_idx as usize];
-
-	let locals_count = body.locals().len() as u32;
-	let max_stack_height = max_height::max_stack_height(defined_func_idx, module);
-
-	locals_count + max_stack_height
 }
 
 fn resolve_func_type(func_idx: u32, module: &elements::Module) -> &elements::FunctionType {
