@@ -15,6 +15,7 @@ byteorder = "1"
 [dev-dependencies]
 tempdir = "0.3"
 wabt = "0.2"
+diff = "0.1.11"
 
 [lib]
 
