@@ -151,11 +151,12 @@ pub fn inject_stack_counter(
 		signature: FunctionType,
 		// Index in function space of this thunk.
 		idx: Option<u32>,
+		original_func_idx: u32,
 		callee_stack_cost: u32,
 	}
 
 	// First, we need to collect all function indicies that should be replaced by thunks.
-	let mut replacement_map: HashMap<u32, Thunk> = {
+	let mut replacement_map: Vec<Option<Thunk>> = {
 		let func_imports = module.import_count(elements::ImportCountType::Function);
 		let exports = module
 			.export_section()
@@ -171,58 +172,50 @@ pub fn inject_stack_counter(
 			.unwrap_or(&[]);
 		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
 
-		// Replacement map is at least export_section size.
-		let mut replacement_map: HashMap<u32, Thunk> = HashMap::with_capacity(exports.len());
+		let exported_func_indecies = exports.iter().filter_map(|entry| match *entry.internal() {
+			Internal::Function(ref function_idx) => Some(*function_idx),
+			_ => None,
+		});
+		let table_func_indicies = elem_segments.iter().flat_map(|segment| segment.members()).cloned();
 
-		{
-			// This function will check if the function needs a thunk,
-			// add into a replacement_map if one is needed.
-			let mut add_candidate_thunk = |func_idx: u32| {
-				let callee_stack_cost = funcs_stack_costs[func_idx as usize];
-				if callee_stack_cost == 0 {
-					return;
-				}
 
-				replacement_map.insert(
-					func_idx,
-					Thunk {
-						signature: resolve_func_type(func_idx, &module).clone(),
-						idx: None,
-						callee_stack_cost,
-					},
-				);
+		// Replacement map is at least export section size. The other component
+		let mut replacement_map: Vec<Option<Thunk>> = Vec::new();
+
+		for func_idx in exported_func_indecies.chain(table_func_indicies) {
+			let callee_stack_cost = funcs_stack_costs[func_idx as usize];
+			let thunk = if callee_stack_cost == 0 {
+				// Don't generate a thunk if stack_cost of a callee is zero.
+				None
+			} else {
+				Some(Thunk {
+					signature: resolve_func_type(func_idx, &module).clone(),
+					idx: None,
+					callee_stack_cost,
+					original_func_idx: func_idx,
+				})
 			};
-
-			for entry in exports {
-				match *entry.internal() {
-					Internal::Function(ref function_idx) => add_candidate_thunk(*function_idx),
-					_ => {}
-				}
-			}
-
-			for segment in elem_segments {
-				for function_idx in segment.members() {
-					add_candidate_thunk(*function_idx)
-				}
-			}
+			replacement_map.push(thunk);
 		}
 
 		replacement_map
 	};
 
-	// Then, we create a thunk for each original function.
+	// Then, we generate a thunk for each original function.
 
 	// Save current func_idx
 	let mut next_func_idx = module.functions_space() as u32;
 
 	let mut mbuilder = builder::from_module(module);
-	for (orig_func_idx, thunk) in &mut replacement_map {
+	for thunk in replacement_map.iter_mut() {
+		let mut thunk = if let Some(ref mut thunk) = *thunk { thunk } else { continue; };
+
 		// Thunk body consist of:
 		//  - argument pushing
 		//  - instrumented call
 		//  - end
 		let instrumented_call = instrument_call!(
-			*orig_func_idx,
+			thunk.original_func_idx as u32,
 			stack_height_global_idx,
 			thunk.callee_stack_cost as i32,
 			rules.stack_limit() as i32
@@ -259,7 +252,7 @@ pub fn inject_stack_counter(
 	let fixup = |function_idx: &mut u32| {
 		// Check whether this function is in replacement_map, since
 		// we can skip thunk generation (e.g. if stack_cost of function is 0).
-		if let Some(thunk) = replacement_map.get(function_idx) {
+		if let Some(&Some(ref thunk)) = replacement_map.get(*function_idx as usize) {
 			*function_idx = thunk
 				.idx
 				.expect("At this point an index must be assigned to each thunk");
