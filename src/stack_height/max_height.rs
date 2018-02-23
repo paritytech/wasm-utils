@@ -1,4 +1,5 @@
 use parity_wasm::elements::{self, BlockType, Type};
+use super::resolve_func_type;
 
 #[derive(Debug)]
 struct Frame {
@@ -248,23 +249,7 @@ pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> u32 {
 				ctx.mark_unreachable();
 			}
 			Call(idx) => {
-				let func_imports = module.import_count(elements::ImportCountType::Function);
-				let sig_idx = if idx < func_imports as u32 {
-					module
-						.import_section()
-						.expect("function import count is not zero; function section must exists; qed")
-						.entries()
-						.iter()
-						.filter_map(|entry| match *entry.external() {
-							elements::External::Function(ref idx) => Some(*idx),
-							_ => None,
-						})
-						.nth(idx as usize)
-						.unwrap()
-				} else {
-					func_section.entries()[idx as usize - func_imports].type_ref()
-				};
-				let Type::Function(ref ty) = type_section.types()[sig_idx as usize];
+				let ty = resolve_func_type(idx, module);
 
 				// Pop values for arguments of the function.
 				ctx.pop_values(ty.params().len() as u32);

@@ -170,22 +170,6 @@ pub fn inject_stack_counter(
 			.unwrap_or(&[]);
 		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
 
-		let func_type = |idx: u32| -> FunctionType {
-			let type_idx = if idx < func_imports as u32 {
-				if let elements::External::Function(ref idx) =
-					*module.import_section().unwrap().entries()[idx as usize].external()
-				{
-					*idx
-				} else {
-					panic!();
-				}
-			} else {
-				functions[idx as usize - func_imports].type_ref()
-			};
-			let Type::Function(ref ty) = types[type_idx as usize];
-			ty.clone()
-		};
-
 		// Replacement map is atleast export_section size.
 		let mut replacement_map: HashMap<u32, Thunk> = HashMap::with_capacity(exports.len());
 
@@ -195,7 +179,7 @@ pub fn inject_stack_counter(
 					replacement_map.insert(
 						*function_idx,
 						Thunk {
-							signature: func_type(*function_idx),
+							signature: resolve_func_type(*function_idx, &module).clone(),
 							idx: None,
 						},
 					);
@@ -209,7 +193,7 @@ pub fn inject_stack_counter(
 				replacement_map.insert(
 					*function_idx,
 					Thunk {
-						signature: func_type(*function_idx),
+						signature: resolve_func_type(*function_idx, &module).clone(),
 						idx: None,
 					},
 				);
@@ -378,6 +362,34 @@ fn stack_cost(func_idx: u32, module: &elements::Module) -> u32 {
 	let max_stack_height = max_height::max_stack_height(defined_func_idx, module);
 
 	locals_count + max_stack_height
+}
+
+fn resolve_func_type(func_idx: u32, module: &elements::Module) -> &elements::FunctionType {
+	let func_section = module
+		.function_section()
+		.unwrap();
+	let type_section = module
+		.type_section()
+		.unwrap();
+
+	let func_imports = module.import_count(elements::ImportCountType::Function);
+	let sig_idx = if func_idx < func_imports as u32 {
+		module
+			.import_section()
+			.expect("function import count is not zero; function section must exists; qed")
+			.entries()
+			.iter()
+			.filter_map(|entry| match *entry.external() {
+				elements::External::Function(ref idx) => Some(*idx),
+				_ => None,
+			})
+			.nth(func_idx as usize)
+			.unwrap()
+	} else {
+		func_section.entries()[func_idx as usize - func_imports].type_ref()
+	};
+	let Type::Function(ref ty) = type_section.types()[sig_idx as usize];
+	ty
 }
 
 #[cfg(test)]
