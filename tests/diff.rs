@@ -71,14 +71,19 @@ fn run_diff_test<F: FnOnce(&[u8]) -> Vec<u8>>(test_dir: &str, name: &str, test: 
 	}
 }
 
-#[test]
-fn simple_wat() {
-	run_diff_test("stack-height", "simple.wat", |input| {
-		let rules = Default::default();
-		let module = elements::deserialize_buffer(input).expect("Failed to deserialize");
-		let instrumented = wasm_utils::stack_height::inject_stack_counter(module, &rules).expect("Failed to instrument with stack counter");
-		elements::serialize(instrumented).expect("Failed to serialize")
-	});
+macro_rules! def_stack_height_test {
+	( $name:ident ) => {
+		#[test]
+		fn $name() {
+			run_diff_test("stack-height", concat!(stringify!($name), ".wat"), |input| {
+				let rules = Default::default();
+				let module = elements::deserialize_buffer(input).expect("Failed to deserialize");
+				let instrumented = wasm_utils::stack_height::inject_stack_counter(module, &rules).expect("Failed to instrument with stack counter");
+				elements::serialize(instrumented).expect("Failed to serialize")
+			});
+		}
+	};
 }
 
-
+def_stack_height_test!(simple);
+def_stack_height_test!(table);
