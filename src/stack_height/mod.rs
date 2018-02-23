@@ -151,6 +151,7 @@ pub fn inject_stack_counter(
 		signature: FunctionType,
 		// Index in function space of this thunk.
 		idx: Option<u32>,
+		callee_stack_cost: u32,
 	}
 
 	// First, we need to collect all function indicies that should be replaced by thunks.
@@ -170,33 +171,39 @@ pub fn inject_stack_counter(
 			.unwrap_or(&[]);
 		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
 
-		// Replacement map is atleast export_section size.
+		// Replacement map is at least export_section size.
 		let mut replacement_map: HashMap<u32, Thunk> = HashMap::with_capacity(exports.len());
 
-		for entry in exports {
-			match *entry.internal() {
-				Internal::Function(ref function_idx) => {
-					replacement_map.insert(
-						*function_idx,
-						Thunk {
-							signature: resolve_func_type(*function_idx, &module).clone(),
-							idx: None,
-						},
-					);
+		{
+			// This function will check if the function needs a thunk,
+			// add into a replacement_map if one is needed.
+			let mut add_candidate_thunk = |func_idx: u32| {
+				let callee_stack_cost = funcs_stack_costs[func_idx as usize];
+				if callee_stack_cost == 0 {
+					return;
 				}
-				_ => {}
-			}
-		}
 
-		for segment in elem_segments {
-			for function_idx in segment.members() {
 				replacement_map.insert(
-					*function_idx,
+					func_idx,
 					Thunk {
-						signature: resolve_func_type(*function_idx, &module).clone(),
+						signature: resolve_func_type(func_idx, &module).clone(),
 						idx: None,
+						callee_stack_cost,
 					},
 				);
+			};
+
+			for entry in exports {
+				match *entry.internal() {
+					Internal::Function(ref function_idx) => add_candidate_thunk(*function_idx),
+					_ => {}
+				}
+			}
+
+			for segment in elem_segments {
+				for function_idx in segment.members() {
+					add_candidate_thunk(*function_idx)
+				}
 			}
 		}
 
@@ -210,8 +217,6 @@ pub fn inject_stack_counter(
 
 	let mut mbuilder = builder::from_module(module);
 	for (orig_func_idx, thunk) in &mut replacement_map {
-		let callee_stack_cost = funcs_stack_costs[*orig_func_idx as usize];
-
 		// Thunk body consist of:
 		//  - argument pushing
 		//  - instrumented call
@@ -219,7 +224,7 @@ pub fn inject_stack_counter(
 		let instrumented_call = instrument_call!(
 			*orig_func_idx,
 			stack_height_global_idx,
-			callee_stack_cost as i32,
+			thunk.callee_stack_cost as i32,
 			rules.stack_limit() as i32
 		);
 		let mut thunk_body: Vec<elements::Opcode> = Vec::with_capacity(instrumented_call.len() + 1);
@@ -252,12 +257,13 @@ pub fn inject_stack_counter(
 
 	// Fixup original function index to a index of a thunk generated earlier.
 	let fixup = |function_idx: &mut u32| {
-		let thunk = replacement_map
-			.get(function_idx)
-			.expect("Replacement map should contain all functions from export section");
-		*function_idx = thunk
-			.idx
-			.expect("At this point an index must be assigned to each thunk");
+		// Check whether this function is in replacement_map, since
+		// we can skip thunk generation (e.g. if stack_cost of function is 0).
+		if let Some(thunk) = replacement_map.get(function_idx) {
+			*function_idx = thunk
+				.idx
+				.expect("At this point an index must be assigned to each thunk");
+		}
 	};
 
 	for section in module.sections_mut() {
@@ -369,12 +375,8 @@ fn stack_cost(func_idx: u32, module: &elements::Module) -> u32 {
 }
 
 fn resolve_func_type(func_idx: u32, module: &elements::Module) -> &elements::FunctionType {
-	let func_section = module
-		.function_section()
-		.unwrap();
-	let type_section = module
-		.type_section()
-		.unwrap();
+	let func_section = module.function_section().unwrap();
+	let type_section = module.type_section().unwrap();
 
 	let func_imports = module.import_count(elements::ImportCountType::Function);
 	let sig_idx = if func_idx < func_imports as u32 {
