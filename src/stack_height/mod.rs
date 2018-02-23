@@ -102,11 +102,10 @@ impl Context {
 	///
 	/// Panics if it haven't generated yet.
 	fn stack_height_global_idx(&self) -> u32 {
-		self.stack_height_global_idx
-			.expect(
-				"stack_height_global_idx isn't yet generated;
-				Did you call `inject_stack_counter_global`"
-			)
+		self.stack_height_global_idx.expect(
+			"stack_height_global_idx isn't yet generated;
+			Did you call `inject_stack_counter_global`",
+		)
 	}
 
 	/// Returns `stack_cost` for `func_idx`.
@@ -118,12 +117,10 @@ impl Context {
 			.as_ref()
 			.expect(
 				"func_stack_costs isn't yet computed;
-				Did you call `compute_stack_costs`?"
+				Did you call `compute_stack_costs`?",
 			)
 			.get(func_idx as usize)
-			.expect(
-				"func_idx is out of bounds"
-			)
+			.expect("func_idx is out of bounds")
 	}
 
 	/// Returns stack limit specified by the rules.
@@ -132,9 +129,11 @@ impl Context {
 	}
 }
 
-#[allow(unused)]
+/// Instrument a module with stack height metering.
+///
+/// See module-level documentation for more details.
 pub fn inject_stack_counter(
-	module: elements::Module,
+	mut module: elements::Module,
 	rules: &rules::Set,
 ) -> Result<elements::Module, Error> {
 	let mut ctx = Context {
@@ -143,29 +142,42 @@ pub fn inject_stack_counter(
 		stack_limit: rules.stack_limit(),
 	};
 
-	let mut module = inject_stack_counter_global(&mut ctx, module);
-	let funcs_stack_costs = compute_stack_costs(&mut ctx, &module);
+	generate_stack_height_global(&mut ctx, &mut module);
+	compute_stack_costs(&mut ctx, &module);
 	instrument_functions(&mut ctx, &mut module);
 	let module = thunk::generate_thunks(&mut ctx, module);
 
 	Ok(module)
 }
 
-fn inject_stack_counter_global(ctx: &mut Context, module: elements::Module) -> elements::Module {
-	let mut mbuilder = builder::from_module(module);
-	mbuilder = mbuilder
-		.global()
+/// Generate a new global that will be used for tracking current stack height.
+fn generate_stack_height_global(ctx: &mut Context, module: &mut elements::Module) {
+	let global_entry = builder::global()
 		.value_type()
 		.i32()
 		.mutable()
 		.init_expr(elements::Opcode::I32Const(0))
 		.build();
-	let module = mbuilder.build();
 
-	let stack_height_global_idx = (module.globals_space() as u32) - 1;
-	ctx.stack_height_global_idx = Some(stack_height_global_idx);
+	// Try to find an existing global section.
+	for section in module.sections_mut() {
+		match *section {
+			elements::Section::Global(ref mut gs) => {
+				gs.entries_mut().push(global_entry);
 
-	module
+				let stack_height_global_idx = (gs.entries().len() as u32) - 1;
+				ctx.stack_height_global_idx = Some(stack_height_global_idx);
+				return;
+			}
+			_ => {}
+		}
+	}
+
+	// Existing section not found, create one!
+	module.sections_mut().push(elements::Section::Global(
+		elements::GlobalSection::with_entries(vec![global_entry]),
+	));
+	ctx.stack_height_global_idx = Some(0);
 }
 
 /// Calculate stack costs for all functions.
@@ -213,10 +225,7 @@ fn instrument_functions(ctx: &mut Context, module: &mut elements::Module) {
 			elements::Section::Code(ref mut code_section) => {
 				for func_body in code_section.bodies_mut() {
 					let mut opcodes = func_body.code_mut();
-					instrument_function(
-						ctx,
-						opcodes,
-					);
+					instrument_function(ctx, opcodes);
 				}
 			}
 			_ => {}
@@ -224,10 +233,7 @@ fn instrument_functions(ctx: &mut Context, module: &mut elements::Module) {
 	}
 }
 
-fn instrument_function(
-	ctx: &mut Context,
-	opcodes: &mut elements::Opcodes,
-) {
+fn instrument_function(ctx: &mut Context, opcodes: &mut elements::Opcodes) {
 	use parity_wasm::elements::Opcode::*;
 
 	let mut cursor = 0;
