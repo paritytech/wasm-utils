@@ -55,11 +55,11 @@ fn run_diff_test<F: FnOnce(&[u8]) -> Vec<u8>>(test_dir: &str, name: &str, test: 
 	validate_wasm(&actual_wasm).expect("Result module is invalid");
 
 	let actual_wat = wabt::wasm2wat(&actual_wasm).expect("Failed to convert result wasm to wat");
-	dump(&expected_path, actual_wat.as_bytes()).expect("Failed to write to expected");
 
 	if actual_wat != expected_wat {
+		println!("difference!");
 		println!("--- {}", expected_path.display());
-		println!("+++");
+		println!("+++ {} test {}", test_dir, name);
 		for diff in diff::lines(&expected_wat, &actual_wat) {
 			match diff {
 				diff::Result::Left(l) => println!("-{}", l),
@@ -67,6 +67,9 @@ fn run_diff_test<F: FnOnce(&[u8]) -> Vec<u8>>(test_dir: &str, name: &str, test: 
 				diff::Result::Right(r) => println!("+{}", r),
 			}
 		}
+
+		dump(&expected_path, actual_wat.as_bytes()).expect("Failed to write to expected");
+
 		panic!();
 	}
 }
@@ -87,3 +90,4 @@ macro_rules! def_stack_height_test {
 
 def_stack_height_test!(simple);
 def_stack_height_test!(table);
+def_stack_height_test!(global);
