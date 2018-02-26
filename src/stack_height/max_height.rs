@@ -78,7 +78,7 @@ impl Stack {
 	///
 	/// Returns `Err` if the control stack is empty.
 	fn pop_frame(&mut self) -> Result<Frame, Error> {
-		trace!("pop_frame: {:?}", self.control_stack.last().unwrap());
+		trace!("pop_frame: {:?}", self.control_stack.last());
 		Ok(self.control_stack
 			.pop()
 			.ok_or_else(|| Error("stack must be non-empty".into()))?)
