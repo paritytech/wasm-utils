@@ -159,7 +159,7 @@ pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> Result<u32,
 		.types()
 		.get(func_sig_idx as usize)
 		.ok_or_else(|| Error::ComputeHeight("Function is not found in func section".into()))?;
-	let body = &code_section
+	let body = code_section
 		.bodies()
 		.get(func_idx as usize)
 		.ok_or_else(|| Error::ComputeHeight("Function body for the index isn't found".into()))?;
