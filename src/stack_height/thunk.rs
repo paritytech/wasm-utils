@@ -66,8 +66,8 @@ pub(crate) fn generate_thunks(ctx: &mut Context, module: elements::Module) -> el
 		//  - end
 		let instrumented_call = instrument_call!(
 			thunk.original_func_idx as u32,
-			ctx.stack_height_global_idx(),
 			thunk.callee_stack_cost as i32,
+			ctx.stack_height_global_idx(),
 			ctx.stack_limit()
 		);
 		let mut thunk_body: Vec<elements::Opcode> = Vec::with_capacity(instrumented_call.len() + 1);
@@ -77,6 +77,8 @@ pub(crate) fn generate_thunks(ctx: &mut Context, module: elements::Module) -> el
 		}
 		thunk_body.extend(instrumented_call.iter().cloned());
 		thunk_body.push(elements::Opcode::End);
+
+		// TODO: Don't generate a signature, but find an existing one.
 
 		mbuilder = mbuilder.function()
 				// Signature of the thunk should match the original function signature.

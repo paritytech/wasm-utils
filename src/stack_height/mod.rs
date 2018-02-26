@@ -52,8 +52,9 @@ use parity_wasm::elements::{self, Type};
 use parity_wasm::builder;
 use rules;
 
+/// Macro to generate preamble and postamble.
 macro_rules! instrument_call {
-	($callee_idx: expr, $stack_height_global_idx: expr, $callee_stack_cost: expr, $stack_limit: expr) => {{
+	($callee_idx: expr, $callee_stack_cost: expr, $stack_height_global_idx: expr, $stack_limit: expr) => {{
 		use $crate::parity_wasm::elements::Opcode::*;
 		[
 			// stack_height += stack_cost(F)
@@ -233,6 +234,32 @@ fn instrument_functions(ctx: &mut Context, module: &mut elements::Module) {
 	}
 }
 
+/// This function searches `call` instructions and wrap each call
+/// with preamble and postamble.
+///
+/// Before:
+///
+/// ```text
+/// get_local 0
+/// get_local 1
+/// call 228
+/// drop
+/// ```
+///
+/// After:
+///
+/// ```text
+/// get_local 0
+/// get_local 1
+///
+/// < ... preamble ... >
+///
+/// call 228
+///
+/// < .. postamble ... >
+///
+/// drop
+/// ```
 fn instrument_function(ctx: &mut Context, opcodes: &mut elements::Opcodes) {
 	use parity_wasm::elements::Opcode::*;
 
@@ -243,14 +270,30 @@ fn instrument_function(ctx: &mut Context, opcodes: &mut elements::Opcodes) {
 		}
 
 		enum Action {
-			InstrumentCall(u32),
+			InstrumentCall {
+				callee_idx: u32,
+				callee_stack_cost: u32,
+			},
 			Nop,
 		}
 
 		let action: Action = {
 			let opcode = &opcodes.elements()[cursor];
 			match *opcode {
-				Call(ref idx) => Action::InstrumentCall(*idx),
+				Call(ref callee_idx) => {
+					let callee_stack_cost = ctx.stack_cost(*callee_idx);
+
+					// Instrument only calls to a functions which stack_cost is
+					// non-zero.
+					if callee_stack_cost > 0 {
+						Action::InstrumentCall {
+							callee_idx: *callee_idx,
+							callee_stack_cost,
+						}
+					} else {
+						Action::Nop
+					}
+				},
 				_ => Action::Nop,
 			}
 		};
@@ -259,13 +302,11 @@ fn instrument_function(ctx: &mut Context, opcodes: &mut elements::Opcodes) {
 			// We need to wrap a `call idx` instruction
 			// with a code that adjusts stack height counter
 			// and then restores it.
-			Action::InstrumentCall(callee_idx) => {
-				let callee_stack_cost = ctx.stack_cost(callee_idx);
-
+			Action::InstrumentCall { callee_idx, callee_stack_cost } => {
 				let new_seq = instrument_call!(
 					callee_idx,
-					ctx.stack_height_global_idx(),
 					callee_stack_cost as i32,
+					ctx.stack_height_global_idx(),
 					ctx.stack_limit()
 				);
 
@@ -367,81 +408,5 @@ mod tests {
 		let module = inject_stack_counter(module, &Default::default())
 			.expect("Failed to inject stack counter");
 		validate_module(module);
-	}
-
-	#[test]
-	fn simple_with_imports() {
-		let module = parse_wat(
-			r#"
-(module
-  (import "env" "foo" (func $foo))
-  (import "env" "boo" (func $boo))
-  (func (export "i32.add") (param i32 i32) (result i32)
-    call $foo
-	call $boo
-    get_local 0
-	get_local 1
-	i32.add
-  )
-)
-"#,
-		);
-
-		let module = inject_stack_counter(module, &Default::default()).unwrap();
-		validate_module(module);
-	}
-
-	#[test]
-	fn simple_with_global() {
-		let module = parse_wat(
-			r#"
-(module
-  (import "env" "foo" (func $foo))
-  (global (mut i32) (i32.const 1))
-  (func $i32.add (export "i32.add") (param i32 i32) (result i32)
-    get_local 0
-	get_local 1
-	i32.add
-  )
-  (func (param i32)
-     get_local 0
-     i32.const 0
-     call $i32.add
-     drop
-  )
-)
-"#,
-		);
-
-		let module = inject_stack_counter(module, &Default::default()).unwrap();
-		validate_module(module);
-	}
-
-	#[test]
-	fn simple_with_table() {
-		let module = parse_wat(
-			r#"
-(module
-  (import "env" "foo" (func $foo))
-  (global (mut i32) (i32.const 1))
-  (func $i32.add (export "i32.add") (param i32 i32) (result i32)
-    get_local 0
-	get_local 1
-	i32.add
-  )
-  (func (param i32)
-     get_local 0
-     i32.const 0
-     call $i32.add
-     drop
-  )
-  (table 10 anyfunc)
-  (elem (i32.const 0) 0 1 2)
-)
-"#,
-		);
-
-		let module = inject_stack_counter(module, &Default::default()).unwrap();
-		validate_module(module.clone());
 	}
 }

@@ -1,6 +1,7 @@
 use parity_wasm::elements::{self, BlockType, Type};
 use super::resolve_func_type;
 
+/// Control stack frame.
 #[derive(Debug)]
 struct Frame {
 	/// Stack becomes polymorphic only after an instruction that
