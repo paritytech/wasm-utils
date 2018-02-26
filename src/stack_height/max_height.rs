@@ -49,10 +49,10 @@ impl Stack {
 		let control_stack_height: usize = self.control_stack.len();
 		let last_idx = control_stack_height
 			.checked_sub(1)
-			.ok_or_else(|| Error::ComputeHeight("control stack is empty".into()))?;
+			.ok_or_else(|| Error("control stack is empty".into()))?;
 		let idx = last_idx
 			.checked_sub(rel_depth as usize)
-			.ok_or_else(|| Error::ComputeHeight("control stack out-of-bounds".into()))?;
+			.ok_or_else(|| Error("control stack out-of-bounds".into()))?;
 		Ok(&self.control_stack[idx])
 	}
 
@@ -63,7 +63,7 @@ impl Stack {
 		trace!("unreachable");
 		let top_frame = self.control_stack
 			.last_mut()
-			.ok_or_else(|| Error::ComputeHeight("stack must be non-empty".into()))?;
+			.ok_or_else(|| Error("stack must be non-empty".into()))?;
 		top_frame.is_polymorphic = true;
 		Ok(())
 	}
@@ -81,7 +81,7 @@ impl Stack {
 		trace!("pop_frame: {:?}", self.control_stack.last().unwrap());
 		Ok(self.control_stack
 			.pop()
-			.ok_or_else(|| Error::ComputeHeight("stack must be non-empty".into()))?)
+			.ok_or_else(|| Error("stack must be non-empty".into()))?)
 	}
 
 	/// Truncate the height of value stack to the specified height.
@@ -97,7 +97,7 @@ impl Stack {
 		trace!("push: {}", value_count);
 		self.height = self.height
 			.checked_add(value_count)
-			.ok_or_else(|| Error::ComputeHeight("stack overflow".into()))?;
+			.ok_or_else(|| Error("stack overflow".into()))?;
 		Ok(())
 	}
 
@@ -119,14 +119,14 @@ impl Stack {
 				return if top_frame.is_polymorphic {
 					Ok(())
 				} else {
-					Err(Error::ComputeHeight("trying to pop more values than pushed".into()))
+					Err(Error("trying to pop more values than pushed".into()))
 				}
 			}
 		}
 
 		self.height = self.height
 			.checked_sub(value_count)
-			.ok_or_else(|| Error::ComputeHeight("stack underflow".into()))?;
+			.ok_or_else(|| Error("stack underflow".into()))?;
 
 		Ok(())
 	}
@@ -138,13 +138,13 @@ pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> Result<u32,
 
 	let func_section = module
 		.function_section()
-		.ok_or_else(|| Error::ComputeHeight("No function section".into()))?;
+		.ok_or_else(|| Error("No function section".into()))?;
 	let code_section = module
 		.code_section()
-		.ok_or_else(|| Error::ComputeHeight("No code section".into()))?;
+		.ok_or_else(|| Error("No code section".into()))?;
 	let type_section = module
 		.type_section()
-		.ok_or_else(|| Error::ComputeHeight("No type section".into()))?;
+		.ok_or_else(|| Error("No type section".into()))?;
 
 
 	trace!("func_idx: {}", func_idx);
@@ -153,16 +153,16 @@ pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> Result<u32,
 	let func_sig_idx = func_section
 		.entries()
 		.get(func_idx as usize)
-		.ok_or_else(|| Error::ComputeHeight("Function is not found in func section".into()))?
+		.ok_or_else(|| Error("Function is not found in func section".into()))?
 		.type_ref();
 	let Type::Function(ref func_signature) = *type_section
 		.types()
 		.get(func_sig_idx as usize)
-		.ok_or_else(|| Error::ComputeHeight("Function is not found in func section".into()))?;
+		.ok_or_else(|| Error("Function is not found in func section".into()))?;
 	let body = code_section
 		.bodies()
 		.get(func_idx as usize)
-		.ok_or_else(|| Error::ComputeHeight("Function body for the index isn't found".into()))?;
+		.ok_or_else(|| Error("Function body for the index isn't found".into()))?;
 	let opcodes = body.code();
 
 	let mut stack = Stack::new();
@@ -250,7 +250,7 @@ pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> Result<u32,
 				for target in targets.iter() {
 					let arity = stack.frame(*target)?.branch_arity;
 					if arity != arity_of_default {
-						return Err(Error::ComputeHeight(
+						return Err(Error(
 							"Arity of all jump-targets must be equal".into()
 						))
 					}
@@ -284,7 +284,7 @@ pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> Result<u32,
 				let Type::Function(ref ty) = *type_section
 					.types()
 					.get(x as usize)
-					.ok_or_else(|| Error::ComputeHeight("Type not found".into()))?;
+					.ok_or_else(|| Error("Type not found".into()))?;
 
 				// Pop values for arguments of the function.
 				stack.pop_values(ty.params().len() as u32)?;

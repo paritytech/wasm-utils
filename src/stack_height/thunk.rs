@@ -46,7 +46,7 @@ pub(crate) fn generate_thunks(
 
 		for func_idx in exported_func_indicies.chain(table_func_indicies) {
 			let callee_stack_cost = ctx.stack_cost(func_idx).ok_or_else(|| {
-				Error::Thunk(format!("function with idx {} isn't found", func_idx))
+				Error(format!("function with idx {} isn't found", func_idx))
 			})?;
 
 			// Don't generate a thunk if stack_cost of a callee is zero.

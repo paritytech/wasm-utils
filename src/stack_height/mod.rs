@@ -86,16 +86,7 @@ mod thunk;
 ///
 /// This means that the module is invalid.
 #[derive(Debug)]
-pub enum Error {
-	/// Failed to precompute max height of a function.
-	ComputeHeight(String),
-
-	/// Failed to instrument function calls.
-	Instrumentation(String),
-
-	/// Failed to generate thunks.
-	Thunk(String)
-}
+pub struct Error(String);
 
 pub(crate) struct Context {
 	stack_height_global_idx: Option<u32>,
@@ -216,16 +207,16 @@ fn compute_stack_cost(func_idx: u32, module: &elements::Module) -> Result<u32, E
 	// function index space to defined function spaces.
 	let func_imports = module.import_count(elements::ImportCountType::Function) as u32;
 	let defined_func_idx = func_idx.checked_sub(func_imports).ok_or_else(|| {
-		Error::ComputeHeight("This should be a index of a defined function".into())
+		Error("This should be a index of a defined function".into())
 	})?;
 
 	let code_section = module.code_section().ok_or_else(|| {
-		Error::ComputeHeight("Due to validation code section should exists".into())
+		Error("Due to validation code section should exists".into())
 	})?;
 	let body = &code_section
 		.bodies()
 		.get(defined_func_idx as usize)
-		.ok_or_else(|| Error::ComputeHeight("Function body is out of bounds".into()))?;
+		.ok_or_else(|| Error("Function body is out of bounds".into()))?;
 	let locals_count = body.locals().len() as u32;
 
 	let max_stack_height =
@@ -305,7 +296,7 @@ fn instrument_function(
 					let callee_stack_cost = ctx
 						.stack_cost(*callee_idx)
 						.ok_or_else(||
-							Error::Instrumentation(
+							Error(
 								format!("Call to function that out-of-bounds: {}", callee_idx)
 							)
 						)?;
