@@ -298,6 +298,11 @@ impl Set {
 		self.stack_limit
 	}
 
+	pub fn with_stack_limit(mut self, stack_limit: u32) -> Self {
+		self.stack_limit = stack_limit;
+		self
+	}
+
     pub fn grow_cost(&self) -> u32 {
         self.grow
     }
