@@ -81,7 +81,7 @@ macro_rules! def_stack_height_test {
 			run_diff_test("stack-height", concat!(stringify!($name), ".wat"), |input| {
 				let rules = Default::default();
 				let module = elements::deserialize_buffer(input).expect("Failed to deserialize");
-				let instrumented = wasm_utils::stack_height::inject_stack_counter(module, &rules).expect("Failed to instrument with stack counter");
+				let instrumented = wasm_utils::stack_height::inject_limiter(module, &rules).expect("Failed to instrument with stack counter");
 				elements::serialize(instrumented).expect("Failed to serialize")
 			});
 		}

@@ -19,7 +19,7 @@ fn main() {
 	// Loading module
 	let module = parity_wasm::deserialize_file(&input_file).expect("Module deserialization to succeed");
 
-	let result = stack_height::inject_stack_counter(
+	let result = stack_height::inject_limiter(
 		module, &Default::default()
 	).expect("Failed to inject stack height counter");
 

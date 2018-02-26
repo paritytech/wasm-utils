@@ -83,13 +83,19 @@ macro_rules! instrument_call {
 mod max_height;
 mod thunk;
 
+/// Error that occured during processing the module.
+///
+/// This means that the module is invalid.
 #[derive(Debug)]
-pub struct Error(elements::Module);
+pub enum Error {
+	/// Failed to precompute max height of a function.
+	ComputeHeight(String),
 
-impl Error {
-	pub fn into_module(self) -> elements::Module {
-		self.0
-	}
+	/// Failed to instrument function calls.
+	Instrumentation(String),
+
+	/// Failed to generate thunks.
+	Thunk(String)
 }
 
 pub(crate) struct Context {
@@ -113,15 +119,15 @@ impl Context {
 	///
 	/// Panics if stack costs haven't computed yet or `func_idx` is greater
 	/// than the last function index.
-	fn stack_cost(&self, func_idx: u32) -> u32 {
-		*self.func_stack_costs
+	fn stack_cost(&self, func_idx: u32) -> Option<u32> {
+		self.func_stack_costs
 			.as_ref()
 			.expect(
 				"func_stack_costs isn't yet computed;
 				Did you call `compute_stack_costs`?",
 			)
 			.get(func_idx as usize)
-			.expect("func_idx is out of bounds")
+			.cloned()
 	}
 
 	/// Returns stack limit specified by the rules.
@@ -130,10 +136,14 @@ impl Context {
 	}
 }
 
-/// Instrument a module with stack height metering.
+/// Instrument a module with stack height limiter.
 ///
 /// See module-level documentation for more details.
-pub fn inject_stack_counter(
+///
+/// # Errors
+///
+/// Returns `Err` if module is invalid and can't be
+pub fn inject_limiter(
 	mut module: elements::Module,
 	rules: &rules::Set,
 ) -> Result<elements::Module, Error> {
@@ -144,9 +154,9 @@ pub fn inject_stack_counter(
 	};
 
 	generate_stack_height_global(&mut ctx, &mut module);
-	compute_stack_costs(&mut ctx, &module);
-	instrument_functions(&mut ctx, &mut module);
-	let module = thunk::generate_thunks(&mut ctx, module);
+	compute_stack_costs(&mut ctx, &module)?;
+	instrument_functions(&mut ctx, &mut module)?;
+	let module = thunk::generate_thunks(&mut ctx, module)?;
 
 	Ok(module)
 }
@@ -184,54 +194,63 @@ fn generate_stack_height_global(ctx: &mut Context, module: &mut elements::Module
 /// Calculate stack costs for all functions.
 ///
 /// Returns a vector with a stack cost for each function, including imports.
-fn compute_stack_costs(ctx: &mut Context, module: &elements::Module) {
+fn compute_stack_costs(ctx: &mut Context, module: &elements::Module) -> Result<(), Error> {
 	let func_imports = module.import_count(elements::ImportCountType::Function);
 	let mut func_stack_costs = vec![0; module.functions_space()];
 	// TODO: optimize!
 	for (func_idx, func_stack_cost) in func_stack_costs.iter_mut().enumerate() {
 		// We can't calculate stack_cost of the import functions.
 		if func_idx >= func_imports {
-			*func_stack_cost = compute_stack_cost(func_idx as u32, &module);
+			*func_stack_cost = compute_stack_cost(func_idx as u32, &module)?;
 		}
 	}
 
-	ctx.func_stack_costs = Some(func_stack_costs)
+	ctx.func_stack_costs = Some(func_stack_costs);
+	Ok(())
 }
 
 /// Stack cost of the given *defined* function is the sum of it's locals count (that is,
 /// number of arguments plus number of local variables) and the maximal stack
 /// height.
-fn compute_stack_cost(func_idx: u32, module: &elements::Module) -> u32 {
+fn compute_stack_cost(func_idx: u32, module: &elements::Module) -> Result<u32, Error> {
 	// To calculate the cost of a function we need to convert index from
 	// function index space to defined function spaces.
 	let func_imports = module.import_count(elements::ImportCountType::Function) as u32;
-	let defined_func_idx = func_idx
-		.checked_sub(func_imports)
-		.expect("This should be a index of a defined function");
+	let defined_func_idx = func_idx.checked_sub(func_imports).ok_or_else(|| {
+		Error::ComputeHeight("This should be a index of a defined function".into())
+	})?;
 
-	let code_section = module
-		.code_section()
-		.expect("Due to validation code section should exists");
-	let body = &code_section.bodies()[defined_func_idx as usize];
-
+	let code_section = module.code_section().ok_or_else(|| {
+		Error::ComputeHeight("Due to validation code section should exists".into())
+	})?;
+	let body = &code_section
+		.bodies()
+		.get(defined_func_idx as usize)
+		.ok_or_else(|| Error::ComputeHeight("Function body is out of bounds".into()))?;
 	let locals_count = body.locals().len() as u32;
-	let max_stack_height = max_height::max_stack_height(defined_func_idx, module);
 
-	locals_count + max_stack_height
+	let max_stack_height =
+		max_height::max_stack_height(
+			defined_func_idx,
+			module
+		)?;
+
+	Ok(locals_count + max_stack_height)
 }
 
-fn instrument_functions(ctx: &mut Context, module: &mut elements::Module) {
+fn instrument_functions(ctx: &mut Context, module: &mut elements::Module) -> Result<(), Error> {
 	for section in module.sections_mut() {
 		match *section {
 			elements::Section::Code(ref mut code_section) => {
 				for func_body in code_section.bodies_mut() {
 					let mut opcodes = func_body.code_mut();
-					instrument_function(ctx, opcodes);
+					instrument_function(ctx, opcodes)?;
 				}
 			}
 			_ => {}
 		}
 	}
+	Ok(())
 }
 
 /// This function searches `call` instructions and wrap each call
@@ -260,7 +279,10 @@ fn instrument_functions(ctx: &mut Context, module: &mut elements::Module) {
 ///
 /// drop
 /// ```
-fn instrument_function(ctx: &mut Context, opcodes: &mut elements::Opcodes) {
+fn instrument_function(
+	ctx: &mut Context,
+	opcodes: &mut elements::Opcodes,
+) -> Result<(), Error> {
 	use parity_wasm::elements::Opcode::*;
 
 	let mut cursor = 0;
@@ -281,7 +303,13 @@ fn instrument_function(ctx: &mut Context, opcodes: &mut elements::Opcodes) {
 			let opcode = &opcodes.elements()[cursor];
 			match *opcode {
 				Call(ref callee_idx) => {
-					let callee_stack_cost = ctx.stack_cost(*callee_idx);
+					let callee_stack_cost = ctx
+						.stack_cost(*callee_idx)
+						.ok_or_else(||
+							Error::Instrumentation(
+								format!("Call to function that out-of-bounds: {}", callee_idx)
+							)
+						)?;
 
 					// Instrument only calls to a functions which stack_cost is
 					// non-zero.
@@ -329,6 +357,8 @@ fn instrument_function(ctx: &mut Context, opcodes: &mut elements::Opcodes) {
 			}
 		}
 	}
+
+	Ok(())
 }
 
 fn resolve_func_type(func_idx: u32, module: &elements::Module) -> &elements::FunctionType {
@@ -387,7 +417,7 @@ mod tests {
 "#,
 		);
 
-		let module = inject_stack_counter(module, &Default::default()).unwrap();
+		let module = inject_limiter(module, &Default::default()).unwrap();
 		elements::serialize_to_file("test.wasm", module).unwrap();
 	}
 
@@ -405,7 +435,7 @@ mod tests {
 "#,
 		);
 
-		let module = inject_stack_counter(module, &Default::default())
+		let module = inject_limiter(module, &Default::default())
 			.expect("Failed to inject stack counter");
 		validate_module(module);
 	}

@@ -1,7 +1,7 @@
 use parity_wasm::elements::{self, FunctionType, Internal};
 use parity_wasm::builder;
 
-use super::{resolve_func_type, Context};
+use super::{resolve_func_type, Context, Error};
 
 struct Thunk {
 	signature: FunctionType,
@@ -11,7 +11,10 @@ struct Thunk {
 	callee_stack_cost: u32,
 }
 
-pub(crate) fn generate_thunks(ctx: &mut Context, module: elements::Module) -> elements::Module {
+pub(crate) fn generate_thunks(
+	ctx: &mut Context,
+	module: elements::Module,
+) -> Result<elements::Module, Error> {
 	// First, we need to collect all function indicies that should be replaced by thunks.
 	let mut replacement_map: Vec<Option<Thunk>> = {
 		let exports = module
@@ -27,13 +30,18 @@ pub(crate) fn generate_thunks(ctx: &mut Context, module: elements::Module) -> el
 			Internal::Function(ref function_idx) => Some(*function_idx),
 			_ => None,
 		});
-		let table_func_indicies = elem_segments.iter().flat_map(|segment| segment.members()).cloned();
+		let table_func_indicies = elem_segments
+			.iter()
+			.flat_map(|segment| segment.members())
+			.cloned();
 
 		// Replacement map is at least export section size. The other component
 		let mut replacement_map: Vec<Option<Thunk>> = Vec::new();
 
 		for func_idx in exported_func_indecies.chain(table_func_indicies) {
-			let callee_stack_cost = ctx.stack_cost(func_idx);
+			let callee_stack_cost = ctx.stack_cost(func_idx).ok_or_else(|| {
+				Error::Thunk(format!("function with idx {} isn't found", func_idx))
+			})?;
 			let thunk = if callee_stack_cost == 0 {
 				// Don't generate a thunk if stack_cost of a callee is zero.
 				None
@@ -58,7 +66,11 @@ pub(crate) fn generate_thunks(ctx: &mut Context, module: elements::Module) -> el
 
 	let mut mbuilder = builder::from_module(module);
 	for thunk in replacement_map.iter_mut() {
-		let mut thunk = if let Some(ref mut thunk) = *thunk { thunk } else { continue; };
+		let mut thunk = if let Some(ref mut thunk) = *thunk {
+			thunk
+		} else {
+			continue;
+		};
 
 		// Thunk body consist of:
 		//  - argument pushing
@@ -132,6 +144,5 @@ pub(crate) fn generate_thunks(ctx: &mut Context, module: elements::Module) -> el
 		}
 	}
 
-	module
+	Ok(module)
 }
-
