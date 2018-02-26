@@ -48,7 +48,7 @@ fn run_diff_test<F: FnOnce(&[u8]) -> Vec<u8>>(test_dir: &str, name: &str, test: 
 	let fixture_wasm = wabt::wat2wasm(fixture_wat).expect("Failed to read fixture");
 	validate_wasm(&fixture_wasm).expect("Fixture is invalid");
 
-	let expected_wat = slurp(&expected_path).unwrap_or(vec![]);
+	let expected_wat = slurp(&expected_path).unwrap_or_default();
 	let expected_wat = String::from_utf8_lossy(&expected_wat);
 
 	let actual_wasm = test(fixture_wasm.as_ref());
