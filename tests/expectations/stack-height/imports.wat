@@ -29,4 +29,4 @@
     i32.sub
     set_global 0)
   (global (;0;) (mut i32) (i32.const 0))
-  (export "i32.add" (func 2)))
+  (export "i32.add" (func 3)))

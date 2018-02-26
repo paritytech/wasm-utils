@@ -53,4 +53,4 @@
     set_global 1)
   (global (;0;) (mut i32) (i32.const 1))
   (global (;1;) (mut i32) (i32.const 0))
-  (export "i32.add" (func 1)))
+  (export "i32.add" (func 3)))

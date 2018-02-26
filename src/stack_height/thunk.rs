@@ -1,6 +1,8 @@
 use parity_wasm::elements::{self, FunctionType, Internal};
 use parity_wasm::builder;
 
+use std::collections::HashMap;
+
 use super::{resolve_func_type, Context, Error};
 
 struct Thunk {
@@ -15,8 +17,12 @@ pub(crate) fn generate_thunks(
 	ctx: &mut Context,
 	module: elements::Module,
 ) -> Result<elements::Module, Error> {
-	// First, we need to collect all function indicies that should be replaced by thunks.
-	let mut replacement_map: Vec<Option<Thunk>> = {
+	// First, we need to collect all function indicies that should be replaced by thunks
+
+	// Function indicies which needs to generate thunks.
+	let mut need_thunks: Vec<u32> = Vec::new();
+
+	let mut replacement_map: HashMap<u32, Thunk> = {
 		let exports = module
 			.export_section()
 			.map(|es| es.entries())
@@ -26,7 +32,7 @@ pub(crate) fn generate_thunks(
 			.map(|es| es.entries())
 			.unwrap_or(&[]);
 
-		let exported_func_indecies = exports.iter().filter_map(|entry| match *entry.internal() {
+		let exported_func_indicies = exports.iter().filter_map(|entry| match *entry.internal() {
 			Internal::Function(ref function_idx) => Some(*function_idx),
 			_ => None,
 		});
@@ -35,25 +41,24 @@ pub(crate) fn generate_thunks(
 			.flat_map(|segment| segment.members())
 			.cloned();
 
-		// Replacement map is at least export section size. The other component
-		let mut replacement_map: Vec<Option<Thunk>> = Vec::new();
+		// Replacement map is at least export section size.
+		let mut replacement_map: HashMap<u32, Thunk> = HashMap::new();
 
-		for func_idx in exported_func_indecies.chain(table_func_indicies) {
+		for func_idx in exported_func_indicies.chain(table_func_indicies) {
 			let callee_stack_cost = ctx.stack_cost(func_idx).ok_or_else(|| {
 				Error::Thunk(format!("function with idx {} isn't found", func_idx))
 			})?;
-			let thunk = if callee_stack_cost == 0 {
-				// Don't generate a thunk if stack_cost of a callee is zero.
-				None
-			} else {
-				Some(Thunk {
+
+			// Don't generate a thunk if stack_cost of a callee is zero.
+			if callee_stack_cost != 0 {
+				need_thunks.push(func_idx);
+				replacement_map.insert(func_idx, Thunk {
 					signature: resolve_func_type(func_idx, &module).clone(),
 					idx: None,
 					callee_stack_cost,
 					original_func_idx: func_idx,
-				})
-			};
-			replacement_map.push(thunk);
+				});
+			}
 		}
 
 		replacement_map
@@ -65,24 +70,30 @@ pub(crate) fn generate_thunks(
 	let mut next_func_idx = module.functions_space() as u32;
 
 	let mut mbuilder = builder::from_module(module);
-	for thunk in replacement_map.iter_mut() {
-		let mut thunk = if let Some(ref mut thunk) = *thunk {
-			thunk
-		} else {
-			continue;
-		};
+	for func_idx in need_thunks {
+		let mut thunk = replacement_map
+			.get_mut(&func_idx)
+			.expect(
+				"`func_idx` should come from `need_thunks`;
+				`need_thunks` is populated with the same items that in `replacement_map`;
+				qed"
+			);
 
-		// Thunk body consist of:
-		//  - argument pushing
-		//  - instrumented call
-		//  - end
 		let instrumented_call = instrument_call!(
 			thunk.original_func_idx as u32,
 			thunk.callee_stack_cost as i32,
 			ctx.stack_height_global_idx(),
 			ctx.stack_limit()
 		);
-		let mut thunk_body: Vec<elements::Opcode> = Vec::with_capacity(instrumented_call.len() + 1);
+		// Thunk body consist of:
+		//  - argument pushing
+		//  - instrumented call
+		//  - end
+		let mut thunk_body: Vec<elements::Opcode> = Vec::with_capacity(
+			thunk.signature.params().len() +
+			instrumented_call.len() +
+			1
+		);
 
 		for (arg_idx, _) in thunk.signature.params().iter().enumerate() {
 			thunk_body.push(elements::Opcode::GetLocal(arg_idx as u32));
@@ -116,7 +127,7 @@ pub(crate) fn generate_thunks(
 	let fixup = |function_idx: &mut u32| {
 		// Check whether this function is in replacement_map, since
 		// we can skip thunk generation (e.g. if stack_cost of function is 0).
-		if let Some(&Some(ref thunk)) = replacement_map.get(*function_idx as usize) {
+		if let Some(ref thunk) = replacement_map.get(function_idx) {
 			*function_idx = thunk
 				.idx
 				.expect("At this point an index must be assigned to each thunk");
