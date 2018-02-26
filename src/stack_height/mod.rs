@@ -50,7 +50,6 @@
 
 use parity_wasm::elements::{self, Type};
 use parity_wasm::builder;
-use rules;
 
 /// Macro to generate preamble and postamble.
 macro_rules! instrument_call {
@@ -145,12 +144,12 @@ impl Context {
 /// Returns `Err` if module is invalid and can't be
 pub fn inject_limiter(
 	mut module: elements::Module,
-	rules: &rules::Set,
+	stack_limit: u32,
 ) -> Result<elements::Module, Error> {
 	let mut ctx = Context {
 		stack_height_global_idx: None,
 		func_stack_costs: None,
-		stack_limit: rules.stack_limit(),
+		stack_limit,
 	};
 
 	generate_stack_height_global(&mut ctx, &mut module);
@@ -417,7 +416,7 @@ mod tests {
 "#,
 		);
 
-		let module = inject_limiter(module, &Default::default()).unwrap();
+		let module = inject_limiter(module, 1024).unwrap();
 		elements::serialize_to_file("test.wasm", module).unwrap();
 	}
 
@@ -435,7 +434,7 @@ mod tests {
 "#,
 		);
 
-		let module = inject_limiter(module, &Default::default())
+		let module = inject_limiter(module, 1024)
 			.expect("Failed to inject stack counter");
 		validate_module(module);
 	}

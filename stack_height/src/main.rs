@@ -20,7 +20,7 @@ fn main() {
 	let module = parity_wasm::deserialize_file(&input_file).expect("Module deserialization to succeed");
 
 	let result = stack_height::inject_limiter(
-		module, &Default::default()
+		module, 1024
 	).expect("Failed to inject stack height counter");
 
 	parity_wasm::serialize_to_file(&output_file, result).expect("Module serialization to succeed")
