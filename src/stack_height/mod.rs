@@ -404,23 +404,6 @@ mod tests {
 	}
 
 	#[test]
-	fn simple_test() {
-		let module = parse_wat(
-			r#"
-(module
-	(func (export "simple")
-		i32.const 123
-		drop
-	)
-)
-"#,
-		);
-
-		let module = inject_limiter(module, 1024).unwrap();
-		elements::serialize_to_file("test.wasm", module).unwrap();
-	}
-
-	#[test]
 	fn test_with_params_and_result() {
 		let module = parse_wat(
 			r#"
