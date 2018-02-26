@@ -351,15 +351,21 @@ fn instrument_function(
 	Ok(())
 }
 
-fn resolve_func_type(func_idx: u32, module: &elements::Module) -> &elements::FunctionType {
-	let func_section = module.function_section().unwrap();
-	let type_section = module.type_section().unwrap();
+fn resolve_func_type(
+	func_idx: u32,
+	module: &elements::Module,
+) -> Result<&elements::FunctionType, Error> {
+	let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
+	let functions = module
+		.function_section()
+		.map(|fs| fs.entries())
+		.unwrap_or(&[]);
 
 	let func_imports = module.import_count(elements::ImportCountType::Function);
 	let sig_idx = if func_idx < func_imports as u32 {
 		module
 			.import_section()
-			.expect("function import count is not zero; function section must exists; qed")
+			.expect("function import count is not zero; import section must exists; qed")
 			.entries()
 			.iter()
 			.filter_map(|entry| match *entry.external() {
@@ -367,12 +373,24 @@ fn resolve_func_type(func_idx: u32, module: &elements::Module) -> &elements::Fun
 				_ => None,
 			})
 			.nth(func_idx as usize)
-			.unwrap()
+			.expect(
+				"func_idx is less than function imports count;
+				nth function import must be `Some`;
+				qed",
+			)
 	} else {
-		func_section.entries()[func_idx as usize - func_imports].type_ref()
+		functions
+			.get(func_idx as usize - func_imports)
+			.ok_or_else(|| Error(format!("Function at index {} is not defined", func_idx)))?
+			.type_ref()
 	};
-	let Type::Function(ref ty) = type_section.types()[sig_idx as usize];
-	ty
+	let Type::Function(ref ty) = *types.get(sig_idx as usize).ok_or_else(|| {
+		Error(format!(
+			"Signature {} (specified by func {}) isn't defined",
+			sig_idx, func_idx
+		))
+	})?;
+	Ok(ty)
 }
 
 #[cfg(test)]

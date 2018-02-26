@@ -271,7 +271,7 @@ pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> Result<u32,
 				stack.mark_unreachable()?;
 			}
 			Call(idx) => {
-				let ty = resolve_func_type(idx, module);
+				let ty = resolve_func_type(idx, module)?;
 
 				// Pop values for arguments of the function.
 				stack.pop_values(ty.params().len() as u32)?;

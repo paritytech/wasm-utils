@@ -53,7 +53,7 @@ pub(crate) fn generate_thunks(
 			if callee_stack_cost != 0 {
 				need_thunks.push(func_idx);
 				replacement_map.insert(func_idx, Thunk {
-					signature: resolve_func_type(func_idx, &module).clone(),
+					signature: resolve_func_type(func_idx, &module)?.clone(),
 					idx: None,
 					callee_stack_cost,
 					original_func_idx: func_idx,
