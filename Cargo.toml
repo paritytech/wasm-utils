@@ -14,7 +14,8 @@ byteorder = "1"
 
 [dev-dependencies]
 tempdir = "0.3"
-wabt = "0.1"
+wabt = "0.2"
+diff = "0.1.11"
 
 [lib]
 
@@ -33,3 +34,7 @@ path = "gas/src/main.rs"
 [[bin]]
 name = "wasm-build"
 path = "build/src/main.rs"
+
+[[bin]]
+name = "wasm-stack-height"
+path = "stack_height/src/main.rs"

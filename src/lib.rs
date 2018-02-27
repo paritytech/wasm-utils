@@ -18,6 +18,8 @@ mod ext;
 mod pack;
 mod runtime_type;
 
+pub mod stack_height;
+
 pub use optimizer::{optimize, Error as OptimizerError};
 pub use gas::inject_gas_counter;
 pub use logger::init_log;

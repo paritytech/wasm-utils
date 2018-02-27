@@ -281,7 +281,7 @@ impl Default for Set {
 
 impl Set {
     pub fn new(regular: u32, entries: HashMap<InstructionType, Metering>) -> Self {
-        Set { regular: regular, entries: entries, grow: 0, }
+        Set { regular: regular, entries: entries, grow: 0 }
     }
 
     pub fn process(&self, opcode: &elements::Opcode) -> Result<u32, ()>  {
