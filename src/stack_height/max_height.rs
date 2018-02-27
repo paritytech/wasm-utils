@@ -133,7 +133,7 @@ impl Stack {
 }
 
 /// This function expects the function to be validated.
-pub fn max_stack_height(func_idx: u32, module: &elements::Module) -> Result<u32, Error> {
+pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, Error> {
 	use parity_wasm::elements::Opcode::*;
 
 	let func_section = module
@@ -450,7 +450,7 @@ mod tests {
 "#,
 		);
 
-		let height = max_stack_height(0, &module).unwrap();
+		let height = compute(0, &module).unwrap();
 		assert_eq!(height, 3);
 	}
 
@@ -467,7 +467,7 @@ mod tests {
 "#,
 		);
 
-		let height = max_stack_height(0, &module).unwrap();
+		let height = compute(0, &module).unwrap();
 		assert_eq!(height, 1);
 	}
 
@@ -485,7 +485,7 @@ mod tests {
 "#,
 		);
 
-		let height = max_stack_height(0, &module).unwrap();
+		let height = compute(0, &module).unwrap();
 		assert_eq!(height, 0);
 	}
 
@@ -518,7 +518,7 @@ mod tests {
 			.as_ref())
 			.expect("Failed to deserialize the module");
 
-		let height = max_stack_height(0, &module).unwrap();
+		let height = compute(0, &module).unwrap();
 		assert_eq!(height, 2);
 	}
 }

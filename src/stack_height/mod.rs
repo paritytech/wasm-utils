@@ -220,7 +220,7 @@ fn compute_stack_cost(func_idx: u32, module: &elements::Module) -> Result<u32, E
 	let locals_count = body.locals().len() as u32;
 
 	let max_stack_height =
-		max_height::max_stack_height(
+		max_height::compute(
 			defined_func_idx,
 			module
 		)?;
