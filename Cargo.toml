@@ -33,7 +33,7 @@ path = "gas/src/main.rs"
 
 [[bin]]
 name = "wasm-build"
-path = "build/src/main.rs"
+path = "build/main.rs"
 
 [[bin]]
 name = "wasm-stack-height"
