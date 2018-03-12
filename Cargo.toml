@@ -21,20 +21,20 @@ diff = "0.1.11"
 
 [[bin]]
 name = "wasm-prune"
-path = "prune/src/main.rs"
+path = "prune/main.rs"
 
 [[bin]]
 name = "wasm-ext"
-path = "ext/src/main.rs"
+path = "ext/main.rs"
 
 [[bin]]
 name = "wasm-gas"
-path = "gas/src/main.rs"
+path = "gas/main.rs"
 
 [[bin]]
 name = "wasm-build"
-path = "build/src/main.rs"
+path = "build/main.rs"
 
 [[bin]]
 name = "wasm-stack-height"
-path = "stack_height/src/main.rs"
+path = "stack_height/main.rs"

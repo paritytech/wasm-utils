@@ -1,7 +1,0 @@
-[package]
-name = "stack_height"
-version = "0.1.0"
-authors = ["Sergey Pepyakin <s.pepyakin@gmail.com>"]
-
-[dependencies]
-wasm-utils = { path = "../" }

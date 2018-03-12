@@ -3,9 +3,4 @@ language:
 
 script:
   - cargo build --release --verbose
-  - cargo build --manifest-path build/Cargo.toml
-  - cargo build --manifest-path prune/Cargo.toml
-  - cargo build --manifest-path gas/Cargo.toml
-  - cargo build --manifest-path ext/Cargo.toml
   - cargo test --verbose
-  - cargo test --verbose --manifest-path build/Cargo.toml
