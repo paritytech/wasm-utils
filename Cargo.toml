@@ -1,7 +1,11 @@
 [package]
 name = "pwasm-utils"
 version = "0.1.0"
-authors = ["NikVolf <nikvolf@gmail.com>"]
+authors = ["Nikolay Volf <nikvolf@gmail.com>", "Sergey Pepyakin <s.pepyakin@gmail.com>"]
+license = "MIT/Apache-2.0"
+readme = "README.md"
+description = "Collection of command-line utilities and corresponding Rust api for producing pwasm-compatible executables"
+keywords = ["wasm", "webassembly", "pwasm"]
 
 [dependencies]
 parity-wasm = "0.27"
