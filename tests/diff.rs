@@ -1,5 +1,5 @@
 extern crate diff;
-extern crate wasm_utils;
+extern crate pwasm_utils as utils;
 extern crate wabt;
 extern crate parity_wasm;
 
@@ -80,7 +80,7 @@ macro_rules! def_stack_height_test {
 		fn $name() {
 			run_diff_test("stack-height", concat!(stringify!($name), ".wat"), |input| {
 				let module = elements::deserialize_buffer(input).expect("Failed to deserialize");
-				let instrumented = wasm_utils::stack_height::inject_limiter(module, 1024).expect("Failed to instrument with stack counter");
+				let instrumented = utils::stack_height::inject_limiter(module, 1024).expect("Failed to instrument with stack counter");
 				elements::serialize(instrumented).expect("Failed to serialize")
 			});
 		}

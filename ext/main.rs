@@ -1,11 +1,11 @@
 extern crate parity_wasm;
-extern crate wasm_utils;
+extern crate pwasm_utils as utils;
 
 use std::env;
 
 fn main() {
 
-	wasm_utils::init_log();
+	utils::init_log();
 
 	let args = env::args().collect::<Vec<_>>();
 	if args.len() != 3 {
@@ -13,7 +13,7 @@ fn main() {
 		return;
 	}
 
-	let module = wasm_utils::externalize(
+	let module = utils::externalize(
 		parity_wasm::deserialize_file(&args[1]).expect("Module to deserialize ok"),
 		vec!["_free", "_malloc", "_memcpy", "_memset", "_memmove"],
 	);

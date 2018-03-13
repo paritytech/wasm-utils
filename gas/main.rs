@@ -1,11 +1,11 @@
 extern crate parity_wasm;
-extern crate wasm_utils;
+extern crate pwasm_utils as utils;
 
 use std::env;
 
 fn main() {
 
-	wasm_utils::init_log();
+	utils::init_log();
 
 	let args = env::args().collect::<Vec<_>>();
 	if args.len() != 3 {
@@ -16,7 +16,7 @@ fn main() {
 	// Loading module
 	let module = parity_wasm::deserialize_file(&args[1]).expect("Module deserialization to succeed");
 
-	let result = wasm_utils::inject_gas_counter(
+	let result = utils::inject_gas_counter(
 		module, &Default::default()
 	).expect("Failed to inject gas. Some forbidden opcodes?");
 

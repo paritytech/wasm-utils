@@ -1,7 +1,7 @@
 //! Experimental build tool for cargo
 
 extern crate glob;
-extern crate wasm_utils;
+extern crate pwasm_utils as utils;
 extern crate clap;
 extern crate parity_wasm;
 
@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use clap::{App, Arg};
 use parity_wasm::elements;
 
-use wasm_utils::{CREATE_SYMBOL, CALL_SYMBOL, ununderscore_funcs, externalize_mem, shrink_unknown_stack};
+use utils::{CREATE_SYMBOL, CALL_SYMBOL, ununderscore_funcs, externalize_mem, shrink_unknown_stack};
 
 #[derive(Debug)]
 pub enum Error {
@@ -64,7 +64,7 @@ fn has_ctor(module: &elements::Module) -> bool {
 }
 
 fn main() {
-	wasm_utils::init_log();
+	utils::init_log();
 
 	let matches = App::new("wasm-build")
 		.arg(Arg::with_name("target")
@@ -151,13 +151,13 @@ fn main() {
 		}
 		let runtime_version: u32 = matches.value_of("runtime_version").unwrap_or("1").parse()
 			.expect("--runtime-version should be a positive integer");
-		module = wasm_utils::inject_runtime_type(module, &runtime_type, runtime_version);
+		module = utils::inject_runtime_type(module, &runtime_type, runtime_version);
 	}
 
 	let mut ctor_module = module.clone();
 
 	if !matches.is_present("skip_optimization") {
-		wasm_utils::optimize(
+		utils::optimize(
 			&mut module,
 			vec![CALL_SYMBOL]
 		).expect("Optimizer to finish without errors");
@@ -175,9 +175,9 @@ fn main() {
 	// Otherwise it will just save an optimised raw_module
 	if has_ctor(&ctor_module) {
 		if !matches.is_present("skip_optimization") {
-			wasm_utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL]).expect("Optimizer to finish without errors");
+			utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL]).expect("Optimizer to finish without errors");
 		}
-		let ctor_module = wasm_utils::pack_instance(raw_module, ctor_module).expect("Packing failed");
+		let ctor_module = utils::pack_instance(raw_module, ctor_module).expect("Packing failed");
 		parity_wasm::serialize_to_file(&path, ctor_module).expect("Failed to serialize to file");
 	} else {
 		let mut file = fs::File::create(&path).expect("Failed to create file");

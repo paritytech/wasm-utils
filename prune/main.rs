@@ -1,11 +1,11 @@
 extern crate parity_wasm;
-extern crate wasm_utils;
+extern crate pwasm_utils as utils;
 extern crate clap;
 
 use clap::{App, Arg};
 
 fn main() {
-    wasm_utils::init_log();
+    utils::init_log();
 
     let matches = App::new("wasm-opt")
                         .arg(Arg::with_name("input")
@@ -38,7 +38,7 @@ fn main() {
     // Invoke optimizer
     //   Contract is supposed to have only these functions as public api
     //   All other symbols not usable by this list is optimized away
-    wasm_utils::optimize(&mut module, exports).expect("Optimizer to finish without errors");
+    utils::optimize(&mut module, exports).expect("Optimizer to finish without errors");
 
     parity_wasm::serialize_to_file(&output, module).unwrap();
 }

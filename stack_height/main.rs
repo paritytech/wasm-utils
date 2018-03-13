@@ -1,11 +1,11 @@
-extern crate wasm_utils;
+extern crate pwasm_utils as utils;
 extern crate parity_wasm;
 
 use std::env;
-use wasm_utils::stack_height;
+use utils::stack_height;
 
 fn main() {
-	wasm_utils::init_log();
+	utils::init_log();
 
 	let args = env::args().collect::<Vec<_>>();
 	if args.len() != 3 {

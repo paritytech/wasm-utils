@@ -1,5 +1,5 @@
 [package]
-name = "wasm-utils"
+name = "pwasm-utils"
 version = "0.1.0"
 authors = ["NikVolf <nikvolf@gmail.com>"]
 
