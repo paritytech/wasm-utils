@@ -9,13 +9,14 @@ Collection of WASM utilities used in Parity and WASM contract devepment
 Easiest way to use is to install via `cargo install`:
 
 ```
-cargo install --git https://github.com/paritytech/wasm-utils wasm-build
+cargo install pwasm-utils wasm-build
 ```
 
 ## Symbols pruning (wasm-prune)
 
 ```
-cargo run --release --bin wasm-prune -- <input_binary.wasm> <output_binary.wasm>
+cargo install pwasm-utils
+wasm-prune <input_wasm_binary.wasm> <output_wasm_binary.wasm>
 ```
 
 This will optimize WASM symbols tree to leave only those elements that are used by contract `_call` function entry.
@@ -25,7 +26,8 @@ This will optimize WASM symbols tree to leave only those elements that are used 
 For development puposes, raw WASM contract can be injected with gas counters (the same way as it done by Parity runtime when running contracts)
 
 ```
-cargo run --release --bin wasm-gas -- <input_binary.wasm> <output_binary.wasm>
+cargo install pwasm-utils
+wasm-gas <input_wasm_binary.wasm> <output_wasm_binary.wasm>
 ```
 
 ## Externalization (wasm-ext)
@@ -40,7 +42,8 @@ Parity WASM runtime provides some library functions that can be commonly found i
 And then substitutes them with invocations of the imported ones. Should be run before `wasm-opt` for better results.
 
 ```
-cargo run --release --bin wasm-ext -- <input_binary.wasm> <output_binary.wasm>
+cargo install pwasm-utils
+wasm-ext <input_wasm_binary.wasm> <output_wasm_binary.wasm>
 ```
 
 ## API
