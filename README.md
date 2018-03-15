@@ -9,7 +9,7 @@ Collection of WASM utilities used in Parity and WASM contract devepment
 Easiest way to use is to install via `cargo install`:
 
 ```
-cargo install pwasm-utils wasm-build
+cargo install pwasm-utils --bin wasm-build
 ```
 
 ## Symbols pruning (wasm-prune)
