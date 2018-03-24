@@ -78,6 +78,9 @@ fn main() {
 		.arg(Arg::with_name("skip_optimization")
 			.help("Skip symbol optimization step producing final wasm")
 			.long("skip-optimization"))
+		.arg(Arg::with_name("enforce_stack_adjustment")
+			.help("Enforce stack size adjustment (used for old wasm32-unknown-unknown)")
+			.long("enforce-stack-adjustment"))
 		.arg(Arg::with_name("runtime_type")
 			.help("Injects RUNTIME_TYPE global export")
 			.takes_value(true)
@@ -134,14 +137,17 @@ fn main() {
 
 	if let source::SourceTarget::Unknown = source_input.target() {
 		// 49152 is 48kb!
-		let stack_size: u32 = matches.value_of("shrink_stack").unwrap_or_else(|| "49152").parse().expect("New stack size is not valid u32");
-		assert!(stack_size <= 1024*1024);
-		let (new_module, new_stack_top) = shrink_unknown_stack(module, 1024 * 1024 - stack_size);
-		module = new_module;
-		let mut stack_top_page = new_stack_top / 65536;
-		if new_stack_top % 65536 > 0 { stack_top_page += 1 };
-
-		module = externalize_mem(module, Some(stack_top_page), 16);
+		if matches.is_present("enforce_stack_adjustment") {
+			let stack_size: u32 = matches.value_of("shrink_stack").unwrap_or_else(|| "49152").parse().expect("New stack size is not valid u32");
+			assert!(stack_size <= 1024*1024);
+			let (new_module, new_stack_top) = shrink_unknown_stack(module, 1024 * 1024 - stack_size);
+			module = new_module;
+			let mut stack_top_page = new_stack_top / 65536;
+			if new_stack_top % 65536 > 0 { stack_top_page += 1 };
+			module = externalize_mem(module, Some(stack_top_page), 16);
+		} else {
+			module = externalize_mem(module, None, 16);
+		}
 	}
 
 	if let Some(runtime_type) = matches.value_of("runtime_type") {

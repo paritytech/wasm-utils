@@ -44,6 +44,10 @@ pub fn externalize_mem(mut module: elements::Module, adjust_pages: Option<u32>, 
 		entry = elements::MemoryType::new(adjust_pages, Some(max_pages));
 	}
 
+	if entry.limits().maximum().is_none() {
+		entry = elements::MemoryType::new(entry.limits().initial(), Some(max_pages));
+	}
+
 	import_section(&mut module).expect("Import section to exist").entries_mut().push(
 		elements::ImportEntry::new(
 			"env".to_owned(),
