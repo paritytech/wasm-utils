@@ -60,7 +60,7 @@ impl Stack {
 	///
 	/// This effectively makes stack polymorphic.
 	fn mark_unreachable(&mut self) -> Result<(), Error> {
-		trace!("unreachable");
+		trace!(target: "max_height", "unreachable");
 		let top_frame = self.control_stack
 			.last_mut()
 			.ok_or_else(|| Error("stack must be non-empty".into()))?;
@@ -70,7 +70,7 @@ impl Stack {
 
 	/// Push control frame into the control stack.
 	fn push_frame(&mut self, frame: Frame) {
-		trace!("push_frame: {:?}", frame);
+		trace!(target: "max_height", "push_frame: {:?}", frame);
 		self.control_stack.push(frame);
 	}
 
@@ -78,7 +78,7 @@ impl Stack {
 	///
 	/// Returns `Err` if the control stack is empty.
 	fn pop_frame(&mut self) -> Result<Frame, Error> {
-		trace!("pop_frame: {:?}", self.control_stack.last());
+		trace!(target: "max_height", "pop_frame: {:?}", self.control_stack.last());
 		Ok(self.control_stack
 			.pop()
 			.ok_or_else(|| Error("stack must be non-empty".into()))?)
@@ -86,7 +86,7 @@ impl Stack {
 
 	/// Truncate the height of value stack to the specified height.
 	fn trunc(&mut self, new_height: u32) {
-		trace!("trunc: {}", new_height);
+		trace!(target: "max_height", "trunc: {}", new_height);
 		self.height = new_height;
 	}
 
@@ -94,7 +94,7 @@ impl Stack {
 	///
 	/// Returns `Err` if the height overflow usize value.
 	fn push_values(&mut self, value_count: u32) -> Result<(), Error> {
-		trace!("push: {}", value_count);
+		trace!(target: "max_height", "push: {}", value_count);
 		self.height = self.height
 			.checked_add(value_count)
 			.ok_or_else(|| Error("stack overflow".into()))?;
@@ -106,7 +106,7 @@ impl Stack {
 	/// Returns `Err` if the stack happen to be negative value after
 	/// values popped.
 	fn pop_values(&mut self, value_count: u32) -> Result<(), Error> {
-		trace!("pop: {}", value_count);
+		trace!(target: "max_height", "pop: {}", value_count);
 		if value_count == 0 {
 			return Ok(());
 		}
@@ -147,7 +147,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 		.ok_or_else(|| Error("No type section".into()))?;
 
 
-	trace!("func_idx: {}", func_idx);
+	trace!(target: "max_height", "func_idx: {}", func_idx);
 
 	// Get a signature and a body of the specified function.
 	let func_sig_idx = func_section
@@ -196,7 +196,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 		}
 
 		let opcode = &opcodes.elements()[pc];
-		trace!("{:?}", opcode);
+		trace!(target: "max_height", "{:?}", opcode);
 
 		match *opcode {
 			Nop => {}
