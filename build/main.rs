@@ -22,6 +22,7 @@ pub enum Error {
 	FailedToCopy(String),
 	Decoding(elements::Error, String),
 	Encoding(elements::Error),
+	Packing(utils::PackingError),
 	Optimizer,
 }
 
@@ -37,6 +38,12 @@ impl From<utils::OptimizerError> for Error {
 	}
 }
 
+impl From<utils::PackingError> for Error {
+	fn from(err: utils::PackingError) -> Self {
+		Error::Packing(err)
+	}
+}
+
 impl std::fmt::Display for Error {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
 		use Error::*;
@@ -46,6 +53,7 @@ impl std::fmt::Display for Error {
 			Decoding(ref err, ref file) => write!(f, "Decoding error ({}). Must be a valid wasm file {}. Pointed wrong file?", err, file),
 			Encoding(ref err) => write!(f, "Encoding error ({}). Almost impossible to happen, no free disk space?", err),
 			Optimizer => write!(f, "Optimization error due to missing export section. Pointed wrong file?"),
+			Packing(ref e) => write!(f, "Packing failed due to module structure error: {}. Sure used correct libraries for building contracts?", e),
 		}
 	}
 }
@@ -213,7 +221,8 @@ fn main() {
 			utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL])
 				.unwrap_or_else(|e| die(Error::from(e)))
 		}
-		let ctor_module = utils::pack_instance(raw_module, ctor_module).expect("Packing failed");
+		let ctor_module = utils::pack_instance(raw_module, ctor_module)
+			.unwrap_or_else(|e| die(Error::from(e)));
 		parity_wasm::serialize_to_file(&path, ctor_module)
 			.unwrap_or_else(|e| die(Error::Encoding(e)))
 	} else {

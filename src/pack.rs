@@ -1,3 +1,4 @@
+use std::fmt;
 use parity_wasm::elements::{
     self, Section, Opcode, DataSegment, InitExpr, Internal, External,
     ImportCountType,
@@ -19,8 +20,22 @@ pub enum Error {
     InvalidCreateSignature,
     NoCreateSymbol,
     InvalidCreateMember,
-    NoRetImported,
     NoImportSection,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        match *self {
+            Error::MalformedModule => write!(f, "Module internal references are inconsistent"),
+            Error::NoTypeSection => write!(f, "No type section in the module"),
+            Error::NoExportSection => write!(f, "No export section in the module"),
+            Error::NoCodeSection => write!(f, "No code section inthe module"),
+            Error::InvalidCreateSignature => write!(f, "Exported symbol `deploy` has invalid signature, should be () -> ()"),
+            Error::InvalidCreateMember => write!(f, "Exported symbol `deploy` should be a function"),
+            Error::NoCreateSymbol => write!(f, "No exported `deploy` symbol"),
+            Error::NoImportSection => write!(f, "No import section in the module"),
+        }
+    }
 }
 
 /// If module has an exported "_create" function we want to pack it into "constructor".
