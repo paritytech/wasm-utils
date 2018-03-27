@@ -49,7 +49,7 @@ impl std::fmt::Display for Error {
 		use Error::*;
 		match *self {
 			Io(ref io) => write!(f, "Generic i/o error: {}", io),
-			FailedToCopy(ref msg) => write!(f, "{}. Did you tried to run \"cargo build\"?", msg),
+			FailedToCopy(ref msg) => write!(f, "{}. Have you tried to run \"cargo build\"?", msg),
 			Decoding(ref err, ref file) => write!(f, "Decoding error ({}). Must be a valid wasm file {}. Pointed wrong file?", err, file),
 			Encoding(ref err) => write!(f, "Encoding error ({}). Almost impossible to happen, no free disk space?", err),
 			Optimizer => write!(f, "Optimization error due to missing export section. Pointed wrong file?"),
