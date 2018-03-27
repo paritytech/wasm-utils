@@ -24,5 +24,5 @@ pub use optimizer::{optimize, Error as OptimizerError};
 pub use gas::inject_gas_counter;
 pub use logger::init_log;
 pub use ext::{externalize, externalize_mem, underscore_funcs, ununderscore_funcs, shrink_unknown_stack};
-pub use pack::pack_instance;
+pub use pack::{pack_instance, Error as PackingError};
 pub use runtime_type::inject_runtime_type;

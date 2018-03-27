@@ -19,14 +19,42 @@ use utils::{CREATE_SYMBOL, CALL_SYMBOL, ununderscore_funcs, externalize_mem, shr
 #[derive(Debug)]
 pub enum Error {
 	Io(io::Error),
-	NoSuitableFile(String),
-	TooManyFiles(String),
-	NoEnvVar,
+	FailedToCopy(String),
+	Decoding(elements::Error, String),
+	Encoding(elements::Error),
+	Packing(utils::PackingError),
+	Optimizer,
 }
 
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
 		Error::Io(err)
+	}
+}
+
+impl From<utils::OptimizerError> for Error {
+	fn from(_err: utils::OptimizerError) -> Self {
+		Error::Optimizer
+	}
+}
+
+impl From<utils::PackingError> for Error {
+	fn from(err: utils::PackingError) -> Self {
+		Error::Packing(err)
+	}
+}
+
+impl std::fmt::Display for Error {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+		use Error::*;
+		match *self {
+			Io(ref io) => write!(f, "Generic i/o error: {}", io),
+			FailedToCopy(ref msg) => write!(f, "{}. Have you tried to run \"cargo build\"?", msg),
+			Decoding(ref err, ref file) => write!(f, "Decoding error ({}). Must be a valid wasm file {}. Pointed wrong file?", err, file),
+			Encoding(ref err) => write!(f, "Encoding error ({}). Almost impossible to happen, no free disk space?", err),
+			Optimizer => write!(f, "Optimization error due to missing export section. Pointed wrong file?"),
+			Packing(ref e) => write!(f, "Packing failed due to module structure error: {}. Sure used correct libraries for building contracts?", e),
+		}
 	}
 }
 
@@ -50,7 +78,10 @@ pub fn process_output(input: &source::SourceInput) -> Result<(), Error> {
 
 	let mut target_path = PathBuf::from(input.target_dir());
 	target_path.push(format!("{}.wasm", input.final_name()));
-	fs::copy(cargo_path, target_path)?;
+	fs::copy(cargo_path.as_path(), target_path.as_path())
+		.map_err(|io| Error::FailedToCopy(
+			format!("Failed to copy '{}' to '{}': {}", cargo_path.display(), target_path.display(), io)
+		))?;
 
 	Ok(())
 }
@@ -63,7 +94,7 @@ fn has_ctor(module: &elements::Module) -> bool {
 	}
 }
 
-fn main() {
+fn do_main() -> Result<(), Error> {
 	utils::init_log();
 
 	let matches = App::new("wasm-build")
@@ -117,7 +148,7 @@ fn main() {
 	} else if source_target_val == source::EMSCRIPTEN_TRIPLET {
 		source_input = source_input.emscripten()
 	} else {
-		println!("--target can be: '{}' or '{}'", source::EMSCRIPTEN_TRIPLET, source::UNKNOWN_TRIPLET);
+		eprintln!("--target can be: '{}' or '{}'", source::EMSCRIPTEN_TRIPLET, source::UNKNOWN_TRIPLET);
 		::std::process::exit(1);
 	}
 
@@ -125,11 +156,12 @@ fn main() {
 		source_input = source_input.with_final(final_name);
 	}
 
-	process_output(&source_input).expect("Failed to process cargo target directory");
+	process_output(&source_input)?;
 
 	let path = wasm_path(&source_input);
 
-	let mut module = parity_wasm::deserialize_file(&path).unwrap();
+	let mut module = parity_wasm::deserialize_file(&path)
+		.map_err(|e| Error::Decoding(e, path.to_string()))?;
 
 	if let source::SourceTarget::Emscripten = source_input.target() {
 		module = ununderscore_funcs(module);
@@ -166,28 +198,36 @@ fn main() {
 		utils::optimize(
 			&mut module,
 			vec![CALL_SYMBOL]
-		).expect("Optimizer to finish without errors");
+		)?;
 	}
 
 	if let Some(save_raw_path) = matches.value_of("save_raw") {
-		parity_wasm::serialize_to_file(save_raw_path, module.clone())
-			.expect("Failed to write intermediate module");
+		parity_wasm::serialize_to_file(save_raw_path, module.clone()).map_err(Error::Encoding)?;
 	}
 
-	let raw_module = parity_wasm::serialize(module).expect("Failed to serialize module");
+	let raw_module = parity_wasm::serialize(module).map_err(Error::Encoding)?;
 
 	// If module has an exported function with name=CREATE_SYMBOL
 	// build will pack the module (raw_module) into this funciton and export as CALL_SYMBOL.
 	// Otherwise it will just save an optimised raw_module
 	if has_ctor(&ctor_module) {
 		if !matches.is_present("skip_optimization") {
-			utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL]).expect("Optimizer to finish without errors");
+			utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL])?;
 		}
-		let ctor_module = utils::pack_instance(raw_module, ctor_module).expect("Packing failed");
-		parity_wasm::serialize_to_file(&path, ctor_module).expect("Failed to serialize to file");
+		let ctor_module = utils::pack_instance(raw_module, ctor_module)?;
+		parity_wasm::serialize_to_file(&path, ctor_module).map_err(Error::Encoding)?;
 	} else {
-		let mut file = fs::File::create(&path).expect("Failed to create file");
-		file.write_all(&raw_module).expect("Failed to write module to file");
+		let mut file = fs::File::create(&path)?;
+		file.write_all(&raw_module)?;
+	}
+
+	Ok(())
+}
+
+fn main() {
+	if let Err(e) = do_main() {
+		eprintln!("{}", e);
+		std::process::exit(1)
 	}
 }
 
