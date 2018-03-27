@@ -20,13 +20,20 @@ use utils::{CREATE_SYMBOL, CALL_SYMBOL, ununderscore_funcs, externalize_mem, shr
 pub enum Error {
 	Io(io::Error),
 	FailedToCopy(String),
-	NoSuitableFile(String),
-	TooManyFiles(String),
+	Decoding(elements::Error, String),
+	Encoding(elements::Error),
+	Optimizer,
 }
 
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
 		Error::Io(err)
+	}
+}
+
+impl From<utils::OptimizerError> for Error {
+	fn from(_err: utils::OptimizerError) -> Self {
+		Error::Optimizer
 	}
 }
 
@@ -36,8 +43,9 @@ impl std::fmt::Display for Error {
 		match *self {
 			Io(ref io) => write!(f, "Generic i/o error: {}", io),
 			FailedToCopy(ref msg) => write!(f, "{}. Did you tried to run \"cargo build\"?", msg),
-			NoSuitableFile(ref file) => write!(f, "No suitable file to process here: {}. May be run \"cargo build\"?", file),
-			TooManyFiles(ref file) => write!(f, "To many files to process in there: {}. May be try \"cargo clean\" and then \"cargo build\"?", file),
+			Decoding(ref err, ref file) => write!(f, "Decoding error ({}). Must be a valid wasm file {}. Pointed wrong file?", err, file),
+			Encoding(ref err) => write!(f, "Encoding error ({}). Almost impossible to happen, no free disk space?", err),
+			Optimizer => write!(f, "Optimization error due to missing export section. Pointed wrong file?"),
 		}
 	}
 }
@@ -76,6 +84,11 @@ fn has_ctor(module: &elements::Module) -> bool {
 	} else {
 		false
 	}
+}
+
+fn die(e: Error) -> ! {
+	eprintln!("{}", e);
+	std::process::exit(1)
 }
 
 fn main() {
@@ -140,14 +153,11 @@ fn main() {
 		source_input = source_input.with_final(final_name);
 	}
 
-	process_output(&source_input).unwrap_or_else(|e| {
-		println!("{}", e);
-		std::process::exit(1)
-	});
+	process_output(&source_input).unwrap_or_else(|e| die(e));
 
 	let path = wasm_path(&source_input);
 
-	let mut module = parity_wasm::deserialize_file(&path).unwrap();
+	let mut module = parity_wasm::deserialize_file(&path).unwrap_or_else(|e| die(Error::Decoding(e, path.to_string())));
 
 	if let source::SourceTarget::Emscripten = source_input.target() {
 		module = ununderscore_funcs(module);
@@ -184,28 +194,33 @@ fn main() {
 		utils::optimize(
 			&mut module,
 			vec![CALL_SYMBOL]
-		).expect("Optimizer to finish without errors");
+		).unwrap_or_else(|e| die(Error::from(e)))
 	}
 
 	if let Some(save_raw_path) = matches.value_of("save_raw") {
 		parity_wasm::serialize_to_file(save_raw_path, module.clone())
-			.expect("Failed to write intermediate module");
+			.unwrap_or_else(|e| die(Error::Encoding(e)));
 	}
 
-	let raw_module = parity_wasm::serialize(module).expect("Failed to serialize module");
+	let raw_module = parity_wasm::serialize(module)
+		.unwrap_or_else(|e| die(Error::Encoding(e)));
 
 	// If module has an exported function with name=CREATE_SYMBOL
 	// build will pack the module (raw_module) into this funciton and export as CALL_SYMBOL.
 	// Otherwise it will just save an optimised raw_module
 	if has_ctor(&ctor_module) {
 		if !matches.is_present("skip_optimization") {
-			utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL]).expect("Optimizer to finish without errors");
+			utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL])
+				.unwrap_or_else(|e| die(Error::from(e)))
 		}
 		let ctor_module = utils::pack_instance(raw_module, ctor_module).expect("Packing failed");
-		parity_wasm::serialize_to_file(&path, ctor_module).expect("Failed to serialize to file");
+		parity_wasm::serialize_to_file(&path, ctor_module)
+			.unwrap_or_else(|e| die(Error::Encoding(e)))
 	} else {
-		let mut file = fs::File::create(&path).expect("Failed to create file");
-		file.write_all(&raw_module).expect("Failed to write module to file");
+		let mut file = fs::File::create(&path)
+			.unwrap_or_else(|io| die(Error::from(io)));
+		file.write_all(&raw_module)
+			.unwrap_or_else(|io| die(Error::from(io)));
 	}
 }
 
