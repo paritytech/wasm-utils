@@ -94,12 +94,7 @@ fn has_ctor(module: &elements::Module) -> bool {
 	}
 }
 
-fn die(e: Error) -> ! {
-	eprintln!("{}", e);
-	std::process::exit(1)
-}
-
-fn main() {
+fn do_main() -> Result<(), Error> {
 	utils::init_log();
 
 	let matches = App::new("wasm-build")
@@ -153,7 +148,7 @@ fn main() {
 	} else if source_target_val == source::EMSCRIPTEN_TRIPLET {
 		source_input = source_input.emscripten()
 	} else {
-		println!("--target can be: '{}' or '{}'", source::EMSCRIPTEN_TRIPLET, source::UNKNOWN_TRIPLET);
+		eprintln!("--target can be: '{}' or '{}'", source::EMSCRIPTEN_TRIPLET, source::UNKNOWN_TRIPLET);
 		::std::process::exit(1);
 	}
 
@@ -161,11 +156,12 @@ fn main() {
 		source_input = source_input.with_final(final_name);
 	}
 
-	process_output(&source_input).unwrap_or_else(|e| die(e));
+	process_output(&source_input)?;
 
 	let path = wasm_path(&source_input);
 
-	let mut module = parity_wasm::deserialize_file(&path).unwrap_or_else(|e| die(Error::Decoding(e, path.to_string())));
+	let mut module = parity_wasm::deserialize_file(&path)
+		.map_err(|e| Error::Decoding(e, path.to_string()))?;
 
 	if let source::SourceTarget::Emscripten = source_input.target() {
 		module = ununderscore_funcs(module);
@@ -202,34 +198,36 @@ fn main() {
 		utils::optimize(
 			&mut module,
 			vec![CALL_SYMBOL]
-		).unwrap_or_else(|e| die(Error::from(e)))
+		)?;
 	}
 
 	if let Some(save_raw_path) = matches.value_of("save_raw") {
-		parity_wasm::serialize_to_file(save_raw_path, module.clone())
-			.unwrap_or_else(|e| die(Error::Encoding(e)));
+		parity_wasm::serialize_to_file(save_raw_path, module.clone()).map_err(Error::Encoding)?;
 	}
 
-	let raw_module = parity_wasm::serialize(module)
-		.unwrap_or_else(|e| die(Error::Encoding(e)));
+	let raw_module = parity_wasm::serialize(module).map_err(Error::Encoding)?;
 
 	// If module has an exported function with name=CREATE_SYMBOL
 	// build will pack the module (raw_module) into this funciton and export as CALL_SYMBOL.
 	// Otherwise it will just save an optimised raw_module
 	if has_ctor(&ctor_module) {
 		if !matches.is_present("skip_optimization") {
-			utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL])
-				.unwrap_or_else(|e| die(Error::from(e)))
+			utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL])?;
 		}
-		let ctor_module = utils::pack_instance(raw_module, ctor_module)
-			.unwrap_or_else(|e| die(Error::from(e)));
-		parity_wasm::serialize_to_file(&path, ctor_module)
-			.unwrap_or_else(|e| die(Error::Encoding(e)))
+		let ctor_module = utils::pack_instance(raw_module, ctor_module)?;
+		parity_wasm::serialize_to_file(&path, ctor_module).map_err(Error::Encoding)?;
 	} else {
-		let mut file = fs::File::create(&path)
-			.unwrap_or_else(|io| die(Error::from(io)));
-		file.write_all(&raw_module)
-			.unwrap_or_else(|io| die(Error::from(io)));
+		let mut file = fs::File::create(&path)?;
+		file.write_all(&raw_module)?;
+	}
+
+	Ok(())
+}
+
+fn main() {
+	if let Err(e) = do_main() {
+		eprintln!("{}", e);
+		std::process::exit(1)
 	}
 }
 
