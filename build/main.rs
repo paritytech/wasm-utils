@@ -19,14 +19,26 @@ use utils::{CREATE_SYMBOL, CALL_SYMBOL, ununderscore_funcs, externalize_mem, shr
 #[derive(Debug)]
 pub enum Error {
 	Io(io::Error),
+	FailedToCopy(String),
 	NoSuitableFile(String),
 	TooManyFiles(String),
-	NoEnvVar,
 }
 
 impl From<io::Error> for Error {
 	fn from(err: io::Error) -> Self {
 		Error::Io(err)
+	}
+}
+
+impl std::fmt::Display for Error {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+		use Error::*;
+		match *self {
+			Io(ref io) => write!(f, "Generic i/o error: {}", io),
+			FailedToCopy(ref msg) => write!(f, "{}. Did you tried to run \"cargo build\"?", msg),
+			NoSuitableFile(ref file) => write!(f, "No suitable file to process here: {}. May be run \"cargo build\"?", file),
+			TooManyFiles(ref file) => write!(f, "To many files to process in there: {}. May be try \"cargo clean\" and then \"cargo build\"?", file),
+		}
 	}
 }
 
@@ -50,7 +62,10 @@ pub fn process_output(input: &source::SourceInput) -> Result<(), Error> {
 
 	let mut target_path = PathBuf::from(input.target_dir());
 	target_path.push(format!("{}.wasm", input.final_name()));
-	fs::copy(cargo_path, target_path)?;
+	fs::copy(cargo_path.as_path(), target_path.as_path())
+		.map_err(|io| Error::FailedToCopy(
+			format!("Failed to copy '{}' to '{}': {}", cargo_path.display(), target_path.display(), io)
+		))?;
 
 	Ok(())
 }
@@ -125,7 +140,10 @@ fn main() {
 		source_input = source_input.with_final(final_name);
 	}
 
-	process_output(&source_input).expect("Failed to process cargo target directory");
+	process_output(&source_input).unwrap_or_else(|e| {
+		println!("{}", e);
+		std::process::exit(1)
+	});
 
 	let path = wasm_path(&source_input);
 
