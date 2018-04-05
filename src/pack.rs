@@ -216,3 +216,121 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
 
     Ok(new_module)
 }
+
+#[cfg(test)]
+mod test {
+    extern crate parity_wasm;
+
+    use parity_wasm::builder;
+    use super::*;
+    use super::super::optimize;
+    use byteorder::{ByteOrder, LittleEndian};
+
+    fn test_packer(mut module: elements::Module) {
+        let mut ctor_module = module.clone();
+        optimize(&mut module, vec![CALL_SYMBOL]).expect("Optimizer to finish without errors");
+        optimize(&mut ctor_module, vec![CREATE_SYMBOL]).expect("Optimizer to finish without errors");
+
+        let raw_module = parity_wasm::serialize(module).unwrap();
+        let ctor_module = pack_instance(raw_module.clone(), ctor_module).expect("Packing failed");
+
+        let data_section = ctor_module.data_section().expect("Packed module has to have a data section");
+        let data_segment = data_section.entries().iter().last().expect("Packed module has to have a data section with at least one entry");
+        assert!(data_segment.value() == AsRef::<[u8]>::as_ref(&raw_module), "Last data segment should be equal to the raw module");
+    }
+
+    #[test]
+    fn no_data_section() {
+        test_packer(builder::module()
+            .import()
+                .module("env")
+                .field("memory")
+                .external().memory(1 as u32, Some(1 as u32))
+                .build()
+            .function()
+                .signature()
+                    .params().i32().i32().build()
+                        .build()
+                    .body().build()
+                    .build()
+            .function()
+                .signature().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+            .build()
+            .function()
+                .signature().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+            .build()
+            .export()
+                .field(CALL_SYMBOL)
+                .internal().func(1)
+            .build()
+            .export()
+                .field(CREATE_SYMBOL)
+                .internal().func(2)
+            .build()
+        .build()
+        );
+    }
+
+    #[test]
+    fn with_data_section() {
+        test_packer(builder::module()
+            .import()
+                .module("env")
+                .field("memory")
+                .external().memory(1 as u32, Some(1 as u32))
+                .build()
+            .data()
+                .offset(elements::Opcode::I32Const(16)).value(vec![0u8])
+                .build()
+            .function()
+                .signature()
+                    .params().i32().i32().build()
+                        .build()
+                    .body().build()
+                    .build()
+            .function()
+                .signature().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+            .build()
+            .function()
+                .signature().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+            .build()
+            .export()
+                .field(CALL_SYMBOL)
+                .internal().func(1)
+            .build()
+            .export()
+                .field(CREATE_SYMBOL)
+                .internal().func(2)
+            .build()
+        .build()
+        );
+    }
+}
