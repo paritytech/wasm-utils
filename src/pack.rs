@@ -1,6 +1,6 @@
 use std::fmt;
 use parity_wasm::elements::{
-    self, Section, Opcode, DataSegment, InitExpr, Internal, External,
+    self, Section, DataSection, Opcode, DataSegment, InitExpr, Internal, External,
     ImportCountType,
 };
 use parity_wasm::builder;
@@ -146,12 +146,21 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
     // If new function is put in ctor module, it will have this callable index
     let last_function_index = ctor_module.functions_space();
 
+    // We ensure here that module has the DataSection
+    if ctor_module
+        .sections()
+        .iter()
+        .find(|section| match **section { Section::Data(ref _d) => true, _ => false })
+        .is_none() {
+        // DataSection has to be the last non-custom section according the to the spec
+        ctor_module.sections_mut().push(Section::Data(DataSection::with_entries(vec![])));
+    }
+
     // Code data address is an address where we put the contract's code (raw_module)
     let mut code_data_address = 0i32;
 
     for section in ctor_module.sections_mut() {
         match section {
-            // TODO: add data section is there no one
             &mut Section::Data(ref mut data_section) => {
                 let (index, offset) = if let Some(ref entry) = data_section.entries().iter().last() {
                     if let Opcode::I32Const(offst) = entry.offset().code()[0] {
