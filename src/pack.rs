@@ -1,6 +1,6 @@
 use std::fmt;
 use parity_wasm::elements::{
-    self, Section, Opcode, DataSegment, InitExpr, Internal, External,
+    self, Section, DataSection, Opcode, DataSegment, InitExpr, Internal, External,
     ImportCountType,
 };
 use parity_wasm::builder;
@@ -146,12 +146,21 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
     // If new function is put in ctor module, it will have this callable index
     let last_function_index = ctor_module.functions_space();
 
+    // We ensure here that module has the DataSection
+    if ctor_module
+        .sections()
+        .iter()
+        .find(|section| match **section { Section::Data(ref _d) => true, _ => false })
+        .is_none() {
+        // DataSection has to be the last non-custom section according the to the spec
+        ctor_module.sections_mut().push(Section::Data(DataSection::with_entries(vec![])));
+    }
+
     // Code data address is an address where we put the contract's code (raw_module)
     let mut code_data_address = 0i32;
 
     for section in ctor_module.sections_mut() {
         match section {
-            // TODO: add data section is there no one
             &mut Section::Data(ref mut data_section) => {
                 let (index, offset) = if let Some(ref entry) = data_section.entries().iter().last() {
                     if let Opcode::I32Const(offst) = entry.offset().code()[0] {
@@ -206,4 +215,122 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
     };
 
     Ok(new_module)
+}
+
+#[cfg(test)]
+mod test {
+    extern crate parity_wasm;
+
+    use parity_wasm::builder;
+    use super::*;
+    use super::super::optimize;
+    use byteorder::{ByteOrder, LittleEndian};
+
+    fn test_packer(mut module: elements::Module) {
+        let mut ctor_module = module.clone();
+        optimize(&mut module, vec![CALL_SYMBOL]).expect("Optimizer to finish without errors");
+        optimize(&mut ctor_module, vec![CREATE_SYMBOL]).expect("Optimizer to finish without errors");
+
+        let raw_module = parity_wasm::serialize(module).unwrap();
+        let ctor_module = pack_instance(raw_module.clone(), ctor_module).expect("Packing failed");
+
+        let data_section = ctor_module.data_section().expect("Packed module has to have a data section");
+        let data_segment = data_section.entries().iter().last().expect("Packed module has to have a data section with at least one entry");
+        assert!(data_segment.value() == AsRef::<[u8]>::as_ref(&raw_module), "Last data segment should be equal to the raw module");
+    }
+
+    #[test]
+    fn no_data_section() {
+        test_packer(builder::module()
+            .import()
+                .module("env")
+                .field("memory")
+                .external().memory(1 as u32, Some(1 as u32))
+                .build()
+            .function()
+                .signature()
+                    .params().i32().i32().build()
+                        .build()
+                    .body().build()
+                    .build()
+            .function()
+                .signature().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+            .build()
+            .function()
+                .signature().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+            .build()
+            .export()
+                .field(CALL_SYMBOL)
+                .internal().func(1)
+            .build()
+            .export()
+                .field(CREATE_SYMBOL)
+                .internal().func(2)
+            .build()
+        .build()
+        );
+    }
+
+    #[test]
+    fn with_data_section() {
+        test_packer(builder::module()
+            .import()
+                .module("env")
+                .field("memory")
+                .external().memory(1 as u32, Some(1 as u32))
+                .build()
+            .data()
+                .offset(elements::Opcode::I32Const(16)).value(vec![0u8])
+                .build()
+            .function()
+                .signature()
+                    .params().i32().i32().build()
+                        .build()
+                    .body().build()
+                    .build()
+            .function()
+                .signature().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+            .build()
+            .function()
+                .signature().build()
+                .body()
+                    .with_opcodes(elements::Opcodes::new(
+                        vec![
+                            elements::Opcode::End
+                        ]
+                    ))
+                    .build()
+            .build()
+            .export()
+                .field(CALL_SYMBOL)
+                .internal().func(1)
+            .build()
+            .export()
+                .field(CREATE_SYMBOL)
+                .internal().func(2)
+            .build()
+        .build()
+        );
+    }
 }
