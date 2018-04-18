@@ -48,7 +48,8 @@ pub fn externalize_mem(mut module: elements::Module, adjust_pages: Option<u32>, 
 		entry = elements::MemoryType::new(entry.limits().initial(), Some(max_pages));
 	}
 
-	import_section(&mut module).expect("Import section to exist").entries_mut().push(
+	let mut builder = builder::from_module(module);
+	builder.push_import(
 		elements::ImportEntry::new(
 			"env".to_owned(),
 			"memory".to_owned(),
@@ -56,7 +57,7 @@ pub fn externalize_mem(mut module: elements::Module, adjust_pages: Option<u32>, 
 		)
 	);
 
-	module
+	builder.build()
 }
 
 fn foreach_public_func_name<F>(mut module: elements::Module, f: F) -> elements::Module
