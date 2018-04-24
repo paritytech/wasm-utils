@@ -13,11 +13,75 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, inserted_index: u32) {
 	}
 }
 
-enum InjectAction {
-	Spawn(u32),
-	Continue(u32),
-	Increment,
-	IncrementSpawn,
+/// A block of code represented by it's start position and cost.
+///
+/// The block typically starts with instructions such as `loop`, `block`, `if`, etc.
+///
+/// An example of block:
+///
+/// ```ignore
+/// loop
+///   i32.const 1
+///   get_local 0
+///   i32.sub
+///   tee_local 0
+///   br_if 0
+/// end
+/// ```
+///
+/// The start of the block is `i32.const 1`.
+///
+#[derive(Debug)]
+struct BlockEntry {
+	/// Index of the first instruction (aka `Opcode`) in the block.
+	start_pos: usize,
+	/// Sum of costs of all instructions until end of the block.
+	cost: u32,
+}
+
+struct Counter {
+	/// All blocks in the order of theirs start position.
+	blocks: Vec<BlockEntry>,
+
+	// Stack of blocks. Each element is an index to a `self.blocks` vector.
+	stack: Vec<usize>,
+}
+
+impl Counter {
+	fn new() -> Counter {
+		Counter {
+			stack: Vec::new(),
+			blocks: Vec::new(),
+		}
+	}
+
+	/// Begin a new block.
+	fn begin(&mut self, cursor: usize) {
+		let block_idx = self.blocks.len();
+		self.blocks.push(BlockEntry {
+			start_pos: cursor,
+			cost: 1,
+		});
+		self.stack.push(block_idx);
+	}
+
+	/// Finalize the current block.
+	///
+	/// Finalized blocks have final cost which will not change later.
+	fn finalize(&mut self) -> Result<(), ()> {
+		self.stack.pop().ok_or_else(|| ())?;
+		Ok(())
+	}
+
+	/// Increment the cost of the current block by the specified value.
+	fn increment(&mut self, val: u32) -> Result<(), ()> {
+		let stack_top = self.stack.last_mut().ok_or_else(|| ())?;
+		let top_block = self.blocks.get_mut(*stack_top).ok_or_else(|| ())?;
+
+		top_block.cost = top_block.cost.checked_add(val).ok_or_else(|| ())?;
+
+		Ok(())
+	}
 }
 
 fn inject_grow_counter(opcodes: &mut elements::Opcodes, grow_counter_func: u32) -> usize {
@@ -67,62 +131,59 @@ pub fn inject_counter(
 ) -> Result<(), ()> {
 	use parity_wasm::elements::Opcode::*;
 
-	let mut stack: Vec<(usize, usize)> = Vec::new();
-	let mut cursor = 0;
-	stack.push((0, 1));
+	let mut counter = Counter::new();
 
-	loop {
-		if cursor >= opcodes.elements().len() {
-			break;
-		}
+	// Begin an implicit function (i.e. `func...end`) block.
+	counter.begin(0);
 
-		let last_entry = stack.pop().expect("There should be at least one entry on stack");
+	for cursor in 0..opcodes.elements().len() {
+		let opcode = &opcodes.elements()[cursor];
+		match *opcode {
+			Block(_) | If(_) | Loop(_) => {
+				// Increment previous block with the cost of the current opcode.
+				let opcode_cost = rules.process(opcode)?;
+				counter.increment(opcode_cost)?;
 
-		let action = {
-			let opcode = &opcodes.elements()[cursor];
-			match *opcode {
-				Block(_) | If(_) | Loop(_) => {
-					InjectAction::Spawn(rules.process(opcode)?)
-				},
-				Else => {
-					InjectAction::IncrementSpawn
-				},
-				End => {
-					InjectAction::Increment
-				},
-				_ => {
-					InjectAction::Continue(rules.process(opcode)?)
-				}
+				// Begin new block. The cost of the following opcodes until `End` or `Else` will
+				// be included into this block.
+				counter.begin(cursor + 1);
 			}
-		};
-
-		match action {
-			InjectAction::Increment => {
-				let (pos, ops) = last_entry;
-				opcodes.elements_mut().insert(pos, I32Const(ops as i32));
-				opcodes.elements_mut().insert(pos+1, Call(gas_func));
-				cursor += 3;
+			End => {
+				// Just finalize current block.
+				counter.finalize()?;
 			},
-			InjectAction::IncrementSpawn => {
-				let (pos, ops) = last_entry;
-				opcodes.elements_mut().insert(pos, I32Const(ops as i32));
-				opcodes.elements_mut().insert(pos+1, Call(gas_func));
-				cursor += 3;
-				stack.push((cursor, 1));
-			},
-			InjectAction::Continue(val) => {
-				cursor += 1;
-				let (pos, ops) = last_entry;
-				stack.push((pos, ops + val as usize));
-			},
-			InjectAction::Spawn(val) => {
-				let (pos, ops) = last_entry;
-				stack.push((pos, ops + val as usize));
-
-				cursor += 1;
-				stack.push((cursor, 1));
-			},
+			Else => {
+				// `Else` opcode is being encountered. So the case we are looking at:
+				//
+				// if
+				//   ...
+				// else <-- cursor
+				//   ...
+				// end
+				//
+				// Finalize the current block ('then' part of the if statement),
+				// and begin another one for the 'else' part.
+				counter.finalize()?;
+				counter.begin(cursor + 1);
+			}
+			_ => {
+				// An ordinal non control flow instruction. Just increment the cost of the current block.
+				let opcode_cost = rules.process(opcode)?;
+				counter.increment(opcode_cost)?;
+			}
 		}
+	}
+
+	// Then insert metering calls.
+	let mut cumulative_offset = 0;
+	for block in counter.blocks {
+		let effective_pos = block.start_pos + cumulative_offset;
+
+		opcodes.elements_mut().insert(effective_pos, I32Const(block.cost as i32));
+		opcodes.elements_mut().insert(effective_pos+1, Call(gas_func));
+
+		// Take into account these two inserted instructions.
+		cumulative_offset += 2;
 	}
 
 	Ok(())
