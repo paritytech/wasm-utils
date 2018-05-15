@@ -8,37 +8,25 @@ description = "Collection of command-line utilities and corresponding Rust api f
 keywords = ["wasm", "webassembly", "pwasm"]
 
 [dependencies]
-parity-wasm = "0.27"
-log = "0.3"
-env_logger = "0.4"
-lazy_static = "0.2"
-clap = "2.24"
-glob = "0.2"
-byteorder = "1"
+parity-wasm = { git = "https://github.com/paritytech/parity-wasm", default-features = false }
+log = { version = "0.4", default-features = false }
+byteorder = { version = "1", default-features = false }
 
 [dev-dependencies]
 tempdir = "0.3"
 wabt = "0.2"
 diff = "0.1.11"
 
-[lib]
+[features]
+default = ["std"]
+std = ["parity-wasm/std", "log/std", "byteorder/std"]
 
-[[bin]]
-name = "wasm-prune"
-path = "prune/main.rs"
-
-[[bin]]
-name = "wasm-ext"
-path = "ext/main.rs"
-
-[[bin]]
-name = "wasm-gas"
-path = "gas/main.rs"
-
-[[bin]]
-name = "wasm-build"
-path = "build/main.rs"
-
-[[bin]]
-name = "wasm-stack-height"
-path = "stack_height/main.rs"
+[workspace]
+members = [
+  "./logger",
+  "./build",
+  "./ext",
+  "./gas",
+  "./prune",
+  "./stack_height",
+]

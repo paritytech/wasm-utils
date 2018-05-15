@@ -1,0 +1,17 @@
+[package]
+name = "pwasm-utils-stack-height"
+version = "0.1.5"
+authors = ["Nikolay Volf <nikvolf@gmail.com>", "Sergey Pepyakin <s.pepyakin@gmail.com>"]
+license = "MIT/Apache-2.0"
+readme = "README.md"
+description = "Collection of command-line utilities and corresponding Rust api for producing pwasm-compatible executables"
+keywords = ["wasm", "webassembly", "pwasm"]
+
+[[bin]]
+name = "wasm-stack-height"
+path = "src/main.rs"
+
+[dependencies]
+parity-wasm = { git = "https://github.com/paritytech/parity-wasm" }
+pwasm-utils = { path = ".." }
+pwasm-utils-logger = { path = "../logger" }

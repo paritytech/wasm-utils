@@ -1,0 +1,16 @@
+[package]
+name = "pwasm-utils-logger"
+version = "0.1.5"
+authors = ["Nikolay Volf <nikvolf@gmail.com>", "Sergey Pepyakin <s.pepyakin@gmail.com>"]
+license = "MIT/Apache-2.0"
+readme = "README.md"
+description = "Collection of command-line utilities and corresponding Rust api for producing pwasm-compatible executables"
+keywords = ["wasm", "webassembly", "pwasm"]
+
+[lib]
+name = "logger"
+
+[dependencies]
+log = "0.4"
+env_logger = "0.5"
+lazy_static = "1.0"
