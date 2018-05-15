@@ -1,5 +1,5 @@
 [package]
-name = "pwasm-utils-ext"
+name = "pwasm-utils-tools"
 version = "0.1.5"
 authors = ["Nikolay Volf <nikvolf@gmail.com>", "Sergey Pepyakin <s.pepyakin@gmail.com>"]
 license = "MIT/Apache-2.0"
@@ -7,11 +7,36 @@ readme = "README.md"
 description = "Collection of command-line utilities and corresponding Rust api for producing pwasm-compatible executables"
 keywords = ["wasm", "webassembly", "pwasm"]
 
+[lib]
+
+[[bin]]
+name = "wasm-prune"
+path = "prune/main.rs"
+
 [[bin]]
 name = "wasm-ext"
-path = "src/main.rs"
+path = "ext/main.rs"
+
+[[bin]]
+name = "wasm-gas"
+path = "gas/main.rs"
+
+[[bin]]
+name = "wasm-build"
+path = "build/main.rs"
+
+[[bin]]
+name = "wasm-stack-height"
+path = "stack_height/main.rs"
 
 [dependencies]
 parity-wasm = { git = "https://github.com/paritytech/parity-wasm" }
 pwasm-utils = { path = ".." }
-pwasm-utils-logger = { path = "../logger" }
+glob = "0.2"
+clap = "2.24"
+log = "0.4"
+env_logger = "0.5"
+lazy_static = "1.0"
+
+[dev-dependencies]
+tempdir = "0.3"

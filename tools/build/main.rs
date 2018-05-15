@@ -4,7 +4,7 @@ extern crate glob;
 extern crate pwasm_utils as utils;
 extern crate clap;
 extern crate parity_wasm;
-extern crate logger;
+extern crate pwasm_utils_tools as logger;
 
 mod source;
 

@@ -23,10 +23,5 @@ std = ["parity-wasm/std", "log/std", "byteorder/std"]
 
 [workspace]
 members = [
-  "./logger",
-  "./build",
-  "./ext",
-  "./gas",
-  "./prune",
-  "./stack_height",
+  "./tools",
 ]

@@ -1,6 +1,6 @@
 extern crate pwasm_utils as utils;
 extern crate parity_wasm;
-extern crate logger;
+extern crate pwasm_utils_tools as logger;
 
 use std::env;
 use utils::stack_height;
