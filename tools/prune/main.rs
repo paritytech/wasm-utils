@@ -1,6 +1,6 @@
 extern crate parity_wasm;
 extern crate pwasm_utils as utils;
-extern crate pwasm_utils_tools as logger;
+extern crate pwasm_utils_cli as logger;
 extern crate clap;
 
 use clap::{App, Arg};
