@@ -23,5 +23,5 @@ std = ["parity-wasm/std", "log/std", "byteorder/std"]
 
 [workspace]
 members = [
-  "./tools",
+  "./cli",
 ]
