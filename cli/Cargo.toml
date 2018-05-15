@@ -30,7 +30,7 @@ name = "wasm-stack-height"
 path = "stack_height/main.rs"
 
 [dependencies]
-parity-wasm = { git = "https://github.com/paritytech/parity-wasm" }
+parity-wasm = "0.30"
 pwasm-utils = { path = ".." }
 glob = "0.2"
 clap = "2.24"
