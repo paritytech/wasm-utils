@@ -1,4 +1,9 @@
-use std::collections::HashSet;
+#[cfg(features = "std")]
+use std::collections::{HashSet as Set};
+#[cfg(not(features = "std"))]
+use std::collections::{BTreeSet as Set};
+use std::vec::Vec;
+
 use parity_wasm::elements;
 
 use symbols::{Symbol, expand_symbols, push_code_symbols, resolve_function};
@@ -19,7 +24,7 @@ pub fn optimize(
 	//   which in turn compile in unused imports and leaves unused functions
 
 	// Algo starts from the top, listing all items that should stay
-	let mut stay = HashSet::new();
+	let mut stay = Set::new();
 	for (index, entry) in module.export_section().ok_or(Error::NoExportSection)?.entries().iter().enumerate() {
 		if used_exports.iter().find(|e| **e == entry.field()).is_some() {
 			stay.insert(Symbol::Export(index));

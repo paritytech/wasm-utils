@@ -1,3 +1,7 @@
+use std::string::String;
+use std::vec::Vec;
+use std::borrow::ToOwned;
+
 use parity_wasm::{elements, builder};
 use optimizer::{import_section, export_section};
 use byteorder::{LittleEndian, ByteOrder};

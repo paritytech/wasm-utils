@@ -1,7 +1,11 @@
+#[cfg(features = "std")]
+use std::collections::{HashMap as Map};
+#[cfg(not(features = "std"))]
+use std::collections::{BTreeMap as Map};
+use std::vec::Vec;
+
 use parity_wasm::elements::{self, FunctionType, Internal};
 use parity_wasm::builder;
-
-use std::collections::HashMap;
 
 use super::{resolve_func_type, Context, Error};
 
@@ -22,7 +26,7 @@ pub(crate) fn generate_thunks(
 	// Function indicies which needs to generate thunks.
 	let mut need_thunks: Vec<u32> = Vec::new();
 
-	let mut replacement_map: HashMap<u32, Thunk> = {
+	let mut replacement_map: Map<u32, Thunk> = {
 		let exports = module
 			.export_section()
 			.map(|es| es.entries())
@@ -42,7 +46,7 @@ pub(crate) fn generate_thunks(
 			.cloned();
 
 		// Replacement map is at least export section size.
-		let mut replacement_map: HashMap<u32, Thunk> = HashMap::new();
+		let mut replacement_map: Map<u32, Thunk> = Map::new();
 
 		for func_idx in exported_func_indicies.chain(table_func_indicies) {
 			let callee_stack_cost = ctx.stack_cost(func_idx).ok_or_else(|| {
