@@ -17,3 +17,6 @@ pwasm-utils = { path = ".." }
 pwasm-utils-logger = { path = "../logger" }
 glob = "0.2"
 clap = "2.24"
+
+[dev-dependencies]
+tempdir = "0.3"
