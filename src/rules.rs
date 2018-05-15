@@ -1,4 +1,8 @@
-use std::collections::HashMap;
+#[cfg(features = "std")]
+use std::collections::{HashMap as Map};
+#[cfg(not(features = "std"))]
+use std::collections::{BTreeMap as Map};
+
 use parity_wasm::elements;
 
 pub struct UnknownInstruction;
@@ -10,7 +14,7 @@ pub enum Metering {
     Fixed(u32),
 }
 
-#[derive(Debug, Hash, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Hash, PartialEq, Eq, PartialOrd, Ord, Copy, Clone)]
 pub enum InstructionType {
     Bit,
     Add,
@@ -265,7 +269,7 @@ impl InstructionType {
 #[derive(Debug)]
 pub struct Set {
     regular: u32,
-    entries: HashMap<InstructionType, Metering>,
+    entries: Map<InstructionType, Metering>,
     grow: u32,
 }
 
@@ -273,14 +277,14 @@ impl Default for Set {
     fn default() -> Self {
         Set {
             regular: 1,
-            entries: HashMap::new(),
+            entries: Map::new(),
             grow: 0,
         }
     }
 }
 
 impl Set {
-    pub fn new(regular: u32, entries: HashMap<InstructionType, Metering>) -> Self {
+    pub fn new(regular: u32, entries: Map<InstructionType, Metering>) -> Self {
         Set { regular: regular, entries: entries, grow: 0 }
     }
 

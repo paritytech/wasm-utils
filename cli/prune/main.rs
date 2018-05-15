@@ -1,11 +1,12 @@
 extern crate parity_wasm;
 extern crate pwasm_utils as utils;
+extern crate pwasm_utils_cli as logger;
 extern crate clap;
 
 use clap::{App, Arg};
 
 fn main() {
-    utils::init_log();
+    logger::init_log();
 
     let matches = App::new("wasm-opt")
                         .arg(Arg::with_name("input")

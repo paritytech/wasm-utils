@@ -4,6 +4,7 @@ extern crate glob;
 extern crate pwasm_utils as utils;
 extern crate clap;
 extern crate parity_wasm;
+extern crate pwasm_utils_cli as logger;
 
 mod source;
 
@@ -95,7 +96,7 @@ fn has_ctor(module: &elements::Module) -> bool {
 }
 
 fn do_main() -> Result<(), Error> {
-	utils::init_log();
+	logger::init_log();
 
 	let matches = App::new("wasm-build")
 		.arg(Arg::with_name("target")

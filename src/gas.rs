@@ -1,3 +1,5 @@
+use std::vec::Vec;
+
 use parity_wasm::{elements, builder};
 use rules;
 

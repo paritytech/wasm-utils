@@ -1,4 +1,7 @@
 use std::fmt;
+use std::vec::Vec;
+use std::borrow::ToOwned;
+
 use parity_wasm::elements::{
     self, Section, DataSection, Opcode, DataSegment, InitExpr, Internal, External,
     ImportCountType,
@@ -224,7 +227,6 @@ mod test {
     use parity_wasm::builder;
     use super::*;
     use super::super::optimize;
-    use byteorder::{ByteOrder, LittleEndian};
 
     fn test_packer(mut module: elements::Module) {
         let mut ctor_module = module.clone();
