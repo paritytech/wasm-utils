@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/paritytech/wasm-utils.svg?branch=master)](https://travis-ci.org/paritytech/wasm-utils)
 
-Collection of WASM utilities used in Parity and WASM contract devepment
+Collection of WASM utilities used in Parity and WASM contract development
 
 ## Build tools for cargo
 
