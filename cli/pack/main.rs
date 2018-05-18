@@ -22,7 +22,7 @@ fn main() {
     let input = matches.value_of("input").expect("is required; qed");
     let output = matches.value_of("output").expect("is required; qed");
 
-    let module = parity_wasm::deserialize_file(&input).unwrap();
+    let module = parity_wasm::deserialize_file(&input).expect("Input module deserialization failed");
     let ctor_module = module.clone();
 	let raw_module = parity_wasm::serialize(module).expect("Serialization failed");
 
