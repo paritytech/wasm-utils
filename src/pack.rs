@@ -41,7 +41,7 @@ impl fmt::Display for Error {
     }
 }
 
-/// If module has an exported "_create" function we want to pack it into "constructor".
+/// If module has an exported "deploy" function we want to pack it into "constructor".
 /// `raw_module` is the actual contract code
 /// `ctor_module` is the constructor which should return `raw_module`
 pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> Result<elements::Module, Error> {
@@ -49,7 +49,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
     // Total number of constructor module import functions
     let ctor_import_functions = ctor_module.import_section().map(|x| x.functions()).unwrap_or(0);
 
-    // We need to find an internal ID of function witch is exported as "_create"
+    // We need to find an internal ID of function witch is exported as "deploy"
     // in order to find it in the Code section of the module
     let mut create_func_id = {
         let found_entry = ctor_module.export_section().ok_or(Error::NoExportSection)?.entries().iter()
@@ -207,7 +207,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
             &mut Section::Export(ref mut export_section) => {
                 for entry in export_section.entries_mut().iter_mut() {
                     if CREATE_SYMBOL == entry.field() {
-                        // change _create export name into default _call
+                        // change "deploy" export name into default "call"
                         *entry.field_mut() = CALL_SYMBOL.to_owned();
                         *entry.internal_mut() = elements::Internal::Function(last_function_index as u32);
                     }
