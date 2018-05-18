@@ -8,7 +8,7 @@ use clap::{App, Arg};
 fn main() {
     logger::init_log();
 
-    let matches = App::new("wasm-opt")
+    let matches = App::new("wasm-prune")
                         .arg(Arg::with_name("input")
                             .index(1)
                             .required(true)
@@ -22,12 +22,12 @@ fn main() {
                             .short("e")
                             .takes_value(true)
                             .value_name("functions")
-                            .help("Comma-separated list of exported functions to keep. Default: _call"))
+                            .help(&format!("Comma-separated list of exported functions to keep. Default: '{}'", utils::CALL_SYMBOL)))
                         .get_matches();
 
     let exports = matches
                     .value_of("exports")
-                    .unwrap_or("_call")
+                    .unwrap_or(utils::CALL_SYMBOL)
                     .split(',')
                     .collect();
 
@@ -39,7 +39,7 @@ fn main() {
     // Invoke optimizer
     //   Contract is supposed to have only these functions as public api
     //   All other symbols not usable by this list is optimized away
-    utils::optimize(&mut module, exports).expect("Optimizer to finish without errors");
+    utils::optimize(&mut module, exports).expect("Optimizer failed");
 
-    parity_wasm::serialize_to_file(&output, module).unwrap();
+    parity_wasm::serialize_to_file(&output, module).expect("Serialization failed");
 }

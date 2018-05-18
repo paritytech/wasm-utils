@@ -19,7 +19,7 @@ cargo install pwasm-utils-cli --bin wasm-prune
 wasm-prune <input_wasm_binary.wasm> <output_wasm_binary.wasm>
 ```
 
-This will optimize WASM symbols tree to leave only those elements that are used by contract `_call` function entry.
+This will optimize WASM symbols tree to leave only those elements that are used by contract `call` function entry.
 
 ## Gas counter (wasm-gas)
 
