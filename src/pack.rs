@@ -63,7 +63,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
         // Calculates a function index within module's function section
         let function_internal_index = function_index - ctor_import_functions;
 
-        // Constructor should be of signature `func(i32)` (void), fail otherwise
+        // Constructor should be of signature `func()` (void), fail otherwise
         let type_id = ctor_module.function_section().ok_or(Error::NoCodeSection)?
             .entries().get(function_index - ctor_import_functions).ok_or(Error::MalformedModule)?
             .type_ref();
