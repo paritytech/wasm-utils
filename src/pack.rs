@@ -33,15 +33,15 @@ impl fmt::Display for Error {
             Error::NoTypeSection => write!(f, "No type section in the module"),
             Error::NoExportSection => write!(f, "No export section in the module"),
             Error::NoCodeSection => write!(f, "No code section inthe module"),
-            Error::InvalidCreateSignature => write!(f, "Exported symbol `deploy` has invalid signature, should be () -> ()"),
-            Error::InvalidCreateMember => write!(f, "Exported symbol `deploy` should be a function"),
-            Error::NoCreateSymbol => write!(f, "No exported `deploy` symbol"),
+            Error::InvalidCreateSignature => write!(f, "Exported symbol `{}` has invalid signature, should be () -> ()", CREATE_SYMBOL),
+            Error::InvalidCreateMember => write!(f, "Exported symbol `{}` should be a function", CREATE_SYMBOL),
+            Error::NoCreateSymbol => write!(f, "No exported `{}` symbol", CREATE_SYMBOL),
             Error::NoImportSection => write!(f, "No import section in the module"),
         }
     }
 }
 
-/// If module has an exported "deploy" function we want to pack it into "constructor".
+/// If module has an exported "CREATE_SYMBOL" function we want to pack it into "constructor".
 /// `raw_module` is the actual contract code
 /// `ctor_module` is the constructor which should return `raw_module`
 pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> Result<elements::Module, Error> {
@@ -49,7 +49,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
     // Total number of constructor module import functions
     let ctor_import_functions = ctor_module.import_section().map(|x| x.functions()).unwrap_or(0);
 
-    // We need to find an internal ID of function witch is exported as "deploy"
+    // We need to find an internal ID of function witch is exported as "CREATE_SYMBOL"
     // in order to find it in the Code section of the module
     let mut create_func_id = {
         let found_entry = ctor_module.export_section().ok_or(Error::NoExportSection)?.entries().iter()
@@ -207,7 +207,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
             &mut Section::Export(ref mut export_section) => {
                 for entry in export_section.entries_mut().iter_mut() {
                     if CREATE_SYMBOL == entry.field() {
-                        // change "deploy" export name into default "call"
+                        // change "CREATE_SYMBOL" export name into default "CALL_SYMBOL"
                         *entry.field_mut() = CALL_SYMBOL.to_owned();
                         *entry.internal_mut() = elements::Internal::Function(last_function_index as u32);
                     }

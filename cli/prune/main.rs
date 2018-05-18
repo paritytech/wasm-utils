@@ -22,12 +22,12 @@ fn main() {
                             .short("e")
                             .takes_value(true)
                             .value_name("functions")
-                            .help("Comma-separated list of exported functions to keep. Default: 'call'"))
+                            .help(&format!("Comma-separated list of exported functions to keep. Default: '{}'", utils::CALL_SYMBOL)))
                         .get_matches();
 
     let exports = matches
                     .value_of("exports")
-                    .unwrap_or("call")
+                    .unwrap_or(utils::CALL_SYMBOL)
                     .split(',')
                     .collect();
 
