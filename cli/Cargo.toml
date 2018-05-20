@@ -29,6 +29,10 @@ path = "build/main.rs"
 name = "wasm-stack-height"
 path = "stack_height/main.rs"
 
+[[bin]]
+name = "wasm-pack"
+path = "pack/main.rs"
+
 [dependencies]
 parity-wasm = "0.30"
 pwasm-utils = { path = "..", version = "0.2" }
