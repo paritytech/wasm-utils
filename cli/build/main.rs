@@ -137,6 +137,11 @@ fn do_main() -> Result<(), Error> {
 			.help("Shrinks the new stack size for wasm32-unknown-unknown")
 			.takes_value(true)
 			.long("shrink-stack"))
+		.arg(Arg::with_name("public_api")
+			.help("Preserves specific imports in the library")
+			.takes_value(true)
+			.long("public-api"))
+
 		.get_matches();
 
     let target_dir = matches.value_of("target").expect("is required; qed");
@@ -195,10 +200,14 @@ fn do_main() -> Result<(), Error> {
 
 	let mut ctor_module = module.clone();
 
+	let mut public_api_entries = matches.value_of("public_api")
+		.map(|val| val.split(",").collect())
+		.unwrap_or(Vec::new());
+	public_api_entries.push(CALL_SYMBOL);
 	if !matches.is_present("skip_optimization") {
 		utils::optimize(
 			&mut module,
-			vec![CALL_SYMBOL]
+			public_api_entries,
 		)?;
 	}
 
