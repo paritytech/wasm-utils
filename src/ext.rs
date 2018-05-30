@@ -11,26 +11,20 @@ type Insertion = (usize, u32, u32, String);
 pub fn update_call_index(opcodes: &mut elements::Opcodes, original_imports: usize, inserts: &[Insertion]) {
 	use parity_wasm::elements::Opcode::*;
 	for opcode in opcodes.elements_mut().iter_mut() {
-		match opcode {
-			&mut Call(ref mut call_index) => {
-				if let Some(pos) = inserts.iter().position(|x| x.1 == *call_index) {
-					*call_index = (original_imports + pos) as u32;
-				} else if *call_index as usize > original_imports {
-					*call_index += inserts.len() as u32;
-				}
-			},
-			_ => { }
+		if let &mut Call(ref mut call_index) = opcode {
+			if let Some(pos) = inserts.iter().position(|x| x.1 == *call_index) {
+				*call_index = (original_imports + pos) as u32;
+			} else if *call_index as usize > original_imports {
+				*call_index += inserts.len() as u32;
+			}
 		}
 	}
 }
 
 pub fn memory_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::MemorySection> {
-   for section in module.sections_mut() {
-		match section {
-			&mut elements::Section::Memory(ref mut sect) => {
-				return Some(sect);
-			},
-			_ => { }
+	for section in module.sections_mut() {
+	   if let &mut elements::Section::Memory(ref mut sect) = section {
+		   return Some(sect);
 		}
 	}
 	None
@@ -182,11 +176,8 @@ pub fn externalize(
 			},
 			&mut elements::Section::Export(ref mut export_section) => {
 				for ref mut export in export_section.entries_mut() {
-					match export.internal_mut() {
-						&mut elements::Internal::Function(ref mut func_index) => {
-							if *func_index >= import_funcs_total as u32 { *func_index += replaces.len() as u32; }
-						},
-						_ => {}
+					if let &mut elements::Internal::Function(ref mut func_index) = export.internal_mut() {
+						if *func_index >= import_funcs_total as u32 { *func_index += replaces.len() as u32; }
 					}
 				}
 			},

@@ -19,14 +19,11 @@ pub fn resolve_function(module: &elements::Module, index: u32) -> Symbol {
 	let mut functions = 0;
 	if let Some(import_section) = module.import_section() {
 		for (item_index, item) in import_section.entries().iter().enumerate() {
-			match item.external() {
-				&elements::External::Function(_) => {
-					if functions == index {
-						return Symbol::Import(item_index as usize);
-					}
-					functions += 1;
-				},
-				_ => {}
+			if let &elements::External::Function(_) = item.external() {
+				if functions == index {
+					return Symbol::Import(item_index as usize);
+				}
+				functions += 1;
 			}
 		}
 	}
@@ -38,14 +35,11 @@ pub fn resolve_global(module: &elements::Module, index: u32) -> Symbol {
 	let mut globals = 0;
 	if let Some(import_section) = module.import_section() {
 		for (item_index, item) in import_section.entries().iter().enumerate() {
-			match item.external() {
-				&elements::External::Global(_) => {
-					if globals == index {
-						return Symbol::Import(item_index as usize);
-					}
-					globals += 1;
-				},
-				_ => {}
+			if let &elements::External::Global(_) = item.external() {
+				if globals == index {
+					return Symbol::Import(item_index as usize);
+				}
+				globals += 1;
 			}
 		}
 	}
@@ -109,15 +103,12 @@ pub fn expand_symbols(module: &elements::Module, set: &mut Set<Symbol>) {
 			},
 			Import(idx) => {
 				let entry = &module.import_section().expect("Import section to exist").entries()[idx];
-				match entry.external() {
-					&elements::External::Function(type_idx) => {
-						let type_symbol = Symbol::Type(type_idx as usize);
-						if !stop.contains(&type_symbol) {
-							fringe.push(type_symbol);
-						}
-						set.insert(type_symbol);
-					},
-					_ => {}
+				if let &elements::External::Function(type_idx) = entry.external() {
+					let type_symbol = Symbol::Type(type_idx as usize);
+					if !stop.contains(&type_symbol) {
+						fringe.push(type_symbol);
+					}
+					set.insert(type_symbol);
 				}
 			},
 			Function(idx) => {

@@ -142,9 +142,8 @@ pub(crate) fn generate_thunks(
 		match *section {
 			elements::Section::Export(ref mut export_section) => {
 				for entry in export_section.entries_mut() {
-					match *entry.internal_mut() {
-						Internal::Function(ref mut function_idx) => fixup(function_idx),
-						_ => {}
+					if let Internal::Function(ref mut function_idx) = *entry.internal_mut() {
+						fixup(function_idx)
 					}
 				}
 			}

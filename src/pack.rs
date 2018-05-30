@@ -120,11 +120,8 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
                     },
                     elements::Section::Export(ref mut export_section) => {
                         for ref mut export in export_section.entries_mut() {
-                            match export.internal_mut() {
-                                &mut elements::Internal::Function(ref mut func_index) => {
-                                    if *func_index >= ret_func { *func_index += 1}
-                                },
-                                _ => {}
+                            if let &mut elements::Internal::Function(ref mut func_index) = export.internal_mut() {
+                                if *func_index >= ret_func { *func_index += 1}
                             }
                         }
                     },
@@ -163,28 +160,25 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
     let mut code_data_address = 0i32;
 
     for section in ctor_module.sections_mut() {
-        match section {
-            &mut Section::Data(ref mut data_section) => {
-                let (index, offset) = if let Some(ref entry) = data_section.entries().iter().last() {
-                    if let Opcode::I32Const(offst) = entry.offset().code()[0] {
-                        let len = entry.value().len() as i32;
-                        let offst = offst as i32;
-                        (entry.index(), offst + (len + 4) - len % 4)
-                    } else {
-                        (0, 0)
-                    }
+        if let &mut Section::Data(ref mut data_section) = section {
+            let (index, offset) = if let Some(ref entry) = data_section.entries().iter().last() {
+                if let Opcode::I32Const(offst) = entry.offset().code()[0] {
+                    let len = entry.value().len() as i32;
+                    let offst = offst as i32;
+                    (entry.index(), offst + (len + 4) - len % 4)
                 } else {
                     (0, 0)
-                };
-                let code_data = DataSegment::new(
-                    index,
-                    InitExpr::new(vec![Opcode::I32Const(offset), Opcode::End]),
-                    raw_module.clone()
-                );
-                data_section.entries_mut().push(code_data);
-                code_data_address = offset;
-            },
-            _ => {;}
+                }
+            } else {
+                (0, 0)
+            };
+            let code_data = DataSegment::new(
+                index,
+                InitExpr::new(vec![Opcode::I32Const(offset), Opcode::End]),
+                raw_module.clone()
+            );
+            data_section.entries_mut().push(code_data);
+            code_data_address = offset;
         }
     }
 
@@ -203,17 +197,14 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
         .build();
 
     for section in new_module.sections_mut() {
-        match section {
-            &mut Section::Export(ref mut export_section) => {
-                for entry in export_section.entries_mut().iter_mut() {
-                    if CREATE_SYMBOL == entry.field() {
-                        // change "CREATE_SYMBOL" export name into default "CALL_SYMBOL"
-                        *entry.field_mut() = CALL_SYMBOL.to_owned();
-                        *entry.internal_mut() = elements::Internal::Function(last_function_index as u32);
-                    }
+        if let &mut Section::Export(ref mut export_section) = section {
+            for entry in export_section.entries_mut().iter_mut() {
+                if CREATE_SYMBOL == entry.field() {
+                    // change "CREATE_SYMBOL" export name into default "CALL_SYMBOL"
+                    *entry.field_mut() = CALL_SYMBOL.to_owned();
+                    *entry.internal_mut() = elements::Internal::Function(last_function_index as u32);
                 }
-            },
-            _ => { },
+            }
         }
     };
 
