@@ -273,13 +273,10 @@ pub fn optimize(
 pub fn update_call_index(opcodes: &mut elements::Opcodes, eliminated_indices: &[usize]) {
 	use parity_wasm::elements::Opcode::*;
 	for opcode in opcodes.elements_mut().iter_mut() {
-		match opcode {
-			&mut Call(ref mut call_index) => {
-				let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
-				trace!("rewired call {} -> call {}", *call_index, *call_index - totalle as u32);
-				*call_index -= totalle as u32;
-			},
-			_ => { },
+		if let &mut Call(ref mut call_index) = opcode {
+			let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
+			trace!("rewired call {} -> call {}", *call_index, *call_index - totalle as u32);
+			*call_index -= totalle as u32;
 		}
 	}
 }
@@ -303,24 +300,18 @@ pub fn update_global_index(opcodes: &mut Vec<elements::Opcode>, eliminated_indic
 pub fn update_type_index(opcodes: &mut elements::Opcodes, eliminated_indices: &[usize]) {
 	use parity_wasm::elements::Opcode::*;
 	for opcode in opcodes.elements_mut().iter_mut() {
-		match opcode {
-			&mut CallIndirect(ref mut call_index, _) => {
-				let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
-				trace!("rewired call_indrect {} -> call_indirect {}", *call_index, *call_index - totalle as u32);
-				*call_index -= totalle as u32;
-			},
-			_ => { },
+		if let &mut CallIndirect(ref mut call_index, _) = opcode {
+			let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
+			trace!("rewired call_indrect {} -> call_indirect {}", *call_index, *call_index - totalle as u32);
+			*call_index -= totalle as u32;
 		}
 	}
 }
 
 pub fn import_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::ImportSection> {
    for section in module.sections_mut() {
-		match section {
-			&mut elements::Section::Import(ref mut sect) => {
-				return Some(sect);
-			},
-			_ => { }
+		if let &mut elements::Section::Import(ref mut sect) = section {
+			return Some(sect);
 		}
 	}
 	None
@@ -328,11 +319,8 @@ pub fn import_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut el
 
 pub fn global_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::GlobalSection> {
    for section in module.sections_mut() {
-		match section {
-			&mut elements::Section::Global(ref mut sect) => {
-				return Some(sect);
-			},
-			_ => { }
+		if let &mut elements::Section::Global(ref mut sect) = section {
+			return Some(sect);
 		}
 	}
 	None
@@ -340,11 +328,8 @@ pub fn global_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut el
 
 pub fn function_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::FunctionSection> {
    for section in module.sections_mut() {
-		match section {
-			&mut elements::Section::Function(ref mut sect) => {
-				return Some(sect);
-			},
-			_ => { }
+		if let &mut elements::Section::Function(ref mut sect) = section {
+			return Some(sect);
 		}
 	}
 	None
@@ -352,11 +337,8 @@ pub fn function_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut 
 
 pub fn code_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::CodeSection> {
    for section in module.sections_mut() {
-		match section {
-			&mut elements::Section::Code(ref mut sect) => {
-				return Some(sect);
-			},
-			_ => { }
+		if let &mut elements::Section::Code(ref mut sect) = section {
+			return Some(sect);
 		}
 	}
 	None
@@ -364,11 +346,8 @@ pub fn code_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elem
 
 pub fn export_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::ExportSection> {
    for section in module.sections_mut() {
-		match section {
-			&mut elements::Section::Export(ref mut sect) => {
-				return Some(sect);
-			},
-			_ => { }
+		if let &mut elements::Section::Export(ref mut sect) = section {
+			return Some(sect);
 		}
 	}
 	None
@@ -376,11 +355,8 @@ pub fn export_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut el
 
 pub fn type_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::TypeSection> {
    for section in module.sections_mut() {
-		match section {
-			&mut elements::Section::Type(ref mut sect) => {
-				return Some(sect);
-			},
-			_ => { }
+		if let &mut elements::Section::Type(ref mut sect) = section {
+			return Some(sect);
 		}
 	}
 	None

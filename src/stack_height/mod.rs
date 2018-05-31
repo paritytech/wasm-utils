@@ -165,15 +165,12 @@ fn generate_stack_height_global(ctx: &mut Context, module: &mut elements::Module
 
 	// Try to find an existing global section.
 	for section in module.sections_mut() {
-		match *section {
-			elements::Section::Global(ref mut gs) => {
-				gs.entries_mut().push(global_entry);
+		if let elements::Section::Global(ref mut gs) = *section {
+			gs.entries_mut().push(global_entry);
 
-				let stack_height_global_idx = (gs.entries().len() as u32) - 1;
-				ctx.stack_height_global_idx = Some(stack_height_global_idx);
-				return;
-			}
-			_ => {}
+			let stack_height_global_idx = (gs.entries().len() as u32) - 1;
+			ctx.stack_height_global_idx = Some(stack_height_global_idx);
+			return;
 		}
 	}
 
@@ -233,14 +230,11 @@ fn compute_stack_cost(func_idx: u32, module: &elements::Module) -> Result<u32, E
 
 fn instrument_functions(ctx: &mut Context, module: &mut elements::Module) -> Result<(), Error> {
 	for section in module.sections_mut() {
-		match *section {
-			elements::Section::Code(ref mut code_section) => {
-				for func_body in code_section.bodies_mut() {
-					let mut opcodes = func_body.code_mut();
-					instrument_function(ctx, opcodes)?;
-				}
+		if let elements::Section::Code(ref mut code_section) = *section {
+			for func_body in code_section.bodies_mut() {
+				let mut opcodes = func_body.code_mut();
+				instrument_function(ctx, opcodes)?;
 			}
-			_ => {}
 		}
 	}
 	Ok(())

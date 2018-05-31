@@ -6,11 +6,8 @@ use rules;
 pub fn update_call_index(opcodes: &mut elements::Opcodes, inserted_index: u32) {
 	use parity_wasm::elements::Opcode::*;
 	for opcode in opcodes.elements_mut().iter_mut() {
-		match opcode {
-			&mut Call(ref mut call_index) => {
-				if *call_index >= inserted_index { *call_index += 1}
-			},
-			_ => { },
+		if let &mut Call(ref mut call_index) = opcode {
+			if *call_index >= inserted_index { *call_index += 1}
 		}
 	}
 }
@@ -90,12 +87,9 @@ fn inject_grow_counter(opcodes: &mut elements::Opcodes, grow_counter_func: u32) 
 	use parity_wasm::elements::Opcode::*;
 	let mut counter = 0;
 	for opcode in opcodes.elements_mut() {
-		match *opcode {
-			GrowMemory(_) => {
-				*opcode = Call(grow_counter_func);
-				counter += 1;
-			},
-			_ => {}
+		if let GrowMemory(_) = *opcode {
+			*opcode = Call(grow_counter_func);
+			counter += 1;
 		}
 	}
 	counter
@@ -244,11 +238,8 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 			},
 			&mut elements::Section::Export(ref mut export_section) => {
 				for ref mut export in export_section.entries_mut() {
-					match export.internal_mut() {
-						&mut elements::Internal::Function(ref mut func_index) => {
-							if *func_index >= gas_func { *func_index += 1}
-						},
-						_ => {}
+					if let &mut elements::Internal::Function(ref mut func_index) = export.internal_mut() {
+						if *func_index >= gas_func { *func_index += 1}
 					}
 				}
 			},
