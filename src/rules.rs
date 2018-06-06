@@ -62,7 +62,7 @@ impl ::std::str::FromStr for InstructionType {
             "reinterpret" => Ok(InstructionType::Reinterpretation),
             "unreachable" => Ok(InstructionType::Unreachable),
             "nop" => Ok(InstructionType::Nop),
-            "currrent_mem" => Ok(InstructionType::CurrentMemory),
+            "current_mem" => Ok(InstructionType::CurrentMemory),
             "grow_mem" => Ok(InstructionType::GrowMemory),
             _ => Err(UnknownInstruction),
         }
