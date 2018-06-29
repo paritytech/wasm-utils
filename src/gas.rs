@@ -3,10 +3,10 @@ use std::vec::Vec;
 use parity_wasm::{elements, builder};
 use rules;
 
-pub fn update_call_index(opcodes: &mut elements::Opcodes, inserted_index: u32) {
-	use parity_wasm::elements::Opcode::*;
-	for opcode in opcodes.elements_mut().iter_mut() {
-		if let &mut Call(ref mut call_index) = opcode {
+pub fn update_call_index(instructions: &mut elements::Instructions, inserted_index: u32) {
+	use parity_wasm::elements::Instruction::*;
+	for instruction in instructions.elements_mut().iter_mut() {
+		if let &mut Call(ref mut call_index) = instruction {
 			if *call_index >= inserted_index { *call_index += 1}
 		}
 	}
@@ -83,12 +83,12 @@ impl Counter {
 	}
 }
 
-fn inject_grow_counter(opcodes: &mut elements::Opcodes, grow_counter_func: u32) -> usize {
-	use parity_wasm::elements::Opcode::*;
+fn inject_grow_counter(instructions: &mut elements::Instructions, grow_counter_func: u32) -> usize {
+	use parity_wasm::elements::Instruction::*;
 	let mut counter = 0;
-	for opcode in opcodes.elements_mut() {
-		if let GrowMemory(_) = *opcode {
-			*opcode = Call(grow_counter_func);
+	for instruction in instructions.elements_mut() {
+		if let GrowMemory(_) = *instruction {
+			*instruction = Call(grow_counter_func);
 			counter += 1;
 		}
 	}
@@ -96,14 +96,14 @@ fn inject_grow_counter(opcodes: &mut elements::Opcodes, grow_counter_func: u32) 
 }
 
 fn add_grow_counter(module: elements::Module, rules: &rules::Set, gas_func: u32) -> elements::Module {
-	use parity_wasm::elements::Opcode::*;
+	use parity_wasm::elements::Instruction::*;
 
 	let mut b = builder::from_module(module);
 	b.push_function(
 		builder::function()
 			.signature().params().i32().build().with_return_type(Some(elements::ValueType::I32)).build()
 			.body()
-				.with_opcodes(elements::Opcodes::new(vec![
+				.with_instructions(elements::Instructions::new(vec![
 					GetLocal(0),
 					GetLocal(0),
 					I32Const(rules.grow_cost() as i32),
@@ -121,24 +121,24 @@ fn add_grow_counter(module: elements::Module, rules: &rules::Set, gas_func: u32)
 }
 
 pub fn inject_counter(
-	opcodes: &mut elements::Opcodes,
+	instructions: &mut elements::Instructions,
 	rules: &rules::Set,
 	gas_func: u32,
 ) -> Result<(), ()> {
-	use parity_wasm::elements::Opcode::*;
+	use parity_wasm::elements::Instruction::*;
 
 	let mut counter = Counter::new();
 
 	// Begin an implicit function (i.e. `func...end`) block.
 	counter.begin(0);
 
-	for cursor in 0..opcodes.elements().len() {
-		let opcode = &opcodes.elements()[cursor];
-		match *opcode {
+	for cursor in 0..instructions.elements().len() {
+		let instruction = &instructions.elements()[cursor];
+		match *instruction {
 			Block(_) | If(_) | Loop(_) => {
 				// Increment previous block with the cost of the current opcode.
-				let opcode_cost = rules.process(opcode)?;
-				counter.increment(opcode_cost)?;
+				let instruction_cost = rules.process(instruction)?;
+				counter.increment(instruction_cost)?;
 
 				// Begin new block. The cost of the following opcodes until `End` or `Else` will
 				// be included into this block.
@@ -164,8 +164,8 @@ pub fn inject_counter(
 			}
 			_ => {
 				// An ordinal non control flow instruction. Just increment the cost of the current block.
-				let opcode_cost = rules.process(opcode)?;
-				counter.increment(opcode_cost)?;
+				let instruction_cost = rules.process(instruction)?;
+				counter.increment(instruction_cost)?;
 			}
 		}
 	}
@@ -175,8 +175,8 @@ pub fn inject_counter(
 	for block in counter.blocks {
 		let effective_pos = block.start_pos + cumulative_offset;
 
-		opcodes.elements_mut().insert(effective_pos, I32Const(block.cost as i32));
-		opcodes.elements_mut().insert(effective_pos+1, Call(gas_func));
+		instructions.elements_mut().insert(effective_pos, I32Const(block.cost as i32));
+		instructions.elements_mut().insert(effective_pos+1, Call(gas_func));
 
 		// Take into account these two inserted instructions.
 		cumulative_offset += 2;
@@ -271,7 +271,7 @@ mod tests {
 
 	#[test]
 	fn simple_grow() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -280,7 +280,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							GetGlobal(0),
 							GrowMemory(0),
@@ -326,7 +326,7 @@ mod tests {
 
 	#[test]
 	fn grow_no_gas_no_track() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -335,7 +335,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							GetGlobal(0),
 							GrowMemory(0),
@@ -369,7 +369,7 @@ mod tests {
 
 	#[test]
 	fn simple() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -378,7 +378,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							GetGlobal(0),
 							End
@@ -405,7 +405,7 @@ mod tests {
 
 	#[test]
 	fn nested() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -414,7 +414,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							GetGlobal(0),
 							Block(elements::BlockType::NoResult),
@@ -455,7 +455,7 @@ mod tests {
 
 	#[test]
 	fn ifelse() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -464,7 +464,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							GetGlobal(0),
 							If(elements::BlockType::NoResult),
@@ -513,7 +513,7 @@ mod tests {
 
 	#[test]
 	fn call_index() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -526,7 +526,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							Call(0),
 							If(elements::BlockType::NoResult),
@@ -576,7 +576,7 @@ mod tests {
 
 	#[test]
 	fn forbidden() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -585,7 +585,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							F32Const(555555),
 							End

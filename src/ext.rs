@@ -8,10 +8,10 @@ use byteorder::{LittleEndian, ByteOrder};
 
 type Insertion = (usize, u32, u32, String);
 
-pub fn update_call_index(opcodes: &mut elements::Opcodes, original_imports: usize, inserts: &[Insertion]) {
-	use parity_wasm::elements::Opcode::*;
-	for opcode in opcodes.elements_mut().iter_mut() {
-		if let &mut Call(ref mut call_index) = opcode {
+pub fn update_call_index(instructions: &mut elements::Instructions, original_imports: usize, inserts: &[Insertion]) {
+	use parity_wasm::elements::Instruction::*;
+	for instruction in instructions.elements_mut().iter_mut() {
+		if let &mut Call(ref mut call_index) = instruction {
 			if let Some(pos) = inserts.iter().position(|x| x.1 == *call_index) {
 				*call_index = (original_imports + pos) as u32;
 			} else if *call_index as usize > original_imports {
@@ -98,7 +98,7 @@ pub fn shrink_unknown_stack(
 		match section {
 			&mut elements::Section::Data(ref mut data_section) => {
 				for ref mut data_segment in data_section.entries_mut() {
-					if data_segment.offset().code() == &[elements::Opcode::I32Const(4), elements::Opcode::End] {
+					if data_segment.offset().code() == &[elements::Instruction::I32Const(4), elements::Instruction::End] {
 						assert_eq!(data_segment.value().len(), 4);
 						let current_val = LittleEndian::read_u32(data_segment.value());
 						let new_val = current_val - shrink_amount;

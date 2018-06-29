@@ -136,7 +136,7 @@ impl Stack {
 
 /// This function expects the function to be validated.
 pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, Error> {
-	use parity_wasm::elements::Opcode::*;
+	use parity_wasm::elements::Instruction::*;
 
 	let func_section = module
 		.function_section()
@@ -165,7 +165,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 		.bodies()
 		.get(func_idx as usize)
 		.ok_or_else(|| Error("Function body for the index isn't found".into()))?;
-	let opcodes = body.code();
+	let instructions = body.code();
 
 	let mut stack = Stack::new();
 	let mut max_height: u32 = 0;
@@ -186,7 +186,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 	});
 
 	loop {
-		if pc >= opcodes.elements().len() {
+		if pc >= instructions.elements().len() {
 			break;
 		}
 
@@ -197,7 +197,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 			max_height = stack.height();
 		}
 
-		let opcode = &opcodes.elements()[pc];
+		let opcode = &instructions.elements()[pc];
 		trace!(target: "max_height", "{:?}", opcode);
 
 		match *opcode {

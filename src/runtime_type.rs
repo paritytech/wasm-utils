@@ -1,5 +1,5 @@
 use parity_wasm::{elements, builder};
-use self::elements::{ Module, GlobalEntry, External, ExportEntry, GlobalType, ValueType, InitExpr, Opcode, Internal };
+use self::elements::{ Module, GlobalEntry, External, ExportEntry, GlobalType, ValueType, InitExpr, Instruction, Internal };
 use byteorder::{ LittleEndian, ByteOrder };
 
 pub fn inject_runtime_type(module: Module, runtime_type: &[u8], runtime_version: u32) -> Module {
@@ -18,9 +18,9 @@ pub fn inject_runtime_type(module: Module, runtime_type: &[u8], runtime_version:
 	let total_globals_count: u32 = globals_count + imported_globals_count;
 
 	builder::from_module(module)
-		.with_global(GlobalEntry::new(GlobalType::new(ValueType::I32, false), InitExpr::new(vec![Opcode::I32Const(runtime_type as i32), Opcode::End])))
+		.with_global(GlobalEntry::new(GlobalType::new(ValueType::I32, false), InitExpr::new(vec![Instruction::I32Const(runtime_type as i32), Instruction::End])))
 		.with_export(ExportEntry::new("RUNTIME_TYPE".into(), Internal::Global(total_globals_count)))
-		.with_global(GlobalEntry::new(GlobalType::new(ValueType::I32, false), InitExpr::new(vec![Opcode::I32Const(runtime_version as i32), Opcode::End])))
+		.with_global(GlobalEntry::new(GlobalType::new(ValueType::I32, false), InitExpr::new(vec![Instruction::I32Const(runtime_version as i32), Instruction::End])))
 		.with_export(ExportEntry::new("RUNTIME_VERSION".into(), Internal::Global(total_globals_count + 1)))
 	.build()
 }
@@ -31,7 +31,7 @@ mod tests {
 	#[test]
 	fn it_injects() {
 		let mut module = builder::module()
-			.with_global(GlobalEntry::new(GlobalType::new(ValueType::I32, false), InitExpr::new(vec![Opcode::I32Const(42 as i32)])))
+			.with_global(GlobalEntry::new(GlobalType::new(ValueType::I32, false), InitExpr::new(vec![Instruction::I32Const(42 as i32)])))
 		.build();
 		module = inject_runtime_type(module, b"emcc", 1);
 		let global_section = module.global_section().expect("Global section expected");

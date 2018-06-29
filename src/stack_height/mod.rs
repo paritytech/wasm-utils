@@ -57,7 +57,7 @@ use parity_wasm::builder;
 /// Macro to generate preamble and postamble.
 macro_rules! instrument_call {
 	($callee_idx: expr, $callee_stack_cost: expr, $stack_height_global_idx: expr, $stack_limit: expr) => {{
-		use $crate::parity_wasm::elements::Opcode::*;
+		use $crate::parity_wasm::elements::Instruction::*;
 		[
 			// stack_height += stack_cost(F)
 			GetGlobal($stack_height_global_idx),
@@ -160,7 +160,7 @@ fn generate_stack_height_global(ctx: &mut Context, module: &mut elements::Module
 		.value_type()
 		.i32()
 		.mutable()
-		.init_expr(elements::Opcode::I32Const(0))
+		.init_expr(elements::Instruction::I32Const(0))
 		.build();
 
 	// Try to find an existing global section.
@@ -268,13 +268,13 @@ fn instrument_functions(ctx: &mut Context, module: &mut elements::Module) -> Res
 /// ```
 fn instrument_function(
 	ctx: &mut Context,
-	opcodes: &mut elements::Opcodes,
+	instructions: &mut elements::Instructions,
 ) -> Result<(), Error> {
-	use parity_wasm::elements::Opcode::*;
+	use parity_wasm::elements::Instruction::*;
 
 	let mut cursor = 0;
 	loop {
-		if cursor >= opcodes.elements().len() {
+		if cursor >= instructions.elements().len() {
 			break;
 		}
 
@@ -287,8 +287,8 @@ fn instrument_function(
 		}
 
 		let action: Action = {
-			let opcode = &opcodes.elements()[cursor];
-			match *opcode {
+			let instruction = &instructions.elements()[cursor];
+			match *instruction {
 				Call(ref callee_idx) => {
 					let callee_stack_cost = ctx
 						.stack_cost(*callee_idx)
@@ -330,7 +330,7 @@ fn instrument_function(
 				//
 				// To splice actually take a place, we need to consume iterator
 				// splice returns. So we just `count()` it.
-				let _ = opcodes
+				let _ = instructions
 					.elements_mut()
 					.splice(cursor..(cursor + 1), new_seq.iter().cloned())
 					.count();

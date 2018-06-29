@@ -47,11 +47,11 @@ pub fn resolve_global(module: &elements::Module, index: u32) -> Symbol {
 	Symbol::Global(index as usize - globals as usize)
 }
 
-pub fn push_code_symbols(module: &elements::Module, opcodes: &[elements::Opcode], dest: &mut Vec<Symbol>) {
-	use parity_wasm::elements::Opcode::*;
+pub fn push_code_symbols(module: &elements::Module, instructions: &[elements::Instruction], dest: &mut Vec<Symbol>) {
+	use parity_wasm::elements::Instruction::*;
 
-	for opcode in opcodes {
-		match opcode {
+	for instruction in instructions {
+		match instruction {
 			&Call(idx) => {
 				dest.push(resolve_function(module, idx));
 			},

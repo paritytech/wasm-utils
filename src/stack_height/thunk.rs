@@ -93,17 +93,17 @@ pub(crate) fn generate_thunks(
 		//  - argument pushing
 		//  - instrumented call
 		//  - end
-		let mut thunk_body: Vec<elements::Opcode> = Vec::with_capacity(
+		let mut thunk_body: Vec<elements::Instruction> = Vec::with_capacity(
 			thunk.signature.params().len() +
 			instrumented_call.len() +
 			1
 		);
 
 		for (arg_idx, _) in thunk.signature.params().iter().enumerate() {
-			thunk_body.push(elements::Opcode::GetLocal(arg_idx as u32));
+			thunk_body.push(elements::Instruction::GetLocal(arg_idx as u32));
 		}
 		thunk_body.extend(instrumented_call.iter().cloned());
-		thunk_body.push(elements::Opcode::End);
+		thunk_body.push(elements::Instruction::End);
 
 		// TODO: Don't generate a signature, but find an existing one.
 
@@ -114,7 +114,7 @@ pub(crate) fn generate_thunks(
 					.with_return_type(thunk.signature.return_type().clone())
 					.build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						thunk_body
 					))
 					.build()
