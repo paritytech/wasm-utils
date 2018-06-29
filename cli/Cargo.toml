@@ -34,7 +34,7 @@ name = "wasm-pack"
 path = "pack/main.rs"
 
 [dependencies]
-parity-wasm = "0.30"
+parity-wasm = "0.31"
 pwasm-utils = { path = "..", version = "0.2" }
 glob = "0.2"
 clap = "2.24"

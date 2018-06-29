@@ -435,7 +435,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Instructions::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							elements::Instruction::GetGlobal(0),
 							elements::Instruction::End
@@ -477,7 +477,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Instructions::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							elements::Instruction::GetGlobal(1),
 							elements::Instruction::End
@@ -510,7 +510,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Instructions::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							elements::Instruction::Call(1),
 							elements::Instruction::End
@@ -563,7 +563,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Instructions::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							elements::Instruction::CallIndirect(1, 0),
 							elements::Instruction::End

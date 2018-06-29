@@ -271,7 +271,7 @@ mod tests {
 
 	#[test]
 	fn simple_grow() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -280,7 +280,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							GetGlobal(0),
 							GrowMemory(0),
@@ -326,7 +326,7 @@ mod tests {
 
 	#[test]
 	fn grow_no_gas_no_track() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -335,7 +335,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							GetGlobal(0),
 							GrowMemory(0),
@@ -369,7 +369,7 @@ mod tests {
 
 	#[test]
 	fn simple() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -378,7 +378,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							GetGlobal(0),
 							End
@@ -405,7 +405,7 @@ mod tests {
 
 	#[test]
 	fn nested() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -414,7 +414,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							GetGlobal(0),
 							Block(elements::BlockType::NoResult),
@@ -455,7 +455,7 @@ mod tests {
 
 	#[test]
 	fn ifelse() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -464,7 +464,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							GetGlobal(0),
 							If(elements::BlockType::NoResult),
@@ -513,7 +513,7 @@ mod tests {
 
 	#[test]
 	fn call_index() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -526,7 +526,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							Call(0),
 							If(elements::BlockType::NoResult),
@@ -576,7 +576,7 @@ mod tests {
 
 	#[test]
 	fn forbidden() {
-		use parity_wasm::elements::Opcode::*;
+		use parity_wasm::elements::Instruction::*;
 
 		let module = builder::module()
 			.global()
@@ -585,7 +585,7 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_instructions(elements::Instructions::new(
 						vec![
 							F32Const(555555),
 							End

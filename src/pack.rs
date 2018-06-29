@@ -249,7 +249,7 @@ mod test {
             .function()
                 .signature().build()
                 .body()
-                    .with_opcodes(elements::Instructions::new(
+                    .with_instructions(elements::Instructions::new(
                         vec![
                             elements::Instruction::End
                         ]
@@ -259,7 +259,7 @@ mod test {
             .function()
                 .signature().build()
                 .body()
-                    .with_opcodes(elements::Instructions::new(
+                    .with_instructions(elements::Instructions::new(
                         vec![
                             elements::Instruction::End
                         ]
@@ -298,7 +298,7 @@ mod test {
             .function()
                 .signature().build()
                 .body()
-                    .with_opcodes(elements::Instructions::new(
+                    .with_instructions(elements::Instructions::new(
                         vec![
                             elements::Instruction::End
                         ]
@@ -308,7 +308,7 @@ mod test {
             .function()
                 .signature().build()
                 .body()
-                    .with_opcodes(elements::Instructions::new(
+                    .with_instructions(elements::Instructions::new(
                         vec![
                             elements::Instruction::End
                         ]
