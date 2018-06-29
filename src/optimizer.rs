@@ -270,10 +270,10 @@ pub fn optimize(
 }
 
 
-pub fn update_call_index(opcodes: &mut elements::Opcodes, eliminated_indices: &[usize]) {
-	use parity_wasm::elements::Opcode::*;
-	for opcode in opcodes.elements_mut().iter_mut() {
-		if let &mut Call(ref mut call_index) = opcode {
+pub fn update_call_index(instructions: &mut elements::Instructions, eliminated_indices: &[usize]) {
+	use parity_wasm::elements::Instruction::*;
+	for instruction in instructions.elements_mut().iter_mut() {
+		if let &mut Call(ref mut call_index) = instruction {
 			let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
 			trace!("rewired call {} -> call {}", *call_index, *call_index - totalle as u32);
 			*call_index -= totalle as u32;
@@ -282,10 +282,10 @@ pub fn update_call_index(opcodes: &mut elements::Opcodes, eliminated_indices: &[
 }
 
 /// Updates global references considering the _ordered_ list of eliminated indices
-pub fn update_global_index(opcodes: &mut Vec<elements::Opcode>, eliminated_indices: &[usize]) {
-	use parity_wasm::elements::Opcode::*;
-	for opcode in opcodes.iter_mut() {
-		match opcode {
+pub fn update_global_index(instructions: &mut Vec<elements::Instruction>, eliminated_indices: &[usize]) {
+	use parity_wasm::elements::Instruction::*;
+	for instruction in instructions.iter_mut() {
+		match instruction {
 			&mut GetGlobal(ref mut index) | &mut SetGlobal(ref mut index) => {
 				let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *index).count();
 				trace!("rewired global {} -> global {}", *index, *index - totalle as u32);
@@ -297,10 +297,10 @@ pub fn update_global_index(opcodes: &mut Vec<elements::Opcode>, eliminated_indic
 }
 
 /// Updates global references considering the _ordered_ list of eliminated indices
-pub fn update_type_index(opcodes: &mut elements::Opcodes, eliminated_indices: &[usize]) {
-	use parity_wasm::elements::Opcode::*;
-	for opcode in opcodes.elements_mut().iter_mut() {
-		if let &mut CallIndirect(ref mut call_index, _) = opcode {
+pub fn update_type_index(instructions: &mut elements::Instructions, eliminated_indices: &[usize]) {
+	use parity_wasm::elements::Instruction::*;
+	for instruction in instructions.elements_mut().iter_mut() {
+		if let &mut CallIndirect(ref mut call_index, _) = instruction {
 			let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
 			trace!("rewired call_indrect {} -> call_indirect {}", *call_index, *call_index - totalle as u32);
 			*call_index -= totalle as u32;
@@ -435,10 +435,10 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_opcodes(elements::Instructions::new(
 						vec![
-							elements::Opcode::GetGlobal(0),
-							elements::Opcode::End
+							elements::Instruction::GetGlobal(0),
+							elements::Instruction::End
 						]
 					))
 					.build()
@@ -477,10 +477,10 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_opcodes(elements::Instructions::new(
 						vec![
-							elements::Opcode::GetGlobal(1),
-							elements::Opcode::End
+							elements::Instruction::GetGlobal(1),
+							elements::Instruction::End
 						]
 					))
 					.build()
@@ -510,10 +510,10 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_opcodes(elements::Instructions::new(
 						vec![
-							elements::Opcode::Call(1),
-							elements::Opcode::End
+							elements::Instruction::Call(1),
+							elements::Instruction::End
 						]
 					))
 					.build()
@@ -563,10 +563,10 @@ mod tests {
 			.function()
 				.signature().param().i32().build()
 				.body()
-					.with_opcodes(elements::Opcodes::new(
+					.with_opcodes(elements::Instructions::new(
 						vec![
-							elements::Opcode::CallIndirect(1, 0),
-							elements::Opcode::End
+							elements::Instruction::CallIndirect(1, 0),
+							elements::Instruction::End
 						]
 					))
 					.build()
@@ -586,7 +586,7 @@ mod tests {
 
 		let indirect_opcode = &module.code_section().expect("code section to be generated").bodies()[0].code().elements()[0];
 		match *indirect_opcode {
-			elements::Opcode::CallIndirect(0, 0) => {},
+			elements::Instruction::CallIndirect(0, 0) => {},
 			_ => {
 				panic!(
 					"Expected call_indirect to use index 0 after optimization, since previois 0th was eliminated, but got {:?}",

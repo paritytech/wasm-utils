@@ -70,10 +70,10 @@ impl ::std::str::FromStr for InstructionType {
 }
 
 impl InstructionType {
-    pub fn op(opcode: &elements::Opcode) -> Self {
-        use parity_wasm::elements::Opcode::*;
+    pub fn op(instruction: &elements::Instruction) -> Self {
+        use parity_wasm::elements::Instruction::*;
 
-        match *opcode {
+        match *instruction {
             Unreachable => InstructionType::Unreachable,
             Nop => InstructionType::Nop,
             Block(_) => InstructionType::ControlFlow,
@@ -288,8 +288,8 @@ impl Set {
         Set { regular: regular, entries: entries, grow: 0 }
     }
 
-    pub fn process(&self, opcode: &elements::Opcode) -> Result<u32, ()>  {
-        match self.entries.get(&InstructionType::op(opcode)).map(|x| *x) {
+    pub fn process(&self, instruction: &elements::Instruction) -> Result<u32, ()>  {
+        match self.entries.get(&InstructionType::op(instruction)).map(|x| *x) {
             None | Some(Metering::Regular) => Ok(self.regular),
             Some(Metering::Forbidden) => Err(()),
             Some(Metering::Fixed(val)) => Ok(val),

@@ -3,7 +3,7 @@ use std::vec::Vec;
 use std::borrow::ToOwned;
 
 use parity_wasm::elements::{
-    self, Section, DataSection, Opcode, DataSegment, InitExpr, Internal, External,
+    self, Section, DataSection, Instruction, DataSegment, InitExpr, Internal, External,
     ImportCountType,
 };
 use parity_wasm::builder;
@@ -162,7 +162,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
     for section in ctor_module.sections_mut() {
         if let &mut Section::Data(ref mut data_section) = section {
             let (index, offset) = if let Some(ref entry) = data_section.entries().iter().last() {
-                if let Opcode::I32Const(offst) = entry.offset().code()[0] {
+                if let Instruction::I32Const(offst) = entry.offset().code()[0] {
                     let len = entry.value().len() as i32;
                     let offst = offst as i32;
                     (entry.index(), offst + (len + 4) - len % 4)
@@ -174,7 +174,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
             };
             let code_data = DataSegment::new(
                 index,
-                InitExpr::new(vec![Opcode::I32Const(offset), Opcode::End]),
+                InitExpr::new(vec![Instruction::I32Const(offset), Instruction::End]),
                 raw_module.clone()
             );
             data_section.entries_mut().push(code_data);
@@ -185,13 +185,13 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
     let mut new_module = builder::from_module(ctor_module)
         .function()
         .signature().build()
-        .body().with_opcodes(elements::Opcodes::new(
+        .body().with_instructions(elements::Instructions::new(
             vec![
-                Opcode::Call((create_func_id + ctor_import_functions) as u32),
-                Opcode::I32Const(code_data_address),
-                Opcode::I32Const(raw_module.len() as i32),
-                Opcode::Call(ret_function_id as u32),
-                Opcode::End,
+                Instruction::Call((create_func_id + ctor_import_functions) as u32),
+                Instruction::I32Const(code_data_address),
+                Instruction::I32Const(raw_module.len() as i32),
+                Instruction::Call(ret_function_id as u32),
+                Instruction::End,
             ])).build()
             .build()
         .build();
@@ -249,9 +249,9 @@ mod test {
             .function()
                 .signature().build()
                 .body()
-                    .with_opcodes(elements::Opcodes::new(
+                    .with_opcodes(elements::Instructions::new(
                         vec![
-                            elements::Opcode::End
+                            elements::Instruction::End
                         ]
                     ))
                     .build()
@@ -259,9 +259,9 @@ mod test {
             .function()
                 .signature().build()
                 .body()
-                    .with_opcodes(elements::Opcodes::new(
+                    .with_opcodes(elements::Instructions::new(
                         vec![
-                            elements::Opcode::End
+                            elements::Instruction::End
                         ]
                     ))
                     .build()
@@ -287,7 +287,7 @@ mod test {
                 .external().memory(1 as u32, Some(1 as u32))
                 .build()
             .data()
-                .offset(elements::Opcode::I32Const(16)).value(vec![0u8])
+                .offset(elements::Instruction::I32Const(16)).value(vec![0u8])
                 .build()
             .function()
                 .signature()
@@ -298,9 +298,9 @@ mod test {
             .function()
                 .signature().build()
                 .body()
-                    .with_opcodes(elements::Opcodes::new(
+                    .with_opcodes(elements::Instructions::new(
                         vec![
-                            elements::Opcode::End
+                            elements::Instruction::End
                         ]
                     ))
                     .build()
@@ -308,9 +308,9 @@ mod test {
             .function()
                 .signature().build()
                 .body()
-                    .with_opcodes(elements::Opcodes::new(
+                    .with_opcodes(elements::Instructions::new(
                         vec![
-                            elements::Opcode::End
+                            elements::Instruction::End
                         ]
                     ))
                     .build()
