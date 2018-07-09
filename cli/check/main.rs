@@ -35,6 +35,8 @@ const ALLOWED_IMPORTS: &'static [&'static str] = &[
     "value",
     "suicide",
     "panic",
+    "elog",
+    "abort"
 ];
 
 fn main() {
