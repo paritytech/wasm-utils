@@ -36,6 +36,6 @@ mod std {
 	pub use alloc::{vec, string, boxed, borrow};
 
 	pub mod collections {
-		pub use alloc::{BTreeMap, BTreeSet};
+		pub use alloc::collections::{BTreeMap, BTreeSet};
 	}
 }
