@@ -13,6 +13,28 @@ fn fail(msg: &str) -> ! {
 
 const ALLOWED_IMPORTS: &'static [&'static str] = &[
     "ret",
+    "storage_read",
+    "storage_write",
+    "balance",
+    "sender",
+    "origin",
+    "fetch_input",
+    "input_length",
+    "ccall",
+    "dcall",
+    "scall",
+    "create",
+    "balance",
+    "blockhash",
+    "blocknumber",
+    "coinbase",
+    "timestamp",
+    "difficulty",
+    "gaslimit",
+    "address",
+    "value",
+    "suicide",
+    "panic",
 ];
 
 fn main() {
