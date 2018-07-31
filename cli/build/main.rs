@@ -14,8 +14,7 @@ use std::path::PathBuf;
 
 use clap::{App, Arg};
 use parity_wasm::elements;
-
-use utils::{CREATE_SYMBOL, CALL_SYMBOL, ununderscore_funcs, externalize_mem, shrink_unknown_stack};
+use utils::{build, BuildError, Target};
 
 #[derive(Debug)]
 pub enum Error {
@@ -23,38 +22,18 @@ pub enum Error {
 	FailedToCopy(String),
 	Decoding(elements::Error, String),
 	Encoding(elements::Error),
-	Packing(utils::PackingError),
-	Optimizer,
-}
-
-impl From<io::Error> for Error {
-	fn from(err: io::Error) -> Self {
-		Error::Io(err)
-	}
-}
-
-impl From<utils::OptimizerError> for Error {
-	fn from(_err: utils::OptimizerError) -> Self {
-		Error::Optimizer
-	}
-}
-
-impl From<utils::PackingError> for Error {
-	fn from(err: utils::PackingError) -> Self {
-		Error::Packing(err)
-	}
+	Build(BuildError)
 }
 
 impl std::fmt::Display for Error {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-		use Error::*;
+		use self::Error::*;
 		match *self {
 			Io(ref io) => write!(f, "Generic i/o error: {}", io),
 			FailedToCopy(ref msg) => write!(f, "{}. Have you tried to run \"cargo build\"?", msg),
 			Decoding(ref err, ref file) => write!(f, "Decoding error ({}). Must be a valid wasm file {}. Pointed wrong file?", err, file),
 			Encoding(ref err) => write!(f, "Encoding error ({}). Almost impossible to happen, no free disk space?", err),
-			Optimizer => write!(f, "Optimization error due to missing export section. Pointed wrong file?"),
-			Packing(ref e) => write!(f, "Packing failed due to module structure error: {}. Sure used correct libraries for building contracts?", e),
+			Build(ref err) => write!(f, "Build error: {}", err)
 		}
 	}
 }
@@ -70,8 +49,8 @@ pub fn process_output(input: &source::SourceInput) -> Result<(), Error> {
 	let wasm_name = input.bin_name().to_string().replace("-", "_");
 	cargo_path.push(
 		match input.target() {
-			source::SourceTarget::Emscripten => source::EMSCRIPTEN_TRIPLET,
-			source::SourceTarget::Unknown => source::UNKNOWN_TRIPLET,
+			Target::Emscripten => source::EMSCRIPTEN_TRIPLET,
+			Target::Unknown => source::UNKNOWN_TRIPLET,
 		}
 	);
 	cargo_path.push("release");
@@ -85,14 +64,6 @@ pub fn process_output(input: &source::SourceInput) -> Result<(), Error> {
 		))?;
 
 	Ok(())
-}
-
-fn has_ctor(module: &elements::Module) -> bool {
-	if let Some(ref section) = module.export_section() {
-		section.entries().iter().any(|e| CREATE_SYMBOL == e.field())
-	} else {
-		false
-	}
 }
 
 fn do_main() -> Result<(), Error> {
@@ -166,71 +137,37 @@ fn do_main() -> Result<(), Error> {
 
 	let path = wasm_path(&source_input);
 
-	let mut module = parity_wasm::deserialize_file(&path)
+	let module = parity_wasm::deserialize_file(&path)
 		.map_err(|e| Error::Decoding(e, path.to_string()))?;
 
-	if let source::SourceTarget::Emscripten = source_input.target() {
-		module = ununderscore_funcs(module);
-	}
-
-	if let source::SourceTarget::Unknown = source_input.target() {
-		// 49152 is 48kb!
-		if matches.is_present("enforce_stack_adjustment") {
-			let stack_size: u32 = matches.value_of("shrink_stack").unwrap_or_else(|| "49152").parse().expect("New stack size is not valid u32");
-			assert!(stack_size <= 1024*1024);
-			let (new_module, new_stack_top) = shrink_unknown_stack(module, 1024 * 1024 - stack_size);
-			module = new_module;
-			let mut stack_top_page = new_stack_top / 65536;
-			if new_stack_top % 65536 > 0 { stack_top_page += 1 };
-			module = externalize_mem(module, Some(stack_top_page), 16);
-		} else {
-			module = externalize_mem(module, None, 16);
-		}
-	}
-
-	if let Some(runtime_type) = matches.value_of("runtime_type") {
-		let runtime_type: &[u8] = runtime_type.as_bytes();
-		if runtime_type.len() != 4 {
+	let (runtime_type, runtime_version) = if let (Some(runtime_type), Some(runtime_version)) = (matches.value_of("runtime_type"), matches.value_of("runtime_version")) {
+		let ty: &[u8] = runtime_type.as_bytes();
+		if ty.len() != 4 {
 			panic!("--runtime-type should be equal to 4 bytes");
 		}
-		let runtime_version: u32 = matches.value_of("runtime_version").unwrap_or("1").parse()
+		let version: u32 = runtime_version.parse()
 			.expect("--runtime-version should be a positive integer");
-		module = utils::inject_runtime_type(module, &runtime_type, runtime_version);
-	}
+		(Some(ty), Some(version))
+	} else {
+		(None, None)
+	};
 
-	let mut ctor_module = module.clone();
-
-	let mut public_api_entries = matches.value_of("public_api")
+	let public_api_entries = matches.value_of("public_api")
 		.map(|val| val.split(",").collect())
 		.unwrap_or(Vec::new());
-	public_api_entries.push(CALL_SYMBOL);
-	if !matches.is_present("skip_optimization") {
-		utils::optimize(
-			&mut module,
-			public_api_entries,
-		)?;
-	}
 
-	if let Some(save_raw_path) = matches.value_of("save_raw") {
-		parity_wasm::serialize_to_file(save_raw_path, module.clone()).map_err(Error::Encoding)?;
-	}
+	let module = build(
+		module,
+		true,
+		source_input.target(),
+		runtime_type, runtime_version,
+		public_api_entries,
+		matches.is_present("enforce_stack_adjustment"),
+		matches.value_of("shrink_stack").unwrap_or_else(|| "49152").parse()
+			.expect("New stack size is not valid u32"),
+		matches.is_present("skip_optimization")).map_err(Error::Build)?;
 
-	let raw_module = parity_wasm::serialize(module).map_err(Error::Encoding)?;
-
-	// If module has an exported function with name=CREATE_SYMBOL
-	// build will pack the module (raw_module) into this funciton and export as CALL_SYMBOL.
-	// Otherwise it will just save an optimised raw_module
-	if has_ctor(&ctor_module) {
-		if !matches.is_present("skip_optimization") {
-			utils::optimize(&mut ctor_module, vec![CREATE_SYMBOL])?;
-		}
-		let ctor_module = utils::pack_instance(raw_module, ctor_module)?;
-		parity_wasm::serialize_to_file(&path, ctor_module).map_err(Error::Encoding)?;
-	} else {
-		let mut file = fs::File::create(&path)?;
-		file.write_all(&raw_module)?;
-	}
-
+	parity_wasm::serialize_to_file(&path, module).map_err(Error::Encoding)?;
 	Ok(())
 }
 

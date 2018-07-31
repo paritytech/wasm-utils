@@ -15,6 +15,7 @@ pub static RET_SYMBOL: &'static str = "ret";
 
 pub mod rules;
 
+mod build;
 mod optimizer;
 mod gas;
 mod symbols;
@@ -24,6 +25,7 @@ mod runtime_type;
 
 pub mod stack_height;
 
+pub use build::{build, Target, Error as BuildError};
 pub use optimizer::{optimize, Error as OptimizerError};
 pub use gas::inject_gas_counter;
 pub use ext::{externalize, externalize_mem, underscore_funcs, ununderscore_funcs, shrink_unknown_stack};
