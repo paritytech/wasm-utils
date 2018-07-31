@@ -9,7 +9,6 @@ extern crate pwasm_utils_cli as logger;
 mod source;
 
 use std::{fs, io};
-use std::io::Write;
 use std::path::PathBuf;
 
 use clap::{App, Arg};
@@ -156,7 +155,7 @@ fn do_main() -> Result<(), Error> {
 		.map(|val| val.split(",").collect())
 		.unwrap_or(Vec::new());
 
-	let module = build(
+	let (module, ctor_module) = build(
 		module,
 		true,
 		source_input.target(),
@@ -167,7 +166,14 @@ fn do_main() -> Result<(), Error> {
 			.expect("New stack size is not valid u32"),
 		matches.is_present("skip_optimization")).map_err(Error::Build)?;
 
-	parity_wasm::serialize_to_file(&path, module).map_err(Error::Encoding)?;
+	if let Some(save_raw_path) = matches.value_of("save_raw") {
+		parity_wasm::serialize_to_file(save_raw_path, module.clone()).map_err(Error::Encoding)?;
+	}
+
+	parity_wasm::serialize_to_file(
+		&path,
+		ctor_module.expect("ctor_module shouldn't be None, b/c 'constructor' argument is set to true in build")
+	).map_err(Error::Encoding)?;
 	Ok(())
 }
 

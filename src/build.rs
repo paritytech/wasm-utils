@@ -17,7 +17,6 @@ use parity_wasm::elements;
 
 #[derive(Debug)]
 pub enum Error {
-	Decoding(elements::Error, String),
 	Encoding(elements::Error),
 	Packing(PackingError),
 	NoCreateSymbolFound,
@@ -46,8 +45,7 @@ impl std::fmt::Display for Error {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
 		use self::Error::*;
 		match *self {
-			Decoding(ref err, ref file) => write!(f, "Decoding error ({}). Must be a valid wasm file {}. Pointed wrong file?", err, file),
-			Encoding(ref err) => write!(f, "Encoding error ({}). Almost impossible to happen, no free disk space?", err),
+			Encoding(ref err) => write!(f, "Encoding error ({})", err),
 			Optimizer => write!(f, "Optimization error due to missing export section. Pointed wrong file?"),
 			Packing(ref e) => write!(f, "Packing failed due to module structure error: {}. Sure used correct libraries for building contracts?", e),
 			NoCreateSymbolFound => write!(f, "Packing failed: no \"{}\" symbol found?", CREATE_SYMBOL),
@@ -72,7 +70,7 @@ pub fn build(
 	mut public_api_entries: Vec<&str>,
 	enforce_stack_adjustment: bool,
 	stack_size: u32,
-	skip_optimization: bool) -> Result<elements::Module, Error> {
+	skip_optimization: bool) -> Result<(elements::Module, Option<elements::Module>), Error> {
 
 	if let Target::Emscripten = target {
 		module = ununderscore_funcs(module);
@@ -115,9 +113,9 @@ pub fn build(
 		}
 		let ctor_module =
 			pack_instance(
-				parity_wasm::serialize(module).map_err(Error::Encoding)?, ctor_module.clone())?;
-		Ok(ctor_module)
+				parity_wasm::serialize(module.clone()).map_err(Error::Encoding)?, ctor_module.clone())?;
+		Ok((module, Some(ctor_module)))
 	} else {
-		Ok(module)
+		Ok((module, None))
 	}
 }
