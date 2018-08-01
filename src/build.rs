@@ -9,7 +9,7 @@ use super::{
 	shrink_unknown_stack,
 	inject_runtime_type,
 	PackingError,
-	OptimizerError
+	OptimizerError,
 };
 use parity_wasm;
 use parity_wasm::elements;
@@ -69,7 +69,7 @@ pub fn build(
 	public_api_entries: &[&str],
 	enforce_stack_adjustment: bool,
 	stack_size: u32,
-	skip_optimization: bool
+	skip_optimization: bool,
 ) -> Result<(elements::Module, Option<elements::Module>), Error> {
 
 	if let SourceTarget::Emscripten = source_target {

@@ -21,7 +21,7 @@ pub enum Error {
 	FailedToCopy(String),
 	Decoding(elements::Error, String),
 	Encoding(elements::Error),
-	Build(BuildError)
+	Build(BuildError),
 }
 
 impl std::fmt::Display for Error {
