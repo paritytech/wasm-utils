@@ -3,7 +3,7 @@
 pub const UNKNOWN_TRIPLET: &str = "wasm32-unknown-unknown";
 pub const EMSCRIPTEN_TRIPLET: &str = "wasm32-unknown-emscripten";
 
-use utils::Target;
+use utils::SourceTarget;
 
 /// Configuration of previous build step (cargo compilation)
 #[derive(Debug)]
@@ -11,7 +11,7 @@ pub struct SourceInput<'a> {
 	target_dir: &'a str,
 	bin_name: &'a str,
 	final_name: &'a str,
-	target: Target,
+	target: SourceTarget,
 }
 
 impl<'a> SourceInput<'a> {
@@ -20,17 +20,17 @@ impl<'a> SourceInput<'a> {
 			target_dir: target_dir,
 			bin_name: bin_name,
 			final_name: bin_name,
-			target: Target::Emscripten,
+			target: SourceTarget::Emscripten,
 		}
 	}
 
 	pub fn unknown(mut self) -> Self {
-		self.target = Target::Unknown;
+		self.target = SourceTarget::Unknown;
 		self
 	}
 
 	pub fn emscripten(mut self) -> Self {
-		self.target = Target::Emscripten;
+		self.target = SourceTarget::Emscripten;
 		self
 	}
 
@@ -51,7 +51,7 @@ impl<'a> SourceInput<'a> {
 		self.final_name
 	}
 
-	pub fn target(&self) -> Target {
+	pub fn target(&self) -> SourceTarget {
 		self.target
 	}
 }

@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use clap::{App, Arg};
 use parity_wasm::elements;
-use utils::{build, BuildError, Target};
+use utils::{build, BuildError, SourceTarget};
 
 #[derive(Debug)]
 pub enum Error {
@@ -48,8 +48,8 @@ pub fn process_output(input: &source::SourceInput) -> Result<(), Error> {
 	let wasm_name = input.bin_name().to_string().replace("-", "_");
 	cargo_path.push(
 		match input.target() {
-			Target::Emscripten => source::EMSCRIPTEN_TRIPLET,
-			Target::Unknown => source::UNKNOWN_TRIPLET,
+			SourceTarget::Emscripten => source::EMSCRIPTEN_TRIPLET,
+			SourceTarget::Unknown => source::UNKNOWN_TRIPLET,
 		}
 	);
 	cargo_path.push("release");

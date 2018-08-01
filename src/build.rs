@@ -35,7 +35,7 @@ impl From<PackingError> for Error {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Target {
+pub enum SourceTarget {
 	Emscripten,
 	Unknown,
 }
@@ -63,7 +63,7 @@ fn has_ctor(module: &elements::Module) -> bool {
 pub fn build(
 	mut module: elements::Module,
 	constructor: bool,
-	target: Target,
+	source_target: SourceTarget,
 	runtime_type: Option<[u8; 4]>,
 	runtime_version: Option<u32>,
 	public_api_entries: &[&str],
@@ -72,11 +72,11 @@ pub fn build(
 	skip_optimization: bool
 ) -> Result<(elements::Module, Option<elements::Module>), Error> {
 
-	if let Target::Emscripten = target {
+	if let SourceTarget::Emscripten = source_target {
 		module = ununderscore_funcs(module);
 	}
 
-	if let Target::Unknown = target {
+	if let SourceTarget::Unknown = source_target {
 		// 49152 is 48kb!
 		if enforce_stack_adjustment {
 			assert!(stack_size <= 1024*1024);
