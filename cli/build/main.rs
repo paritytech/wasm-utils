@@ -164,7 +164,8 @@ fn do_main() -> Result<(), Error> {
 		matches.is_present("enforce_stack_adjustment"),
 		matches.value_of("shrink_stack").unwrap_or_else(|| "49152").parse()
 			.expect("New stack size is not valid u32"),
-		matches.is_present("skip_optimization")).map_err(Error::Build)?;
+		matches.is_present("skip_optimization"),
+	).map_err(Error::Build)?;
 
 	if let Some(save_raw_path) = matches.value_of("save_raw") {
 		parity_wasm::serialize_to_file(save_raw_path, module.clone()).map_err(Error::Encoding)?;
@@ -172,7 +173,7 @@ fn do_main() -> Result<(), Error> {
 
 	parity_wasm::serialize_to_file(
 		&path,
-		ctor_module.expect("ctor_module shouldn't be None, b/c 'constructor' argument is set to true in build")
+		ctor_module.expect("ctor_module can't be None, because 'constructor' argument is set to true in build"),
 	).map_err(Error::Encoding)?;
 	Ok(())
 }

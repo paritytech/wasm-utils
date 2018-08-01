@@ -10,10 +10,9 @@ use super::{
 	inject_runtime_type,
 	PackingError,
 	OptimizerError
-	};
+};
 use parity_wasm;
 use parity_wasm::elements;
-
 
 #[derive(Debug)]
 pub enum Error {
@@ -70,7 +69,8 @@ pub fn build(
 	mut public_api_entries: Vec<&str>,
 	enforce_stack_adjustment: bool,
 	stack_size: u32,
-	skip_optimization: bool) -> Result<(elements::Module, Option<elements::Module>), Error> {
+	skip_optimization: bool
+) -> Result<(elements::Module, Option<elements::Module>), Error> {
 
 	if let Target::Emscripten = target {
 		module = ununderscore_funcs(module);
@@ -111,9 +111,10 @@ pub fn build(
 		if !skip_optimization {
 			optimize(&mut ctor_module, vec![CREATE_SYMBOL])?;
 		}
-		let ctor_module =
-			pack_instance(
-				parity_wasm::serialize(module.clone()).map_err(Error::Encoding)?, ctor_module.clone())?;
+		let ctor_module = pack_instance(
+			parity_wasm::serialize(module.clone()).map_err(Error::Encoding)?,
+			ctor_module.clone(),
+		)?;
 		Ok((module, Some(ctor_module)))
 	} else {
 		Ok((module, None))
