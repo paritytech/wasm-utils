@@ -2,7 +2,7 @@ use parity_wasm::{elements, builder};
 use self::elements::{ Module, GlobalEntry, External, ExportEntry, GlobalType, ValueType, InitExpr, Instruction, Internal };
 use byteorder::{ LittleEndian, ByteOrder };
 
-pub fn inject_runtime_type(module: Module, runtime_type: &[u8], runtime_version: u32) -> Module {
+pub fn inject_runtime_type(module: Module, runtime_type: [u8; 4], runtime_version: u32) -> Module {
 	let runtime_type: u32 = LittleEndian::read_u32(&runtime_type);
 	let globals_count: u32 = match module.global_section() {
 		Some(ref section) => section.entries().len() as u32,
@@ -33,7 +33,9 @@ mod tests {
 		let mut module = builder::module()
 			.with_global(GlobalEntry::new(GlobalType::new(ValueType::I32, false), InitExpr::new(vec![Instruction::I32Const(42 as i32)])))
 		.build();
-		module = inject_runtime_type(module, b"emcc", 1);
+		let mut runtime_type: [u8; 4] = Default::default();
+		runtime_type.copy_from_slice(b"emcc");
+		module = inject_runtime_type(module, runtime_type, 1);
 		let global_section = module.global_section().expect("Global section expected");
 		assert_eq!(3, global_section.entries().len());
 		let export_section = module.export_section().expect("Export section expected");

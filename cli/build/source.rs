@@ -3,12 +3,7 @@
 pub const UNKNOWN_TRIPLET: &str = "wasm32-unknown-unknown";
 pub const EMSCRIPTEN_TRIPLET: &str = "wasm32-unknown-emscripten";
 
-/// Target configiration of previous build step
-#[derive(Debug, Clone, Copy)]
-pub enum SourceTarget {
-	Emscripten,
-	Unknown,
-}
+use utils::SourceTarget;
 
 /// Configuration of previous build step (cargo compilation)
 #[derive(Debug)]
