@@ -64,9 +64,9 @@ pub fn build(
 	mut module: elements::Module,
 	constructor: bool,
 	target: Target,
-	runtime_type: Option<&[u8]>,
+	runtime_type: Option<[u8; 4]>,
 	runtime_version: Option<u32>,
-	mut public_api_entries: Vec<&str>,
+	public_api_entries: &[&str],
 	enforce_stack_adjustment: bool,
 	stack_size: u32,
 	skip_optimization: bool
@@ -90,12 +90,13 @@ pub fn build(
 		}
 	}
 
-	if let (Some(ref runtime_type), Some(runtime_version)) = (runtime_type, runtime_version) {
+	if let (Some(runtime_type), Some(runtime_version)) = (runtime_type, runtime_version) {
 		module = inject_runtime_type(module, runtime_type, runtime_version);
 	}
 
 	let mut ctor_module = module.clone();
 
+	let mut public_api_entries = public_api_entries.to_vec();
 	public_api_entries.push(CALL_SYMBOL);
 	if !skip_optimization {
 		optimize(

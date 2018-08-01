@@ -140,10 +140,12 @@ fn do_main() -> Result<(), Error> {
 		.map_err(|e| Error::Decoding(e, path.to_string()))?;
 
 	let (runtime_type, runtime_version) = if let (Some(runtime_type), Some(runtime_version)) = (matches.value_of("runtime_type"), matches.value_of("runtime_version")) {
-		let ty: &[u8] = runtime_type.as_bytes();
-		if ty.len() != 4 {
+		let mut ty: [u8; 4] = Default::default();
+		let runtime_bytes = runtime_type.as_bytes();
+		if runtime_bytes.len() != 4 {
 			panic!("--runtime-type should be equal to 4 bytes");
 		}
+		ty.copy_from_slice(runtime_bytes);
 		let version: u32 = runtime_version.parse()
 			.expect("--runtime-version should be a positive integer");
 		(Some(ty), Some(version))
@@ -160,7 +162,7 @@ fn do_main() -> Result<(), Error> {
 		true,
 		source_input.target(),
 		runtime_type, runtime_version,
-		public_api_entries,
+		&public_api_entries,
 		matches.is_present("enforce_stack_adjustment"),
 		matches.value_of("shrink_stack").unwrap_or_else(|| "49152").parse()
 			.expect("New stack size is not valid u32"),
