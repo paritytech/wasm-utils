@@ -139,7 +139,8 @@ fn do_main() -> Result<(), Error> {
 	let module = parity_wasm::deserialize_file(&path)
 		.map_err(|e| Error::Decoding(e, path.to_string()))?;
 
-	let (runtime_type, runtime_version) = if let (Some(runtime_type), Some(runtime_version)) = (matches.value_of("runtime_type"), matches.value_of("runtime_version")) {
+	let runtime_type_version = if let (Some(runtime_type), Some(runtime_version))
+		 = (matches.value_of("runtime_type"), matches.value_of("runtime_version")) {
 		let mut ty: [u8; 4] = Default::default();
 		let runtime_bytes = runtime_type.as_bytes();
 		if runtime_bytes.len() != 4 {
@@ -148,9 +149,9 @@ fn do_main() -> Result<(), Error> {
 		ty.copy_from_slice(runtime_bytes);
 		let version: u32 = runtime_version.parse()
 			.expect("--runtime-version should be a positive integer");
-		(Some(ty), Some(version))
+		Some((ty, version))
 	} else {
-		(None, None)
+		None
 	};
 
 	let public_api_entries = matches.value_of("public_api")
@@ -161,7 +162,7 @@ fn do_main() -> Result<(), Error> {
 		module,
 		true,
 		source_input.target(),
-		runtime_type, runtime_version,
+		runtime_type_version,
 		&public_api_entries,
 		matches.is_present("enforce_stack_adjustment"),
 		matches.value_of("shrink_stack").unwrap_or_else(|| "49152").parse()

@@ -64,8 +64,7 @@ pub fn build(
 	mut module: elements::Module,
 	constructor: bool,
 	source_target: SourceTarget,
-	runtime_type: Option<[u8; 4]>,
-	runtime_version: Option<u32>,
+	runtime_type_version: Option<([u8; 4], u32)>,
 	public_api_entries: &[&str],
 	enforce_stack_adjustment: bool,
 	stack_size: u32,
@@ -90,7 +89,8 @@ pub fn build(
 		}
 	}
 
-	if let (Some(runtime_type), Some(runtime_version)) = (runtime_type, runtime_version) {
+	if let Some(runtime_type_version) = runtime_type_version {
+		let (runtime_type, runtime_version) = runtime_type_version;
 		module = inject_runtime_type(module, runtime_type, runtime_version);
 	}
 
