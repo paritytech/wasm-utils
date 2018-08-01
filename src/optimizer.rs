@@ -558,7 +558,7 @@ mod tests {
 				.signature().param().i32().param().i32().build()
 				.build()
 			.function()
-				.signature().param().i32().param().i32().build()
+				.signature().param().i32().param().i32().param().i32().build()
 				.build()
 			.function()
 				.signature().param().i32().build()

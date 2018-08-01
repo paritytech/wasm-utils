@@ -2,9 +2,6 @@
   (type (;0;) (func))
   (type (;1;) (func (param i32)))
   (type (;2;) (func (param i32 i32) (result i32)))
-  (type (;3;) (func (param i32 i32) (result i32)))
-  (type (;4;) (func (param i32)))
-  (type (;5;) (func (param i32 i32) (result i32)))
   (import "env" "foo" (func (;0;) (type 0)))
   (func (;1;) (type 1) (param i32)
     get_local 0
@@ -29,7 +26,7 @@
     get_local 0
     get_local 1
     i32.add)
-  (func (;3;) (type 3) (param i32 i32) (result i32)
+  (func (;3;) (type 2) (param i32 i32) (result i32)
     get_local 0
     get_local 1
     get_global 0
@@ -47,7 +44,7 @@
     i32.const 2
     i32.sub
     set_global 0)
-  (func (;4;) (type 4) (param i32)
+  (func (;4;) (type 1) (param i32)
     get_local 0
     get_global 0
     i32.const 2
@@ -64,7 +61,7 @@
     i32.const 2
     i32.sub
     set_global 0)
-  (func (;5;) (type 5) (param i32 i32) (result i32)
+  (func (;5;) (type 2) (param i32 i32) (result i32)
     get_local 0
     get_local 1
     get_global 0
