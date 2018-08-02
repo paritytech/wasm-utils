@@ -25,7 +25,7 @@ mod runtime_type;
 
 pub mod stack_height;
 
-pub use build::{build, SourceTarget, Error as BuildError};
+pub use build::{build, build_with_constructor, build_raw, SourceTarget, Error as BuildError};
 pub use optimizer::{optimize, Error as OptimizerError};
 pub use gas::inject_gas_counter;
 pub use ext::{externalize, externalize_mem, underscore_funcs, ununderscore_funcs, shrink_unknown_stack};

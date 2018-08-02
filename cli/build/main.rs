@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use clap::{App, Arg};
 use parity_wasm::elements;
-use utils::{build, BuildError, SourceTarget};
+use utils::{build_with_constructor, BuildError, SourceTarget};
 
 #[derive(Debug)]
 pub enum Error {
@@ -158,9 +158,8 @@ fn do_main() -> Result<(), Error> {
 		.map(|val| val.split(",").collect())
 		.unwrap_or(Vec::new());
 
-	let (module, ctor_module) = build(
+	let (module, ctor_module) = build_with_constructor(
 		module,
-		true,
 		source_input.target(),
 		runtime_type_version,
 		&public_api_entries,
@@ -174,10 +173,7 @@ fn do_main() -> Result<(), Error> {
 		parity_wasm::serialize_to_file(save_raw_path, module.clone()).map_err(Error::Encoding)?;
 	}
 
-	parity_wasm::serialize_to_file(
-		&path,
-		ctor_module.expect("ctor_module can't be None, because 'constructor' argument is set to true in build"),
-	).map_err(Error::Encoding)?;
+	parity_wasm::serialize_to_file(&path, ctor_module,).map_err(Error::Encoding)?;
 	Ok(())
 }
 
