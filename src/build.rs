@@ -60,6 +60,57 @@ fn has_ctor(module: &elements::Module) -> bool {
 	}
 }
 
+pub fn build_with_constructor(
+	module: elements::Module,
+	source_target: SourceTarget,
+	runtime_type_version: Option<([u8; 4], u32)>,
+	public_api_entries: &[&str],
+	enforce_stack_adjustment: bool,
+	stack_size: u32,
+	skip_optimization: bool,
+) -> Result<(elements::Module, elements::Module), Error> {
+	let (module, module_ctor) = build(
+		module,
+		true,
+		source_target,
+		runtime_type_version,
+		public_api_entries,
+		enforce_stack_adjustment,
+		stack_size,
+		skip_optimization,
+	)?;
+
+	Ok((
+		module,
+		module_ctor.expect(
+			"ctor_module can't be None, because \
+			'constructor' argument is set to true in build")
+	))
+}
+
+pub fn build_raw(
+	module: elements::Module,
+	source_target: SourceTarget,
+	runtime_type_version: Option<([u8; 4], u32)>,
+	public_api_entries: &[&str],
+	enforce_stack_adjustment: bool,
+	stack_size: u32,
+	skip_optimization: bool,
+) -> Result<elements::Module, Error> {
+	let (module, _) = build(
+		module,
+		false,
+		source_target,
+		runtime_type_version,
+		public_api_entries,
+		enforce_stack_adjustment,
+		stack_size,
+		skip_optimization,
+	)?;
+
+	Ok(module)
+}
+
 pub fn build(
 	mut module: elements::Module,
 	constructor: bool,
