@@ -18,7 +18,6 @@ use parity_wasm::elements;
 pub enum Error {
 	Encoding(elements::Error),
 	Packing(PackingError),
-	NoCreateSymbolFound,
 	Optimizer,
 }
 
@@ -47,7 +46,6 @@ impl std::fmt::Display for Error {
 			Encoding(ref err) => write!(f, "Encoding error ({})", err),
 			Optimizer => write!(f, "Optimization error due to missing export section. Pointed wrong file?"),
 			Packing(ref e) => write!(f, "Packing failed due to module structure error: {}. Sure used correct libraries for building contracts?", e),
-			NoCreateSymbolFound => write!(f, "Packing failed: no \"{}\" symbol found?", CREATE_SYMBOL),
 		}
 	}
 }
@@ -62,7 +60,6 @@ fn has_ctor(module: &elements::Module) -> bool {
 
 pub fn build(
 	mut module: elements::Module,
-	constructor: bool,
 	source_target: SourceTarget,
 	runtime_type_version: Option<([u8; 4], u32)>,
 	public_api_entries: &[&str],
@@ -105,10 +102,7 @@ pub fn build(
 		)?;
 	}
 
-	if constructor {
-		if !has_ctor(&ctor_module) {
-			Err(Error::NoCreateSymbolFound)?
-		}
+	if has_ctor(&ctor_module) {
 		if !skip_optimization {
 			optimize(&mut ctor_module, vec![CREATE_SYMBOL])?;
 		}
