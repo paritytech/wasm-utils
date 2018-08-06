@@ -160,7 +160,6 @@ fn do_main() -> Result<(), Error> {
 
 	let (module, ctor_module) = build(
 		module,
-		true,
 		source_input.target(),
 		runtime_type_version,
 		&public_api_entries,
@@ -174,10 +173,13 @@ fn do_main() -> Result<(), Error> {
 		parity_wasm::serialize_to_file(save_raw_path, module.clone()).map_err(Error::Encoding)?;
 	}
 
-	parity_wasm::serialize_to_file(
-		&path,
-		ctor_module.expect("ctor_module can't be None, because 'constructor' argument is set to true in build"),
-	).map_err(Error::Encoding)?;
+	if let Some(ctor_module) = ctor_module {
+		parity_wasm::serialize_to_file(
+			&path,
+			ctor_module,
+		).map_err(Error::Encoding)?;
+	}
+
 	Ok(())
 }
 
