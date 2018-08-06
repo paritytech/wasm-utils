@@ -178,6 +178,8 @@ fn do_main() -> Result<(), Error> {
 			&path,
 			ctor_module,
 		).map_err(Error::Encoding)?;
+	} else {
+		parity_wasm::serialize_to_file(&path, module).map_err(Error::Encoding)?;
 	}
 
 	Ok(())
