@@ -111,6 +111,9 @@ fn do_main() -> Result<(), Error> {
 			.help("Preserves specific imports in the library")
 			.takes_value(true)
 			.long("public-api"))
+		.arg(Arg::with_name("no_constructor")
+			.help("Do not wrap with constructor but only save an optimized module")
+			.long("no-constructor"))
 
 		.get_matches();
 
@@ -160,7 +163,7 @@ fn do_main() -> Result<(), Error> {
 
 	let (module, ctor_module) = build(
 		module,
-		true,
+		!matches.is_present("no_constructor"),
 		source_input.target(),
 		runtime_type_version,
 		&public_api_entries,
