@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use clap::{App, Arg};
 use parity_wasm::elements;
-use utils::{build, BuildError, SourceTarget};
+use utils::{build, BuildError, SourceTarget, TargetRuntime};
 
 #[derive(Debug)]
 pub enum Error {
@@ -77,6 +77,12 @@ fn do_main() -> Result<(), Error> {
 			.index(2)
 			.required(true)
 			.help("Wasm binary name"))
+		.arg(Arg::with_name("target-runtime")
+			.help("What runtime we are compiling to")
+			.long("target-runtime")
+			.takes_value(true)
+			.default_value("pwasm")
+			.possible_values(&["substrate", "pwasm"]))
 		.arg(Arg::with_name("skip_optimization")
 			.help("Skip symbol optimization step producing final wasm")
 			.long("skip-optimization"))
@@ -158,6 +164,12 @@ fn do_main() -> Result<(), Error> {
 		.map(|val| val.split(",").collect())
 		.unwrap_or(Vec::new());
 
+	let target_runtime = match matches.value_of("target-runtime").expect("target-runtime has a default value; qed") {
+		"pwasm" => TargetRuntime::pwasm(),
+		"substrate" => TargetRuntime::substrate(),
+		_ => unreachable!("all possible values are enumerated in clap config; qed"),
+	};
+
 	let (module, ctor_module) = build(
 		module,
 		source_input.target(),
@@ -167,6 +179,7 @@ fn do_main() -> Result<(), Error> {
 		matches.value_of("shrink_stack").unwrap_or_else(|| "49152").parse()
 			.expect("New stack size is not valid u32"),
 		matches.is_present("skip_optimization"),
+		&target_runtime,
 	).map_err(Error::Build)?;
 
 	if let Some(save_raw_path) = matches.value_of("save_raw") {

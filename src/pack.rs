@@ -7,7 +7,7 @@ use parity_wasm::elements::{
     ImportCountType,
 };
 use parity_wasm::builder;
-use super::{CREATE_SYMBOL, CALL_SYMBOL, RET_SYMBOL};
+use super::TargetRuntime;
 use super::gas::update_call_index;
 
 /// Pack error.
@@ -20,9 +20,9 @@ pub enum Error {
     NoTypeSection,
     NoExportSection,
     NoCodeSection,
-    InvalidCreateSignature,
-    NoCreateSymbol,
-    InvalidCreateMember,
+    InvalidCreateSignature(&'static str),
+    NoCreateSymbol(&'static str),
+    InvalidCreateMember(&'static str),
     NoImportSection,
 }
 
@@ -33,9 +33,9 @@ impl fmt::Display for Error {
             Error::NoTypeSection => write!(f, "No type section in the module"),
             Error::NoExportSection => write!(f, "No export section in the module"),
             Error::NoCodeSection => write!(f, "No code section inthe module"),
-            Error::InvalidCreateSignature => write!(f, "Exported symbol `{}` has invalid signature, should be () -> ()", CREATE_SYMBOL),
-            Error::InvalidCreateMember => write!(f, "Exported symbol `{}` should be a function", CREATE_SYMBOL),
-            Error::NoCreateSymbol => write!(f, "No exported `{}` symbol", CREATE_SYMBOL),
+            Error::InvalidCreateSignature(sym) => write!(f, "Exported symbol `{}` has invalid signature, should be () -> ()", sym),
+            Error::InvalidCreateMember(sym) => write!(f, "Exported symbol `{}` should be a function", sym),
+            Error::NoCreateSymbol(sym) => write!(f, "No exported `{}` symbol", sym),
             Error::NoImportSection => write!(f, "No import section in the module"),
         }
     }
@@ -44,7 +44,7 @@ impl fmt::Display for Error {
 /// If module has an exported "CREATE_SYMBOL" function we want to pack it into "constructor".
 /// `raw_module` is the actual contract code
 /// `ctor_module` is the constructor which should return `raw_module`
-pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> Result<elements::Module, Error> {
+pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, target: &TargetRuntime) -> Result<elements::Module, Error> {
 
     // Total number of constructor module import functions
     let ctor_import_functions = ctor_module.import_section().map(|x| x.functions()).unwrap_or(0);
@@ -53,11 +53,11 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
     // in order to find it in the Code section of the module
     let mut create_func_id = {
         let found_entry = ctor_module.export_section().ok_or(Error::NoExportSection)?.entries().iter()
-            .find(|entry| CREATE_SYMBOL == entry.field()).ok_or(Error::NoCreateSymbol)?;
+            .find(|entry| target.create_symbol == entry.field()).ok_or_else(|| Error::NoCreateSymbol(target.create_symbol))?;
 
         let function_index: usize = match found_entry.internal() {
             &Internal::Function(index) => index as usize,
-            _ => { return Err(Error::InvalidCreateMember) },
+            _ => { return Err(Error::InvalidCreateMember(target.create_symbol)) },
         };
 
         // Calculates a function index within module's function section
@@ -73,10 +73,10 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
 
         // Deploy should have no arguments and also should return nothing
         if !func.params().is_empty() {
-            return Err(Error::InvalidCreateSignature);
+            return Err(Error::InvalidCreateSignature(target.create_symbol));
         }
         if func.return_type().is_some() {
-            return Err(Error::InvalidCreateSignature);
+            return Err(Error::InvalidCreateSignature(target.create_symbol));
         }
 
         function_internal_index
@@ -87,7 +87,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
         let mut found = false;
         for entry in ctor_module.import_section().ok_or(Error::NoImportSection)?.entries().iter() {
             if let External::Function(_) = *entry.external() {
-                if entry.field() == RET_SYMBOL { found = true; break; }
+                if entry.field() == target.return_symbol { found = true; break; }
                 else { id += 1; }
             }
         }
@@ -102,7 +102,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
             mbuilder.push_import(
                 builder::import()
                     .module("env")
-                    .field("ret")
+                    .field(&target.return_symbol)
                     .external().func(import_sig)
                     .build()
                 );
@@ -199,9 +199,9 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module) -> 
     for section in new_module.sections_mut() {
         if let &mut Section::Export(ref mut export_section) = section {
             for entry in export_section.entries_mut().iter_mut() {
-                if CREATE_SYMBOL == entry.field() {
-                    // change "CREATE_SYMBOL" export name into default "CALL_SYMBOL"
-                    *entry.field_mut() = CALL_SYMBOL.to_owned();
+                if target.create_symbol == entry.field() {
+                    // change `create_symbol` export name into default `call_symbol`.
+                    *entry.field_mut() = target.call_symbol.to_owned();
                     *entry.internal_mut() = elements::Internal::Function(last_function_index as u32);
                 }
             }
@@ -219,13 +219,13 @@ mod test {
     use super::*;
     use super::super::optimize;
 
-    fn test_packer(mut module: elements::Module) {
+    fn test_packer(mut module: elements::Module, target_runtime: &TargetRuntime) {
         let mut ctor_module = module.clone();
-        optimize(&mut module, vec![CALL_SYMBOL]).expect("Optimizer to finish without errors");
-        optimize(&mut ctor_module, vec![CREATE_SYMBOL]).expect("Optimizer to finish without errors");
+        optimize(&mut module, vec![target_runtime.call_symbol]).expect("Optimizer to finish without errors");
+        optimize(&mut ctor_module, vec![target_runtime.create_symbol]).expect("Optimizer to finish without errors");
 
         let raw_module = parity_wasm::serialize(module).unwrap();
-        let ctor_module = pack_instance(raw_module.clone(), ctor_module).expect("Packing failed");
+        let ctor_module = pack_instance(raw_module.clone(), ctor_module, target_runtime).expect("Packing failed");
 
         let data_section = ctor_module.data_section().expect("Packed module has to have a data section");
         let data_segment = data_section.entries().iter().last().expect("Packed module has to have a data section with at least one entry");
@@ -234,6 +234,8 @@ mod test {
 
     #[test]
     fn no_data_section() {
+		let target_runtime = TargetRuntime::pwasm();
+
         test_packer(builder::module()
             .import()
                 .module("env")
@@ -267,19 +269,22 @@ mod test {
                     .build()
             .build()
             .export()
-                .field(CALL_SYMBOL)
+                .field(target_runtime.call_symbol)
                 .internal().func(1)
             .build()
             .export()
-                .field(CREATE_SYMBOL)
+                .field(target_runtime.create_symbol)
                 .internal().func(2)
             .build()
-        .build()
+        .build(),
+			&target_runtime,
         );
     }
 
     #[test]
     fn with_data_section() {
+		let target_runtime = TargetRuntime::pwasm();
+
         test_packer(builder::module()
             .import()
                 .module("env")
@@ -316,14 +321,15 @@ mod test {
                     .build()
             .build()
             .export()
-                .field(CALL_SYMBOL)
+                .field(target_runtime.call_symbol)
                 .internal().func(1)
             .build()
             .export()
-                .field(CREATE_SYMBOL)
+                .field(target_runtime.create_symbol)
                 .internal().func(2)
             .build()
-        .build()
+        .build(),
+			&target_runtime,
         );
     }
 }
