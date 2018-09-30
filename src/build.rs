@@ -1,7 +1,5 @@
 use std;
 use super::{
-	CREATE_SYMBOL,
-	CALL_SYMBOL,
 	optimize,
 	pack_instance,
 	ununderscore_funcs,
@@ -10,6 +8,7 @@ use super::{
 	inject_runtime_type,
 	PackingError,
 	OptimizerError,
+	TargetRuntime,
 };
 use parity_wasm;
 use parity_wasm::elements;
@@ -50,9 +49,9 @@ impl std::fmt::Display for Error {
 	}
 }
 
-fn has_ctor(module: &elements::Module) -> bool {
+fn has_ctor(module: &elements::Module, target_runtime: &TargetRuntime) -> bool {
 	if let Some(ref section) = module.export_section() {
-		section.entries().iter().any(|e| CREATE_SYMBOL == e.field())
+		section.entries().iter().any(|e| target_runtime.create_symbol == e.field())
 	} else {
 		false
 	}
@@ -66,6 +65,7 @@ pub fn build(
 	enforce_stack_adjustment: bool,
 	stack_size: u32,
 	skip_optimization: bool,
+	target_runtime: &TargetRuntime,
 ) -> Result<(elements::Module, Option<elements::Module>), Error> {
 
 	if let SourceTarget::Emscripten = source_target {
@@ -94,7 +94,7 @@ pub fn build(
 	let mut ctor_module = module.clone();
 
 	let mut public_api_entries = public_api_entries.to_vec();
-	public_api_entries.push(CALL_SYMBOL);
+	public_api_entries.push(target_runtime.call_symbol);
 	if !skip_optimization {
 		optimize(
 			&mut module,
@@ -102,13 +102,14 @@ pub fn build(
 		)?;
 	}
 
-	if has_ctor(&ctor_module) {
+	if has_ctor(&ctor_module, target_runtime) {
 		if !skip_optimization {
-			optimize(&mut ctor_module, vec![CREATE_SYMBOL])?;
+			optimize(&mut ctor_module, vec![target_runtime.create_symbol])?;
 		}
 		let ctor_module = pack_instance(
 			parity_wasm::serialize(module.clone()).map_err(Error::Encoding)?,
 			ctor_module.clone(),
+			target_runtime,
 		)?;
 		Ok((module, Some(ctor_module)))
 	} else {

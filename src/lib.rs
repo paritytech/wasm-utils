@@ -9,10 +9,6 @@ extern crate parity_wasm;
 extern crate byteorder;
 #[macro_use] extern crate log;
 
-pub static CREATE_SYMBOL: &'static str = "deploy";
-pub static CALL_SYMBOL: &'static str = "call";
-pub static RET_SYMBOL: &'static str = "ret";
-
 pub mod rules;
 
 mod build;
@@ -31,6 +27,30 @@ pub use gas::inject_gas_counter;
 pub use ext::{externalize, externalize_mem, underscore_funcs, ununderscore_funcs, shrink_unknown_stack};
 pub use pack::{pack_instance, Error as PackingError};
 pub use runtime_type::inject_runtime_type;
+
+pub struct TargetRuntime {
+	pub create_symbol: &'static str,
+	pub call_symbol: &'static str,
+	pub return_symbol: &'static str,
+}
+
+impl TargetRuntime {
+	pub fn substrate() -> TargetRuntime {
+		TargetRuntime {
+			create_symbol: "deploy",
+			call_symbol: "call",
+			return_symbol: "ext_return",
+		}
+	}
+
+	pub fn pwasm() -> TargetRuntime {
+		TargetRuntime {
+			create_symbol: "deploy",
+			call_symbol: "call",
+			return_symbol: "ret",
+		}
+	}
+}
 
 #[cfg(not(feature = "std"))]
 mod std {

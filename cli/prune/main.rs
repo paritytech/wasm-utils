@@ -8,6 +8,8 @@ use clap::{App, Arg};
 fn main() {
     logger::init_log();
 
+	let target_runtime = utils::TargetRuntime::pwasm();
+
     let matches = App::new("wasm-prune")
                         .arg(Arg::with_name("input")
                             .index(1)
@@ -22,12 +24,12 @@ fn main() {
                             .short("e")
                             .takes_value(true)
                             .value_name("functions")
-                            .help(&format!("Comma-separated list of exported functions to keep. Default: '{}'", utils::CALL_SYMBOL)))
+                            .help(&format!("Comma-separated list of exported functions to keep. Default: '{}'", target_runtime.call_symbol)))
                         .get_matches();
 
     let exports = matches
                     .value_of("exports")
-                    .unwrap_or(utils::CALL_SYMBOL)
+                    .unwrap_or(target_runtime.call_symbol)
                     .split(',')
                     .collect();
 

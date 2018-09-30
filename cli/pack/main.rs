@@ -8,6 +8,8 @@ use clap::{App, Arg};
 fn main() {
     logger::init_log();
 
+	let target_runtime = utils::TargetRuntime::pwasm();
+
     let matches = App::new("wasm-pack")
                         .arg(Arg::with_name("input")
                             .index(1)
@@ -27,9 +29,9 @@ fn main() {
 	let raw_module = parity_wasm::serialize(module).expect("Serialization failed");
 
     // Invoke packer
-    let mut result_module = utils::pack_instance(raw_module, ctor_module).expect("Packing failed");
+    let mut result_module = utils::pack_instance(raw_module, ctor_module, &utils::TargetRuntime::pwasm()).expect("Packing failed");
     // Optimize constructor, since it does not need everything
-    utils::optimize(&mut result_module, vec![utils::CALL_SYMBOL]).expect("Optimization failed");
+    utils::optimize(&mut result_module, vec![target_runtime.call_symbol]).expect("Optimization failed");
 
     parity_wasm::serialize_to_file(&output, result_module).expect("Serialization failed");
 }
