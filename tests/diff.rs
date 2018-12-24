@@ -88,6 +88,7 @@ macro_rules! def_stack_height_test {
 }
 
 def_stack_height_test!(simple);
+def_stack_height_test!(start);
 def_stack_height_test!(table);
 def_stack_height_test!(global);
 def_stack_height_test!(imports);

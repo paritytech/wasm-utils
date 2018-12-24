@@ -35,6 +35,8 @@ pub(crate) fn generate_thunks(
 			.elements_section()
 			.map(|es| es.entries())
 			.unwrap_or(&[]);
+		let start_func_idx = module
+			.start_section();
 
 		let exported_func_indicies = exports.iter().filter_map(|entry| match *entry.internal() {
 			Internal::Function(ref function_idx) => Some(*function_idx),
@@ -48,7 +50,7 @@ pub(crate) fn generate_thunks(
 		// Replacement map is at least export section size.
 		let mut replacement_map: Map<u32, Thunk> = Map::new();
 
-		for func_idx in exported_func_indicies.chain(table_func_indicies) {
+		for func_idx in exported_func_indicies.chain(table_func_indicies).chain(start_func_idx.into_iter()) {
 			let callee_stack_cost = ctx.stack_cost(func_idx).ok_or_else(|| {
 				Error(format!("function with idx {} isn't found", func_idx))
 			})?;
@@ -153,6 +155,9 @@ pub(crate) fn generate_thunks(
 						fixup(function_idx)
 					}
 				}
+			}
+			elements::Section::Start(ref mut start_idx) => {
+				fixup(start_idx)
 			}
 			_ => {}
 		}

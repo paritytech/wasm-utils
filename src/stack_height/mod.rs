@@ -25,11 +25,12 @@
 //! Because stack height is increased prior the call few problems arises:
 //!
 //! - Stack height isn't increased upon an entry to the first function, i.e. exported function.
+//! - Start function is executed externally (similar to exported functions).
 //! - It is statically unknown what function will be invoked in an indirect call.
 //!
 //! The solution for this problems is to generate a intermediate functions, called 'thunks', which
 //! will increase before and decrease the stack height after the call to original function, and
-//! then make exported function and table entries to point to a corresponding thunks.
+//! then make exported function and table entries, start section to point to a corresponding thunks.
 //!
 //! # Stack cost
 //!
