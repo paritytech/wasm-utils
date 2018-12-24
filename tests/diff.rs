@@ -74,21 +74,47 @@ fn run_diff_test<F: FnOnce(&[u8]) -> Vec<u8>>(test_dir: &str, name: &str, test: 
 	}
 }
 
-macro_rules! def_stack_height_test {
-	( $name:ident ) => {
-		#[test]
-		fn $name() {
-			run_diff_test("stack-height", concat!(stringify!($name), ".wat"), |input| {
-				let module = elements::deserialize_buffer(input).expect("Failed to deserialize");
-				let instrumented = utils::stack_height::inject_limiter(module, 1024).expect("Failed to instrument with stack counter");
-				elements::serialize(instrumented).expect("Failed to serialize")
-			});
-		}
-	};
+mod stack_height {
+	use super::*;
+
+	macro_rules! def_stack_height_test {
+		( $name:ident ) => {
+			#[test]
+			fn $name() {
+				run_diff_test("stack-height", concat!(stringify!($name), ".wat"), |input| {
+					let module = elements::deserialize_buffer(input).expect("Failed to deserialize");
+					let instrumented = utils::stack_height::inject_limiter(module, 1024).expect("Failed to instrument with stack counter");
+					elements::serialize(instrumented).expect("Failed to serialize")
+				});
+			}
+		};
+	}
+
+	def_stack_height_test!(simple);
+	def_stack_height_test!(start);
+	def_stack_height_test!(table);
+	def_stack_height_test!(global);
+	def_stack_height_test!(imports);
 }
 
-def_stack_height_test!(simple);
-def_stack_height_test!(start);
-def_stack_height_test!(table);
-def_stack_height_test!(global);
-def_stack_height_test!(imports);
+mod gas {
+	use super::*;
+
+	macro_rules! def_gas_test {
+		( $name:ident ) => {
+			#[test]
+			fn $name() {
+				run_diff_test("gas", concat!(stringify!($name), ".wat"), |input| {
+					let rules = utils::rules::Set::default();
+
+					let module = elements::deserialize_buffer(input).expect("Failed to deserialize");
+					let instrumented = utils::inject_gas_counter(module, &rules).expect("Failed to instrument with gas metering");
+					elements::serialize(instrumented).expect("Failed to serialize")
+				});
+			}
+		};
+	}
+
+	def_gas_test!(simple);
+	def_gas_test!(start);
+}
