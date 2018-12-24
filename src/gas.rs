@@ -251,6 +251,9 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 					}
 				}
 			},
+			&mut elements::Section::Start(ref mut start_idx) => {
+				if *start_idx >= gas_func { *start_idx += 1}
+			},
 			_ => { }
 		}
 	}
