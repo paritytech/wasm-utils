@@ -3,6 +3,7 @@ use std::collections::{HashSet as Set};
 #[cfg(not(features = "std"))]
 use std::collections::{BTreeSet as Set};
 use std::vec::Vec;
+use std::mem;
 
 use parity_wasm::elements;
 
@@ -22,6 +23,13 @@ pub fn optimize(
 	// WebAssembly exports optimizer
 	// Motivation: emscripten compiler backend compiles in many unused exports
 	//   which in turn compile in unused imports and leaves unused functions
+
+	// try to parse name section
+	let module_temp = mem::replace(module, elements::Module::default());
+	let module_temp = module_temp
+		.parse_names()
+		.unwrap_or_else(|(_err, module)| module);
+	mem::replace(module, module_temp);
 
 	// Algo starts from the top, listing all items that should stay
 	let mut stay = Set::new();
@@ -261,6 +269,34 @@ pub fn optimize(
 						}
 					}
 				},
+				&mut elements::Section::Name(ref mut name_section) => {
+					match name_section {
+						&mut elements::NameSection::Function(ref mut func_name) => {
+							let mut func_name_map = mem::replace(func_name.names_mut(), elements::IndexMap::default());
+							for index in &eliminated_funcs {
+								func_name_map.remove(*index as u32);
+							}
+							let updated_map = func_name_map.into_iter().map(|(index, value)| {
+								let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < index).count() as u32;
+								(index - totalle, value)
+							}).collect();
+							mem::replace(func_name.names_mut(), updated_map);
+						}
+						&mut elements::NameSection::Local(ref mut local_name) => {
+							let mut local_names_map = mem::replace(local_name.local_names_mut(), elements::IndexMap::default());
+							for index in &eliminated_funcs {
+								local_names_map.remove(*index as u32);
+							}
+							let updated_map = local_names_map.into_iter().map(|(index, value)| {
+								let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < index).count() as u32;
+								(index - totalle, value)
+							}).collect();
+
+							mem::replace(local_name.local_names_mut(), updated_map);
+						}
+						_ => {}
+					}
+				}
 				_ => { }
 			}
 		}
