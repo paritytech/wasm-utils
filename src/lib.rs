@@ -18,6 +18,7 @@ mod symbols;
 mod ext;
 mod pack;
 mod runtime_type;
+mod graph;
 
 pub mod stack_height;
 
