@@ -245,24 +245,26 @@ impl Module {
 
 		custom_round(&self.other, &mut idx, &mut sections);
 
-		// TYPE SECTION (1)
+		if self.types.len() > 0 {
+			// TYPE SECTION (1)
+			let mut type_section = elements::TypeSection::default();
+			{
+				let mut types = type_section.types_mut();
 
-		let mut type_section = elements::TypeSection::default();
-		{
-			let mut types = type_section.types_mut();
-
-			for type_entry in self.types.iter() {
-				types.push(type_entry.read().clone())
+				for type_entry in self.types.iter() {
+					types.push(type_entry.read().clone())
+				}
 			}
-		}
-		sections.push(elements::Section::Type(type_section));
-		idx += 1;
+			sections.push(elements::Section::Type(type_section));
+			idx += 1;
 
-		custom_round(&self.other, &mut idx, &mut sections);
+			custom_round(&self.other, &mut idx, &mut sections);
+		}
 
 		// IMPORT SECTION (2)
 		let mut import_section = elements::ImportSection::default();
-		{
+
+		let add = {
 			let mut imports = import_section.entries_mut();
 			for func in self.funcs.iter() {
 				match func.read().origin {
@@ -341,101 +343,168 @@ impl Module {
 					_ => continue,
 				}
 			}
+			imports.len() > 0
+		};
+
+		if add {
+			sections.push(elements::Section::Import(import_section));
+			idx += 1;
+			custom_round(&self.other, &mut idx, &mut sections);
 		}
 
-		sections.push(elements::Section::Import(import_section));
-		idx += 1;
+		if self.funcs.len() > 0 {
+			// FUNC SECTION (3)
+			let mut func_section = elements::FunctionSection::default();
+			{
+				let mut funcs = func_section.entries_mut();
 
-		custom_round(&self.other, &mut idx, &mut sections);
-
-		// FUNC SECTION (3)
-		let mut func_section = elements::FunctionSection::default();
-		{
-			let mut funcs = func_section.entries_mut();
-
-			for func in self.funcs.iter() {
-				match func.read().origin {
-					Declared(_) => {
-						funcs.push(elements::Func::new(
-							func.read().type_ref.order()
-								.expect("detached func encountered somehow!") as u32
-						));
-					},
-					_ => continue,
+				for func in self.funcs.iter() {
+					match func.read().origin {
+						Declared(_) => {
+							funcs.push(elements::Func::new(
+								func.read().type_ref.order()
+									.expect("detached func encountered somehow!") as u32
+							));
+						},
+						_ => continue,
+					}
 				}
 			}
+			sections.push(elements::Section::Function(func_section));
+			idx += 1;
+
+			custom_round(&self.other, &mut idx, &mut sections);
 		}
-		sections.push(elements::Section::Function(func_section));
-		idx += 1;
 
-		custom_round(&self.other, &mut idx, &mut sections);
+		if self.tables.len() > 0 {
+			// TABLE SECTION (4)
+			let mut table_section = elements::TableSection::default();
+			{
+				let mut tables = table_section.entries_mut();
 
-		// TABLE SECTION (4)
-		let mut table_section = elements::TableSection::default();
-		{
-			let mut tables = table_section.entries_mut();
-
-			for table in self.tables.iter() {
-				match table.read().origin {
-					Declared(_) => {
-						tables.push(elements::TableType::new(
-							table.read().limits.initial(),
-							table.read().limits.maximum(),
-						));
-					},
-					_ => continue,
+				for table in self.tables.iter() {
+					match table.read().origin {
+						Declared(_) => {
+							tables.push(elements::TableType::new(
+								table.read().limits.initial(),
+								table.read().limits.maximum(),
+							));
+						},
+						_ => continue,
+					}
 				}
 			}
+			sections.push(elements::Section::Table(table_section));
+			idx += 1;
+
+			custom_round(&self.other, &mut idx, &mut sections);
 		}
-		sections.push(elements::Section::Table(table_section));
-		idx += 1;
 
-		custom_round(&self.other, &mut idx, &mut sections);
+		if self.memory.len() > 0 {
+			// MEMORY SECTION (5)
+			let mut memory_section = elements::MemorySection::default();
+			{
+				let mut memories = memory_section.entries_mut();
 
-		// TABLE SECTION (4)
-		let mut memory_section = elements::MemorySection::default();
-		{
-			let mut memories = memory_section.entries_mut();
-
-			for memory in self.memory.iter() {
-				match memory.read().origin {
-					Declared(_) => {
-						memories.push(elements::MemoryType::new(
-							memory.read().limits.initial(),
-							memory.read().limits.maximum(),
-						));
-					},
-					_ => continue,
+				for memory in self.memory.iter() {
+					match memory.read().origin {
+						Declared(_) => {
+							memories.push(elements::MemoryType::new(
+								memory.read().limits.initial(),
+								memory.read().limits.maximum(),
+							));
+						},
+						_ => continue,
+					}
 				}
 			}
+			sections.push(elements::Section::Memory(memory_section));
+			idx += 1;
+
+			custom_round(&self.other, &mut idx, &mut sections);
 		}
-		sections.push(elements::Section::Memory(memory_section));
-		idx += 1;
 
-		custom_round(&self.other, &mut idx, &mut sections);
+		if self.globals.len() > 0 {
+			// GLOBAL SECTION (6)
+			let mut global_section = elements::GlobalSection::default();
+			{
+				let mut globals = global_section.entries_mut();
 
-		// CODE SECTION (10)
-		let mut code_section = elements::CodeSection::default();
-		{
-			let mut funcs = code_section.bodies_mut();
-
-			for func in self.funcs.iter() {
-				match func.read().origin {
-					Declared(_) => {
-						// TODO: generate body
-						funcs.push(elements::FuncBody::new(
-							Vec::new(),
-							elements::Instructions::empty(),
-						));
-					},
-					_ => continue,
+				for global in self.globals.iter() {
+					match global.read().origin {
+						Declared(_) => {
+							globals.push(elements::GlobalEntry::new(
+								elements::GlobalType::new(global.read().content, global.read().is_mut),
+								// TODO: generate init expr
+								elements::InitExpr::empty(),
+							));
+						},
+						_ => continue,
+					}
 				}
 			}
-		}
-		sections.push(elements::Section::Code(code_section));
-		idx += 1;
+			sections.push(elements::Section::Global(global_section));
+			idx += 1;
 
-		custom_round(&self.other, &mut idx, &mut sections);
+			custom_round(&self.other, &mut idx, &mut sections);
+		}
+
+		if self.exports.len() > 0 {
+			// EXPORT SECTION (6)
+			let mut export_section = elements::ExportSection::default();
+			{
+				let mut exports = export_section.entries_mut();
+
+				for export in self.exports.iter() {
+					let internal = match export.local {
+						ExportLocal::Func(ref func_ref) => {
+							elements::Internal::Function(func_ref.order().expect("detached func ref") as u32)
+						},
+						ExportLocal::Global(ref global_ref) => {
+							elements::Internal::Global(global_ref.order().expect("detached global ref") as u32)
+						},
+						ExportLocal::Table(ref table_ref) => {
+							elements::Internal::Table(table_ref.order().expect("detached table ref") as u32)
+						},
+						ExportLocal::Memory(ref memory_ref) => {
+							elements::Internal::Memory(memory_ref.order().expect("detached memory ref") as u32)
+						},
+						_ => continue,
+					};
+
+					exports.push(elements::ExportEntry::new(export.name.to_owned(), internal));
+				}
+			}
+			sections.push(elements::Section::Export(export_section));
+			idx += 1;
+
+			custom_round(&self.other, &mut idx, &mut sections);
+		}
+
+		if self.funcs.len() > 0 {
+			// CODE SECTION (10)
+			let mut code_section = elements::CodeSection::default();
+			{
+				let mut funcs = code_section.bodies_mut();
+
+				for func in self.funcs.iter() {
+					match func.read().origin {
+						Declared(_) => {
+							// TODO: generate body
+							funcs.push(elements::FuncBody::new(
+								Vec::new(),
+								elements::Instructions::empty(),
+							));
+						},
+						_ => continue,
+					}
+				}
+			}
+			sections.push(elements::Section::Code(code_section));
+			idx += 1;
+
+			custom_round(&self.other, &mut idx, &mut sections);
+		}
 
 		elements::Module::new(sections)
 	}
@@ -454,6 +523,11 @@ fn custom_round(
 
 fn parse(wasm: &[u8]) -> Module {
 	Module::from_elements(&::parity_wasm::deserialize_buffer(wasm).expect("failed to parse wasm"))
+}
+
+fn generate(f: &Module) -> Vec<u8> {
+	let pm = f.generate();
+	::parity_wasm::serialize(pm).expect("failed to generate wasm")
 }
 
 #[cfg(test)]
@@ -484,4 +558,26 @@ mod tests {
 		assert_eq!(f.types.get_ref(0).link_count(), 1);
 		assert_eq!(f.funcs.get_ref(0).link_count(), 1);
 	}
+
+	#[test]
+	#[ignore]
+	fn simple_round_trip() {
+		let wat = r#"
+			(module
+				(type (func))
+				(func (type 0))
+				(memory 0 1)
+				(export "simple" (func 0))
+			)
+		"#;
+		let wasm = wabt::wat2wasm(wat).expect("Failed to read fixture");
+
+		let f = super::parse(&wasm[..]);
+		let wasm_new = super::generate(&f);
+
+		let wat_new = wabt::wasm2wat(&wasm_new).expect("Failed to generate expectation");
+
+		assert_eq!(&wat_new, wat);
+	}
+
 }
