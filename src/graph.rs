@@ -48,14 +48,20 @@ struct Table {
 	limits: elements::ResizableLimits,
 }
 
+enum SegmentLocation {
+	Passive,
+	Default(Vec<Instruction>),
+	WithIndex(u32, Vec<Instruction>),
+}
+
 struct DataSegment {
-	offset_expr: Vec<Instruction>,
-	data: Vec<u8>,
+	location: SegmentLocation,
+	value: Vec<u8>,
 }
 
 struct ElementSegment {
-	offset_expr: Vec<Instruction>,
-	data: Vec<u32>,
+	location: SegmentLocation,
+	value: Vec<u32>,
 }
 
 enum ExportLocal {
@@ -180,6 +186,44 @@ impl Module {
 						res.exports.push(Export { local: local, name: e.field().to_owned() })
 					}
 				},
+				elements::Section::Start(start_func) => {
+					res.start = Some(res.funcs.clone_ref(*start_func as usize));
+				},
+				elements::Section::Element(element_section) => {
+					for element_segment in element_section.entries() {
+
+						// let location = if element_segment.passive() {
+						// 	SegmentLocation::Passive
+						// } else if element_segment.index() == 0 {
+						// 	// TODO: transform instructions
+						// 	SegmentLocation::Default(Vec::new())
+						// } else {
+						// 	// TODO: transform instructions
+						// 	SegmentLocation::WithIndex(element_segment.index(), Vec::new())
+						// };
+
+						// TODO: transform instructions
+						// TODO: update parity-wasm and uncomment the above
+						let location = SegmentLocation::Default(Vec::new());
+
+						res.elements.push(ElementSegment {
+							value: element_segment.members().to_vec(),
+							location: location,
+						});
+					}
+				},
+				elements::Section::Data(data_section) => {
+					for data_segment in data_section.entries() {
+						// TODO: transform instructions
+						// TODO: update parity-wasm and uncomment the above
+						let location = SegmentLocation::Default(Vec::new());
+
+						res.data.push(DataSegment {
+							value: data_segment.value().to_vec(),
+							location: location,
+						});
+					}
+				}
 				_ => continue,
 			}
 		}
