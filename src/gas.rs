@@ -209,23 +209,30 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 		);
 
 	// back to plain module
-	let mut module = mbuilder.build();
+	let module = mbuilder.build();
 
 	// calculate actual function index of the imported definition
 	//    (substract all imports that are NOT functions)
 
 	let gas_func = module.import_count(elements::ImportCountType::Function) as u32 - 1;
+        inject_gas_counter_func(module, rules, gas_func)
+}
+
+
+pub fn inject_gas_counter_func(mut module: elements::Module, rules: &rules::Set, gas_counter_func: u32)
+	-> Result<elements::Module, elements::Module>
+{
 	let total_func = module.functions_space() as u32;
 	let mut need_grow_counter = false;
 	let mut error = false;
 
-	// Updating calling addresses (all calls to function index >= `gas_func` should be incremented)
+	// Updating calling addresses (all calls to function index >= `gas_counter_func` should be incremented)
 	for section in module.sections_mut() {
 		match section {
 			&mut elements::Section::Code(ref mut code_section) => {
 				for ref mut func_body in code_section.bodies_mut() {
-					update_call_index(func_body.code_mut(), gas_func);
-					if let Err(_) = inject_counter(func_body.code_mut(), rules, gas_func) {
+					update_call_index(func_body.code_mut(), gas_counter_func);
+					if let Err(_) = inject_counter(func_body.code_mut(), rules, gas_counter_func) {
 						error = true;
 						break;
 					}
@@ -239,7 +246,7 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 			&mut elements::Section::Export(ref mut export_section) => {
 				for ref mut export in export_section.entries_mut() {
 					if let &mut elements::Internal::Function(ref mut func_index) = export.internal_mut() {
-						if *func_index >= gas_func { *func_index += 1}
+						if *func_index >= gas_counter_func { *func_index += 1}
 					}
 				}
 			},
@@ -247,12 +254,12 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 				for ref mut segment in elements_section.entries_mut() {
 					// update all indirect call addresses initial values
 					for func_index in segment.members_mut() {
-						if *func_index >= gas_func { *func_index += 1}
+						if *func_index >= gas_counter_func { *func_index += 1}
 					}
 				}
 			},
 			&mut elements::Section::Start(ref mut start_idx) => {
-				if *start_idx >= gas_func { *start_idx += 1}
+				if *start_idx >= gas_counter_func { *start_idx += 1}
 			},
 			_ => { }
 		}
@@ -260,7 +267,11 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 
 	if error { return Err(module); }
 
-	if need_grow_counter { Ok(add_grow_counter(module, rules, gas_func)) } else { Ok(module) }
+	if need_grow_counter {
+                Ok(add_grow_counter(module, rules, gas_counter_func))
+        } else {
+                Ok(module)
+        }
 }
 
 #[cfg(test)]
