@@ -110,9 +110,6 @@ impl<T> RefList<T> {
 	}
 
 	fn done_delete(&mut self, indices: &[usize]) {
-
-		let mut index = 0;
-
 		for idx in indices {
 			let mut detached = self.items.remove(*idx);
 			detached.write().index = EntryOrigin::Detached;
@@ -174,13 +171,13 @@ pub struct DeleteTransaction<'a, T> {
 }
 
 impl<'a, T> DeleteTransaction<'a, T> {
-	pub fn push(mut self, idx: usize) -> Self {
+	pub fn push(self, idx: usize) -> Self {
 		let mut tx = self;
 		tx.deleted.push(idx);
 		tx
 	}
 
-	pub fn done(mut self) {
+	pub fn done(self) {
 		let indices = self.deleted;
 		let list = self.list;
 		list.done_delete(&indices[..]);

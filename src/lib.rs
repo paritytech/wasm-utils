@@ -29,6 +29,8 @@ pub use gas::inject_gas_counter;
 pub use ext::{externalize, externalize_mem, underscore_funcs, ununderscore_funcs, shrink_unknown_stack};
 pub use pack::{pack_instance, Error as PackingError};
 pub use runtime_type::inject_runtime_type;
+pub use graph::{Module, parse, generate};
+pub use ref_list::{RefList, Entry, EntryRef, DeleteTransaction};
 
 pub struct TargetRuntime {
 	pub create_symbol: &'static str,

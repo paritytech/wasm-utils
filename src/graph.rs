@@ -7,7 +7,7 @@ use std::borrow::ToOwned;
 use std::string::String;
 use std::collections::BTreeMap;
 
-enum ImportedOrDeclared<T=()> {
+pub enum ImportedOrDeclared<T=()> {
 	Imported(String, String),
 	Declared(T),
 }
@@ -18,82 +18,82 @@ impl<T> From<&elements::ImportEntry> for ImportedOrDeclared<T> {
 	}
 }
 
-type FuncOrigin = ImportedOrDeclared<Vec<Instruction>>;
-type GlobalOrigin = ImportedOrDeclared<Vec<Instruction>>;
-type MemoryOrigin = ImportedOrDeclared;
-type TableOrigin = ImportedOrDeclared;
+pub type FuncOrigin = ImportedOrDeclared<Vec<Instruction>>;
+pub type GlobalOrigin = ImportedOrDeclared<Vec<Instruction>>;
+pub type MemoryOrigin = ImportedOrDeclared;
+pub type TableOrigin = ImportedOrDeclared;
 
-struct Func {
-	type_ref: EntryRef<elements::Type>,
-	origin: FuncOrigin,
+pub struct Func {
+	pub type_ref: EntryRef<elements::Type>,
+	pub origin: FuncOrigin,
 }
 
-struct Global {
-	content: elements::ValueType,
-	is_mut: bool,
-	origin: GlobalOrigin,
+pub struct Global {
+	pub content: elements::ValueType,
+	pub is_mut: bool,
+	pub origin: GlobalOrigin,
 }
 
-enum Instruction {
+pub enum Instruction {
 	Plain(elements::Instruction),
 	Call(EntryRef<Func>),
 }
 
-struct Memory {
-	limits: elements::ResizableLimits,
-	origin: MemoryOrigin,
+pub struct Memory {
+	pub limits: elements::ResizableLimits,
+	pub origin: MemoryOrigin,
 }
 
-struct Table {
-	origin: TableOrigin,
-	limits: elements::ResizableLimits,
+pub struct Table {
+	pub origin: TableOrigin,
+	pub limits: elements::ResizableLimits,
 }
 
-enum SegmentLocation {
+pub enum SegmentLocation {
 	Passive,
 	Default(Vec<Instruction>),
 	WithIndex(u32, Vec<Instruction>),
 }
 
-struct DataSegment {
-	location: SegmentLocation,
-	value: Vec<u8>,
+pub struct DataSegment {
+	pub location: SegmentLocation,
+	pub value: Vec<u8>,
 }
 
-struct ElementSegment {
-	location: SegmentLocation,
-	value: Vec<u32>,
+pub struct ElementSegment {
+	pub location: SegmentLocation,
+	pub value: Vec<u32>,
 }
 
-enum ExportLocal {
+pub enum ExportLocal {
 	Func(EntryRef<Func>),
 	Global(EntryRef<Global>),
 	Table(EntryRef<Table>),
 	Memory(EntryRef<Memory>),
 }
 
-struct Export {
-	name: String,
-	local: ExportLocal,
+pub struct Export {
+	pub name: String,
+	pub local: ExportLocal,
 }
 
 #[derive(Default)]
-struct Module {
-	types: RefList<elements::Type>,
-	funcs: RefList<Func>,
-	memory: RefList<Memory>,
-	tables: RefList<Table>,
-	globals: RefList<Global>,
-	start: Option<EntryRef<Func>>,
-	exports: Vec<Export>,
-	elements: Vec<ElementSegment>,
-	data: Vec<DataSegment>,
-	other: BTreeMap<usize, elements::Section>,
+pub struct Module {
+	pub types: RefList<elements::Type>,
+	pub funcs: RefList<Func>,
+	pub memory: RefList<Memory>,
+	pub tables: RefList<Table>,
+	pub globals: RefList<Global>,
+	pub start: Option<EntryRef<Func>>,
+	pub exports: Vec<Export>,
+	pub elements: Vec<ElementSegment>,
+	pub data: Vec<DataSegment>,
+	pub other: BTreeMap<usize, elements::Section>,
 }
 
 impl Module {
 
-	fn from_elements(module: &elements::Module) -> Self {
+	pub fn from_elements(module: &elements::Module) -> Self {
 
 		let mut idx = 0;
 		let mut res = Module::default();
@@ -469,7 +469,6 @@ impl Module {
 						ExportLocal::Memory(ref memory_ref) => {
 							elements::Internal::Memory(memory_ref.order().expect("detached memory ref") as u32)
 						},
-						_ => continue,
 					};
 
 					exports.push(elements::ExportEntry::new(export.name.to_owned(), internal));
@@ -521,7 +520,7 @@ impl Module {
 			// CODE SECTION (10)
 			let mut code_section = elements::CodeSection::default();
 			{
-				let mut funcs = code_section.bodies_mut();
+				let funcs = code_section.bodies_mut();
 
 				for func in self.funcs.iter() {
 					match func.read().origin {
@@ -587,11 +586,11 @@ fn custom_round(
 	}
 }
 
-fn parse(wasm: &[u8]) -> Module {
+pub fn parse(wasm: &[u8]) -> Module {
 	Module::from_elements(&::parity_wasm::deserialize_buffer(wasm).expect("failed to parse wasm"))
 }
 
-fn generate(f: &Module) -> Vec<u8> {
+pub fn generate(f: &Module) -> Vec<u8> {
 	let pm = f.generate();
 	::parity_wasm::serialize(pm).expect("failed to generate wasm")
 }
@@ -600,7 +599,6 @@ fn generate(f: &Module) -> Vec<u8> {
 mod tests {
 
 	extern crate wabt;
-	use parity_wasm;
 
 	#[test]
 	fn smoky() {
