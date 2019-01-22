@@ -2,6 +2,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::vec::Vec;
+use std::slice;
 
 #[derive(Debug)]
 enum EntryOrigin {
@@ -165,7 +166,7 @@ impl<T> RefList<T> {
 		&self.items[idx]
 	}
 
-	pub fn iter(&self) -> std::slice::Iter<EntryRef<T>> {
+	pub fn iter(&self) -> slice::Iter<EntryRef<T>> {
 		self.items.iter()
 	}
 }
