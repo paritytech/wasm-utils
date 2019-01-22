@@ -1,6 +1,7 @@
 
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::vec::Vec;
 
 #[derive(Debug)]
 enum EntryOrigin {
@@ -59,16 +60,20 @@ impl<T> From<Entry<T>> for EntryRef<T> {
 }
 
 impl<T> EntryRef<T> {
-	fn read(&self) -> ::std::cell::Ref<Entry<T>> {
+	pub fn read(&self) -> ::std::cell::Ref<Entry<T>> {
 		self.0.borrow()
 	}
 
-	fn write(&self) -> ::std::cell::RefMut<Entry<T>> {
+	pub fn write(&self) -> ::std::cell::RefMut<Entry<T>> {
 		self.0.borrow_mut()
 	}
 
-	fn order(&self) -> Option<usize> {
+	pub fn order(&self) -> Option<usize> {
 		self.0.borrow().order()
+	}
+
+	pub fn link_count(&self) -> usize {
+		Rc::strong_count(&self.0) - 1
 	}
 }
 
@@ -147,6 +152,14 @@ impl<T> RefList<T> {
 
 	pub fn len(&self) -> usize {
 		self.items.len()
+	}
+
+	pub fn clone_ref(&self, idx: usize) -> EntryRef<T> {
+		self.items[idx].clone()
+	}
+
+	pub fn get_ref(&self, idx: usize) -> &EntryRef<T> {
+		&self.items[idx]
 	}
 }
 

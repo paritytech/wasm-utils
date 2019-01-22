@@ -2,6 +2,9 @@
 
 use parity_wasm::elements;
 use super::ref_list::{RefList, EntryRef};
+use std::vec::Vec;
+use std::borrow::ToOwned;
+use std::string::String;
 
 enum ImportedOrDeclared<T=()> {
 	Imported(String, String),
@@ -66,12 +69,13 @@ enum Export {
 struct Module {
 	types: RefList<elements::Type>,
 	funcs: RefList<Func>,
-	tables: RefList<Table>,
 	memory: RefList<Memory>,
+	tables: RefList<Table>,
 	globals: RefList<Global>,
+	start: Option<EntryRef<Func>>,
+	exports: Vec<Export>,
 	elements: Vec<ElementSegment>,
 	data: Vec<DataSegment>,
-	exports: Vec<Export>,
 }
 
 impl Module {
@@ -141,6 +145,34 @@ impl Module {
 						});
 					}
 				},
+				elements::Section::Global(global_section) => {
+					for g in global_section.entries() {
+						res.globals.push(Global {
+							content: g.global_type().content_type(),
+							is_mut: g.global_type().is_mutable(),
+							// TODO: init expr
+							origin: ImportedOrDeclared::Declared(Vec::new()),
+						});
+					}
+				},
+				elements::Section::Export(export_section) => {
+					for e in export_section.entries() {
+						match e.internal() {
+							&elements::Internal::Function(func_idx) => {
+								res.exports.push(Export::Func(res.funcs.clone_ref(func_idx as usize)));
+							},
+							&elements::Internal::Global(global_idx) => {
+								res.exports.push(Export::Global(res.globals.clone_ref(global_idx as usize)));
+							},
+							&elements::Internal::Memory(mem_idx) => {
+								res.exports.push(Export::Memory(res.memory.clone_ref(mem_idx as usize)));
+							},
+							&elements::Internal::Table(table_idx) => {
+								res.exports.push(Export::Table(res.tables.clone_ref(table_idx as usize)));
+							},
+						}
+					}
+				},
 				_ => continue,
 			}
 		}
@@ -167,6 +199,7 @@ mod tests {
 				(type (func))
 				(func (type 0))
 				(memory 0 1)
+				(export "simple" (func 0))
 			)
 		"#).expect("Failed to read fixture");
 
@@ -176,5 +209,9 @@ mod tests {
 		assert_eq!(f.funcs.len(), 1);
 		assert_eq!(f.tables.len(), 0);
 		assert_eq!(f.memory.len(), 1);
+		assert_eq!(f.exports.len(), 1);
+
+		assert_eq!(f.types.get_ref(0).link_count(), 1);
+		assert_eq!(f.funcs.get_ref(0).link_count(), 1);
 	}
 }

@@ -59,6 +59,10 @@ mod std {
 	pub use core::*;
 	pub use alloc::{vec, string, boxed, borrow};
 
+	pub mod rc {
+		pub use alloc::rc::Rc;
+	}
+
 	pub mod collections {
 		pub use alloc::collections::{BTreeMap, BTreeSet};
 	}
