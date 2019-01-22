@@ -8,12 +8,6 @@ enum ImportedOrDeclared<T=()> {
 	Declared(T),
 }
 
-impl<T> ImportedOrDeclared<T> {
-	fn imported(module: String, name: String) -> Self {
-		ImportedOrDeclared::Imported(module, name)
-	}
-}
-
 impl<T> From<&elements::ImportEntry> for ImportedOrDeclared<T> {
 	fn from(v: &elements::ImportEntry) -> Self {
 		ImportedOrDeclared::Imported(v.module().to_owned(), v.field().to_owned())
