@@ -245,85 +245,197 @@ impl Module {
 
 		custom_round(&self.other, &mut idx, &mut sections);
 
-		let mut imports = Vec::new();
+		// TYPE SECTION (1)
 
-		for func in self.funcs.iter() {
-			match func.read().origin {
-				Imported(ref module, ref field) => {
-					imports.push(
-						elements::ImportEntry::new(
-							module.to_owned(),
-							field.to_owned(),
-							elements::External::Function(
-								func.read().type_ref.order()
-									.expect("detached func encountered somehow!") as u32
-							),
+		let mut type_section = elements::TypeSection::default();
+		{
+			let mut types = type_section.types_mut();
+
+			for type_entry in self.types.iter() {
+				types.push(type_entry.read().clone())
+			}
+		}
+		sections.push(elements::Section::Type(type_section));
+		idx += 1;
+
+		custom_round(&self.other, &mut idx, &mut sections);
+
+		// IMPORT SECTION (2)
+		let mut import_section = elements::ImportSection::default();
+		{
+			let mut imports = import_section.entries_mut();
+			for func in self.funcs.iter() {
+				match func.read().origin {
+					Imported(ref module, ref field) => {
+						imports.push(
+							elements::ImportEntry::new(
+								module.to_owned(),
+								field.to_owned(),
+								elements::External::Function(
+									func.read().type_ref.order()
+										.expect("detached func encountered somehow!") as u32
+								),
+							)
 						)
-					)
-				},
-				_ => continue,
+					},
+					_ => continue,
+				}
+			}
+
+			for global in self.globals.iter() {
+				match global.read().origin {
+					Imported(ref module, ref field) => {
+						imports.push(
+							elements::ImportEntry::new(
+								module.to_owned(),
+								field.to_owned(),
+								elements::External::Global(
+									elements::GlobalType::new(
+										global.read().content,
+										global.read().is_mut,
+									)
+								),
+							)
+						)
+					},
+					_ => continue,
+				}
+			}
+
+			for memory in self.memory.iter() {
+				match memory.read().origin {
+					Imported(ref module, ref field) => {
+						imports.push(
+							elements::ImportEntry::new(
+								module.to_owned(),
+								field.to_owned(),
+								elements::External::Memory(
+									elements::MemoryType::new(
+										memory.read().limits.initial(),
+										memory.read().limits.maximum(),
+									)
+								),
+							)
+						)
+					},
+					_ => continue,
+				}
+			}
+
+			for table in self.tables.iter() {
+				match table.read().origin {
+					Imported(ref module, ref field) => {
+						imports.push(
+							elements::ImportEntry::new(
+								module.to_owned(),
+								field.to_owned(),
+								elements::External::Table(
+									elements::TableType::new(
+										table.read().limits.initial(),
+										table.read().limits.maximum(),
+									)
+								),
+							)
+						)
+					},
+					_ => continue,
+				}
 			}
 		}
 
-		for global in self.globals.iter() {
-			match global.read().origin {
-				Imported(ref module, ref field) => {
-					imports.push(
-						elements::ImportEntry::new(
-							module.to_owned(),
-							field.to_owned(),
-							elements::External::Global(
-								elements::GlobalType::new(
-									global.read().content,
-									global.read().is_mut,
-								)
-							),
-						)
-					)
-				},
-				_ => continue,
-			}
-		}
+		sections.push(elements::Section::Import(import_section));
+		idx += 1;
 
-		for memory in self.memory.iter() {
-			match memory.read().origin {
-				Imported(ref module, ref field) => {
-					imports.push(
-						elements::ImportEntry::new(
-							module.to_owned(),
-							field.to_owned(),
-							elements::External::Memory(
-								elements::MemoryType::new(
-									memory.read().limits.initial(),
-									memory.read().limits.maximum(),
-								)
-							),
-						)
-					)
-				},
-				_ => continue,
-			}
-		}
+		custom_round(&self.other, &mut idx, &mut sections);
 
-		for table in self.tables.iter() {
-			match table.read().origin {
-				Imported(ref module, ref field) => {
-					imports.push(
-						elements::ImportEntry::new(
-							module.to_owned(),
-							field.to_owned(),
-							elements::External::Table(
-								elements::TableType::new(
-									table.read().limits.initial(),
-									table.read().limits.maximum(),
-								)
-							),
-						)
-					)
-				},
-				_ => continue,
+		// FUNC SECTION (3)
+		let mut func_section = elements::FunctionSection::default();
+		{
+			let mut funcs = func_section.entries_mut();
+
+			for func in self.funcs.iter() {
+				match func.read().origin {
+					Declared(_) => {
+						funcs.push(elements::Func::new(
+							func.read().type_ref.order()
+								.expect("detached func encountered somehow!") as u32
+						));
+					},
+					_ => continue,
+				}
 			}
 		}
+		sections.push(elements::Section::Function(func_section));
+		idx += 1;
+
+		custom_round(&self.other, &mut idx, &mut sections);
+
+		// TABLE SECTION (4)
+		let mut table_section = elements::TableSection::default();
+		{
+			let mut tables = table_section.entries_mut();
+
+			for table in self.tables.iter() {
+				match table.read().origin {
+					Declared(_) => {
+						tables.push(elements::TableType::new(
+							table.read().limits.initial(),
+							table.read().limits.maximum(),
+						));
+					},
+					_ => continue,
+				}
+			}
+		}
+		sections.push(elements::Section::Table(table_section));
+		idx += 1;
+
+		custom_round(&self.other, &mut idx, &mut sections);
+
+		// TABLE SECTION (4)
+		let mut memory_section = elements::MemorySection::default();
+		{
+			let mut memories = memory_section.entries_mut();
+
+			for memory in self.memory.iter() {
+				match memory.read().origin {
+					Declared(_) => {
+						memories.push(elements::MemoryType::new(
+							memory.read().limits.initial(),
+							memory.read().limits.maximum(),
+						));
+					},
+					_ => continue,
+				}
+			}
+		}
+		sections.push(elements::Section::Memory(memory_section));
+		idx += 1;
+
+		custom_round(&self.other, &mut idx, &mut sections);
+
+		// CODE SECTION (10)
+		let mut code_section = elements::CodeSection::default();
+		{
+			let mut funcs = code_section.bodies_mut();
+
+			for func in self.funcs.iter() {
+				match func.read().origin {
+					Declared(_) => {
+						// TODO: generate body
+						funcs.push(elements::FuncBody::new(
+							Vec::new(),
+							elements::Instructions::empty(),
+						));
+					},
+					_ => continue,
+				}
+			}
+		}
+		sections.push(elements::Section::Code(code_section));
+		idx += 1;
+
+		custom_round(&self.other, &mut idx, &mut sections);
 
 		elements::Module::new(sections)
 	}
