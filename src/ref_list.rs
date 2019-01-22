@@ -161,6 +161,10 @@ impl<T> RefList<T> {
 	pub fn get_ref(&self, idx: usize) -> &EntryRef<T> {
 		&self.items[idx]
 	}
+
+	pub fn iter(&self) -> std::slice::Iter<EntryRef<T>> {
+		self.items.iter()
+	}
 }
 
 #[must_use]

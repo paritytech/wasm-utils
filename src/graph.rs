@@ -5,6 +5,7 @@ use super::ref_list::{RefList, EntryRef};
 use std::vec::Vec;
 use std::borrow::ToOwned;
 use std::string::String;
+use std::collections::BTreeMap;
 
 enum ImportedOrDeclared<T=()> {
 	Imported(String, String),
@@ -87,12 +88,14 @@ struct Module {
 	exports: Vec<Export>,
 	elements: Vec<ElementSegment>,
 	data: Vec<DataSegment>,
+	other: BTreeMap<usize, elements::Section>,
 }
 
 impl Module {
 
 	fn from_elements(module: &elements::Module) -> Self {
 
+		let mut idx = 0;
 		let mut res = Module::default();
 
 		for section in module.sections() {
@@ -224,13 +227,117 @@ impl Module {
 						});
 					}
 				}
-				_ => continue,
+				_ => {
+					res.other.insert(idx, section.clone());
+				}
 			}
+			idx += 1;
 		}
 
 		res
 	}
 
+	fn generate(&self) -> elements::Module {
+		use self::ImportedOrDeclared::*;
+
+		let mut idx = 0;
+		let mut sections = Vec::new();
+
+		custom_round(&self.other, &mut idx, &mut sections);
+
+		let mut imports = Vec::new();
+
+		for func in self.funcs.iter() {
+			match func.read().origin {
+				Imported(ref module, ref field) => {
+					imports.push(
+						elements::ImportEntry::new(
+							module.to_owned(),
+							field.to_owned(),
+							elements::External::Function(
+								func.read().type_ref.order()
+									.expect("detached func encountered somehow!") as u32
+							),
+						)
+					)
+				},
+				_ => continue,
+			}
+		}
+
+		for global in self.globals.iter() {
+			match global.read().origin {
+				Imported(ref module, ref field) => {
+					imports.push(
+						elements::ImportEntry::new(
+							module.to_owned(),
+							field.to_owned(),
+							elements::External::Global(
+								elements::GlobalType::new(
+									global.read().content,
+									global.read().is_mut,
+								)
+							),
+						)
+					)
+				},
+				_ => continue,
+			}
+		}
+
+		for memory in self.memory.iter() {
+			match memory.read().origin {
+				Imported(ref module, ref field) => {
+					imports.push(
+						elements::ImportEntry::new(
+							module.to_owned(),
+							field.to_owned(),
+							elements::External::Memory(
+								elements::MemoryType::new(
+									memory.read().limits.initial(),
+									memory.read().limits.maximum(),
+								)
+							),
+						)
+					)
+				},
+				_ => continue,
+			}
+		}
+
+		for table in self.tables.iter() {
+			match table.read().origin {
+				Imported(ref module, ref field) => {
+					imports.push(
+						elements::ImportEntry::new(
+							module.to_owned(),
+							field.to_owned(),
+							elements::External::Table(
+								elements::TableType::new(
+									table.read().limits.initial(),
+									table.read().limits.maximum(),
+								)
+							),
+						)
+					)
+				},
+				_ => continue,
+			}
+		}
+
+		elements::Module::new(sections)
+	}
+}
+
+fn custom_round(
+	map: &BTreeMap<usize, elements::Section>,
+	idx: &mut usize,
+	sections: &mut Vec<elements::Section>,
+) {
+	while let Some(other_section) = map.get(&idx) {
+		sections.push(other_section.clone());
+		*idx += 1;
+	}
 }
 
 fn parse(wasm: &[u8]) -> Module {
