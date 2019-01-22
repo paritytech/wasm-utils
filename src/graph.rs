@@ -116,6 +116,15 @@ impl Module {
 						};
 					}
 				},
+				elements::Section::Function(function_section) => {
+					for f in function_section.entries() {
+						res.funcs.push(Func {
+							type_ref: res.types.get(f.type_ref() as usize).expect("validated; qed").clone(),
+							// code will be populated later
+							origin: ImportedOrDeclared::Declared(Vec::new()),
+						});
+					};
+				},
 				_ => continue,
 			}
 		}
@@ -125,7 +134,28 @@ impl Module {
 
 }
 
+fn parse(wasm: &[u8]) -> Module {
+	Module::from_elements(&::parity_wasm::deserialize_buffer(wasm).expect("failed to parse wasm"))
+}
+
 #[cfg(test)]
 mod tests {
 
+	extern crate wabt;
+	use parity_wasm;
+
+	#[test]
+	fn smoky() {
+		let wasm = wabt::wat2wasm(r#"
+			(module
+				(type (func))
+				(func (type 0))
+			)
+		"#).expect("Failed to read fixture");
+
+		let f = super::parse(&wasm[..]);
+
+		assert_eq!(f.types.len(), 1);
+		assert_eq!(f.funcs.len(), 1);
+	}
 }

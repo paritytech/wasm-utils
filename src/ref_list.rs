@@ -144,6 +144,10 @@ impl<T> RefList<T> {
 
 		res
 	}
+
+	pub fn len(&self) -> usize {
+		self.items.len()
+	}
 }
 
 #[must_use]
