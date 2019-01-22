@@ -1,8 +1,7 @@
 //! Wasm binary graph format
 
 use parity_wasm::elements;
-use std::cell::RefCell;
-use std::rc::Rc;
+use super::ref_list::{RefList, EntryRef};
 
 enum ImportedOrDeclared<T=()> {
 	Imported(String, String),
@@ -26,21 +25,9 @@ type GlobalOrigin = ImportedOrDeclared<Vec<Instruction>>;
 type MemoryOrigin = ImportedOrDeclared;
 type TableOrigin = ImportedOrDeclared;
 
-type TypeRef = Rc<RefCell<elements::Type>>;
-type FuncRef = Rc<RefCell<Func>>;
-type GlobalRef = Rc<RefCell<Global>>;
-type MemoryRef = Rc<RefCell<Memory>>;
-type TableRef = Rc<RefCell<Table>>;
-
 struct Func {
-	type_ref: TypeRef,
+	type_ref: EntryRef<elements::Type>,
 	origin: FuncOrigin,
-}
-
-impl Func {
-	fn into_ref(self) -> Rc<RefCell<Self>> {
-		Rc::from(RefCell::from(self))
-	}
 }
 
 struct Global {
@@ -49,15 +36,9 @@ struct Global {
 	origin: GlobalOrigin,
 }
 
-impl Global {
-	fn into_ref(self) -> Rc<RefCell<Self>> {
-		Rc::from(RefCell::from(self))
-	}
-}
-
 enum Instruction {
 	Plain(elements::Instruction),
-	Call(FuncRef),
+	Call(EntryRef<Func>),
 }
 
 struct Memory {
@@ -65,21 +46,9 @@ struct Memory {
 	origin: MemoryOrigin,
 }
 
-impl Memory {
-	fn into_ref(self) -> Rc<RefCell<Self>> {
-		Rc::from(RefCell::from(self))
-	}
-}
-
 struct Table {
 	origin: TableOrigin,
 	limits: elements::ResizableLimits,
-}
-
-impl Table {
-	fn into_ref(self) -> Rc<RefCell<Self>> {
-		Rc::from(RefCell::from(self))
-	}
 }
 
 struct DataSegment {
@@ -93,19 +62,19 @@ struct ElementSegment {
 }
 
 enum Export {
-	Func(FuncRef),
-	Global(GlobalRef),
-	Table(TableRef),
-	Memory(MemoryRef),
+	Func(EntryRef<Func>),
+	Global(EntryRef<Global>),
+	Table(EntryRef<Table>),
+	Memory(EntryRef<Memory>),
 }
 
 #[derive(Default)]
 struct Module {
-	types: Vec<TypeRef>,
-	funcs: Vec<FuncRef>,
-	tables: Vec<TableRef>,
-	memory: Vec<MemoryRef>,
-	globals: Vec<GlobalRef>,
+	types: RefList<elements::Type>,
+	funcs: RefList<Func>,
+	tables: RefList<Table>,
+	memory: RefList<Memory>,
+	globals: RefList<Global>,
 	elements: Vec<ElementSegment>,
 	data: Vec<DataSegment>,
 	exports: Vec<Export>,
@@ -120,43 +89,37 @@ impl Module {
 		for section in module.sections() {
 			match section {
 				elements::Section::Type(type_section) => {
-					res.types = type_section
-						.types()
-						.iter()
-						.cloned()
-						.map(RefCell::<_>::from)
-						.map(Rc::<_>::from)
-						.collect();
+					res.types = RefList::from_slice(type_section.types());
 				},
 				elements::Section::Import(import_section) => {
 					for entry in import_section.entries() {
 						match *entry.external() {
 							elements::External::Function(f) => {
 								res.funcs.push(Func {
-									type_ref: res.types[f as usize].clone(),
+									type_ref: res.types.get(f as usize).expect("validated; qed").clone(),
 									origin: entry.into(),
-								}.into_ref())
+								});
 							},
 							elements::External::Memory(m) => {
 								res.memory.push(Memory {
 									limits: m.limits().clone(),
 									origin: entry.into(),
-								}.into_ref())
+								});
 							},
 							elements::External::Global(g) => {
 								res.globals.push(Global {
 									content: g.content_type(),
 									is_mut: g.is_mutable(),
 									origin: entry.into(),
-								}.into_ref())
+								});
 							},
 							elements::External::Table(t) => {
 								res.tables.push(Table {
 									limits: t.limits().clone(),
 									origin: entry.into(),
-								}.into_ref())
+								});
 							},
-						}
+						};
 					}
 				},
 				_ => continue,

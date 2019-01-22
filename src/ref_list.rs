@@ -44,7 +44,7 @@ impl<T> ::std::ops::Deref for Entry<T> {
 	}
 }
 
-struct EntryRef<T>(Rc<RefCell<Entry<T>>>);
+pub struct EntryRef<T>(Rc<RefCell<Entry<T>>>);
 
 impl<T> Clone for EntryRef<T> {
 	fn clone(&self) -> Self {
@@ -72,15 +72,21 @@ impl<T> EntryRef<T> {
 	}
 }
 
-struct RefList<T> {
+pub struct RefList<T> {
 	items: Vec<EntryRef<T>>,
+}
+
+impl<T> Default for RefList<T> {
+	fn default() -> Self {
+		RefList { items: Default::default() }
+	}
 }
 
 impl<T> RefList<T> {
 
-	pub fn new() -> Self { RefList { items: Default::default() } }
+	pub fn new() -> Self { Self::default() }
 
-	fn push(&mut self, t: T) -> EntryRef<T> {
+	pub fn push(&mut self, t: T) -> EntryRef<T> {
 		let idx = self.items.len();
 		let val: EntryRef<_> = Entry::new(t, idx).into();
 		self.items.push(val.clone());
@@ -92,6 +98,10 @@ impl<T> RefList<T> {
 			list: self,
 			deleted: Vec::new(),
 		}
+	}
+
+	pub fn get(&self, idx: usize) -> Option<EntryRef<T>> {
+		self.items.get(idx).cloned()
 	}
 
 	fn done_delete(&mut self, indices: &[usize]) {
@@ -115,12 +125,24 @@ impl<T> RefList<T> {
 		}
 	}
 
-	pub fn delete(&mut self, inddices: &[usize]) {
-		self.done_delete(inddices)
+	pub fn delete(&mut self, indices: &[usize]) {
+		self.done_delete(indices)
 	}
 
 	pub fn delete_one(&mut self, index: usize) {
 		self.done_delete(&[index])
+	}
+
+	pub fn from_slice(list: &[T]) -> Self
+		where T: Clone
+	{
+		let mut res = Self::new();
+
+		for t in list {
+			res.push(t.clone());
+		}
+
+		res
 	}
 }
 
