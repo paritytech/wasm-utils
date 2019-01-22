@@ -249,7 +249,7 @@ impl Module {
 			// TYPE SECTION (1)
 			let mut type_section = elements::TypeSection::default();
 			{
-				let mut types = type_section.types_mut();
+				let types = type_section.types_mut();
 
 				for type_entry in self.types.iter() {
 					types.push(type_entry.read().clone())
@@ -265,7 +265,7 @@ impl Module {
 		let mut import_section = elements::ImportSection::default();
 
 		let add = {
-			let mut imports = import_section.entries_mut();
+			let imports = import_section.entries_mut();
 			for func in self.funcs.iter() {
 				match func.read().origin {
 					Imported(ref module, ref field) => {
@@ -356,7 +356,7 @@ impl Module {
 			// FUNC SECTION (3)
 			let mut func_section = elements::FunctionSection::default();
 			{
-				let mut funcs = func_section.entries_mut();
+				let funcs = func_section.entries_mut();
 
 				for func in self.funcs.iter() {
 					match func.read().origin {
@@ -380,7 +380,7 @@ impl Module {
 			// TABLE SECTION (4)
 			let mut table_section = elements::TableSection::default();
 			{
-				let mut tables = table_section.entries_mut();
+				let tables = table_section.entries_mut();
 
 				for table in self.tables.iter() {
 					match table.read().origin {
@@ -404,7 +404,7 @@ impl Module {
 			// MEMORY SECTION (5)
 			let mut memory_section = elements::MemorySection::default();
 			{
-				let mut memories = memory_section.entries_mut();
+				let memories = memory_section.entries_mut();
 
 				for memory in self.memory.iter() {
 					match memory.read().origin {
@@ -428,7 +428,7 @@ impl Module {
 			// GLOBAL SECTION (6)
 			let mut global_section = elements::GlobalSection::default();
 			{
-				let mut globals = global_section.entries_mut();
+				let globals = global_section.entries_mut();
 
 				for global in self.globals.iter() {
 					match global.read().origin {
@@ -450,10 +450,10 @@ impl Module {
 		}
 
 		if self.exports.len() > 0 {
-			// EXPORT SECTION (6)
+			// EXPORT SECTION (7)
 			let mut export_section = elements::ExportSection::default();
 			{
-				let mut exports = export_section.entries_mut();
+				let exports = export_section.entries_mut();
 
 				for export in self.exports.iter() {
 					let internal = match export.local {
@@ -481,6 +481,42 @@ impl Module {
 			custom_round(&self.other, &mut idx, &mut sections);
 		}
 
+		if let Some(ref func_ref) = self.start {
+			// START SECTION (8)
+			sections.push(elements::Section::Start(
+				func_ref.order().expect("detached start func") as u32
+			));
+		}
+
+		if self.elements.len() > 0 {
+			// START SECTION (9)
+			let mut element_section = elements::ElementSection::default();
+			{
+				let element_segments = element_section.entries_mut();
+
+				for element in self.elements.iter() {
+					match element.location {
+						SegmentLocation::Default(ref offset_expr) => {
+							element_segments.push(
+								elements::ElementSegment::new(
+									0,
+									// TODO: generate init expr
+									elements::InitExpr::empty(),
+									element.value.clone(),
+								)
+							);
+						},
+						_ => unreachable!("Other segment location types are never added"),
+					}
+				}
+			}
+
+			sections.push(elements::Section::Element(element_section));
+			idx += 1;
+
+			custom_round(&self.other, &mut idx, &mut sections);
+		}
+
 		if self.funcs.len() > 0 {
 			// CODE SECTION (10)
 			let mut code_section = elements::CodeSection::default();
@@ -501,6 +537,36 @@ impl Module {
 				}
 			}
 			sections.push(elements::Section::Code(code_section));
+			idx += 1;
+
+			custom_round(&self.other, &mut idx, &mut sections);
+		}
+
+
+		if self.data.len() > 0 {
+			// DATA SECTION (11)
+			let mut data_section = elements::DataSection::default();
+			{
+				let data_segments = data_section.entries_mut();
+
+				for data_entry in self.data.iter() {
+					match data_entry.location {
+						SegmentLocation::Default(ref offset_expr) => {
+							data_segments.push(
+								elements::DataSegment::new(
+									0,
+									// TODO: generate init expr
+									elements::InitExpr::empty(),
+									data_entry.value.clone(),
+								)
+							);
+						},
+						_ => unreachable!("Other segment location types are never added"),
+					}
+				}
+			}
+
+			sections.push(elements::Section::Data(data_section));
 			idx += 1;
 
 			custom_round(&self.other, &mut idx, &mut sections);
@@ -565,7 +631,7 @@ mod tests {
 		let wat = r#"
 			(module
 				(type (func))
-				(func (type 0))
+				(import "env" "f1" (func (type 0)))
 				(memory 0 1)
 				(export "simple" (func 0))
 			)
@@ -577,7 +643,11 @@ mod tests {
 
 		let wat_new = wabt::wasm2wat(&wasm_new).expect("Failed to generate expectation");
 
-		assert_eq!(&wat_new, wat);
+		if &wasm_new[..] != &wasm[..] {
+			panic!(
+				"{}\n != \n{}", wat, wat_new
+			);
+		}
 	}
 
 }
