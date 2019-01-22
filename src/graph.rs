@@ -125,6 +125,22 @@ impl Module {
 						});
 					};
 				},
+				elements::Section::Table(table_section) => {
+					for t in table_section.entries() {
+						res.tables.push(Table {
+							limits: t.limits().clone(),
+							origin: ImportedOrDeclared::Declared(()),
+						});
+					}
+				},
+				elements::Section::Memory(table_section) => {
+					for t in table_section.entries() {
+						res.memory.push(Memory {
+							limits: t.limits().clone(),
+							origin: ImportedOrDeclared::Declared(()),
+						});
+					}
+				},
 				_ => continue,
 			}
 		}
@@ -150,6 +166,7 @@ mod tests {
 			(module
 				(type (func))
 				(func (type 0))
+				(memory 0 1)
 			)
 		"#).expect("Failed to read fixture");
 
@@ -157,5 +174,7 @@ mod tests {
 
 		assert_eq!(f.types.len(), 1);
 		assert_eq!(f.funcs.len(), 1);
+		assert_eq!(f.tables.len(), 0);
+		assert_eq!(f.memory.len(), 1);
 	}
 }
