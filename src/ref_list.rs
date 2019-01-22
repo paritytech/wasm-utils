@@ -45,6 +45,12 @@ impl<T> ::std::ops::Deref for Entry<T> {
 	}
 }
 
+impl<T> ::std::ops::DerefMut for Entry<T> {
+	fn deref_mut(&mut self) -> &mut T {
+		&mut self.val
+	}
+}
+
 pub struct EntryRef<T>(Rc<RefCell<Entry<T>>>);
 
 impl<T> Clone for EntryRef<T> {

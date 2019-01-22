@@ -18,10 +18,15 @@ impl<T> From<&elements::ImportEntry> for ImportedOrDeclared<T> {
 	}
 }
 
-pub type FuncOrigin = ImportedOrDeclared<Vec<Instruction>>;
+pub type FuncOrigin = ImportedOrDeclared<FuncBody>;
 pub type GlobalOrigin = ImportedOrDeclared<Vec<Instruction>>;
 pub type MemoryOrigin = ImportedOrDeclared;
 pub type TableOrigin = ImportedOrDeclared;
+
+pub struct FuncBody {
+	pub locals: Vec<elements::Local>,
+	pub code: Vec<Instruction>,
+}
 
 pub struct Func {
 	pub type_ref: EntryRef<elements::Type>,
@@ -37,6 +42,9 @@ pub struct Global {
 pub enum Instruction {
 	Plain(elements::Instruction),
 	Call(EntryRef<Func>),
+	CallIndirect(EntryRef<elements::Type>, u8),
+	GetGlobal(EntryRef<Global>),
+	SetGlobal(EntryRef<Global>),
 }
 
 pub struct Memory {
@@ -93,10 +101,40 @@ pub struct Module {
 
 impl Module {
 
+	fn map_instructions(&self, instructions: &[elements::Instruction]) -> Vec<Instruction> {
+		use parity_wasm::elements::Instruction::*;
+		instructions.iter().map(|instruction|  match instruction {
+			Call(func_idx) => Instruction::Call(self.funcs.clone_ref(*func_idx as usize)),
+			CallIndirect(type_idx, arg2) =>
+				Instruction::CallIndirect(
+					self.types.clone_ref(*type_idx as usize),
+					*arg2,
+				),
+			SetGlobal(global_idx) =>
+				Instruction::SetGlobal(self.globals.clone_ref(*global_idx as usize)),
+			GetGlobal(global_idx) =>
+				Instruction::GetGlobal(self.globals.clone_ref(*global_idx as usize)),
+			other_instruction => Instruction::Plain(other_instruction.clone()),
+		}).collect()
+	}
+
+	fn generate_instructions(&self, instructions: &[Instruction]) -> Vec<elements::Instruction> {
+		use parity_wasm::elements::Instruction::*;
+		instructions.iter().map(|instruction| match instruction {
+			Instruction::Call(func_ref) => Call(func_ref.order().expect("detached instruction!") as u32),
+			Instruction::CallIndirect(type_ref, arg2) => CallIndirect(type_ref.order().expect("detached instruction!") as u32, *arg2),
+			Instruction::SetGlobal(global_ref) => SetGlobal(global_ref.order().expect("detached instruction!") as u32),
+			Instruction::GetGlobal(global_ref) => GetGlobal(global_ref.order().expect("detached instruction!") as u32),
+			Instruction::Plain(plain) => plain.clone(),
+		}).collect()
+	}
+
 	pub fn from_elements(module: &elements::Module) -> Self {
 
 		let mut idx = 0;
 		let mut res = Module::default();
+
+		let mut imported_functions = 0;
 
 		for section in module.sections() {
 			match section {
@@ -111,6 +149,7 @@ impl Module {
 									type_ref: res.types.get(f as usize).expect("validated; qed").clone(),
 									origin: entry.into(),
 								});
+								imported_functions += 1;
 							},
 							elements::External::Memory(m) => {
 								res.memory.push(Memory {
@@ -138,8 +177,11 @@ impl Module {
 					for f in function_section.entries() {
 						res.funcs.push(Func {
 							type_ref: res.types.get(f.type_ref() as usize).expect("validated; qed").clone(),
-							// code will be populated later
-							origin: ImportedOrDeclared::Declared(Vec::new()),
+							origin: ImportedOrDeclared::Declared(FuncBody {
+								locals: Vec::new(),
+								// code will be populated later
+								code: Vec::new(),
+							}),
 						});
 					};
 				},
@@ -161,11 +203,11 @@ impl Module {
 				},
 				elements::Section::Global(global_section) => {
 					for g in global_section.entries() {
+						let init_code = res.map_instructions(g.init_expr().code());
 						res.globals.push(Global {
 							content: g.global_type().content_type(),
 							is_mut: g.global_type().is_mutable(),
-							// TODO: init expr
-							origin: ImportedOrDeclared::Declared(Vec::new()),
+							origin: ImportedOrDeclared::Declared(init_code),
 						});
 					}
 				},
@@ -205,9 +247,10 @@ impl Module {
 						// 	SegmentLocation::WithIndex(element_segment.index(), Vec::new())
 						// };
 
-						// TODO: transform instructions
-						// TODO: update parity-wasm and uncomment the above
-						let location = SegmentLocation::Default(Vec::new());
+						// TODO: update parity-wasm and uncomment the above instead
+						let location = SegmentLocation::Default(
+							res.map_instructions(element_segment.offset().code())
+						);
 
 						res.elements.push(ElementSegment {
 							value: element_segment.members().to_vec(),
@@ -215,18 +258,35 @@ impl Module {
 						});
 					}
 				},
+				elements::Section::Code(code_section) => {
+					let mut idx = 0;
+					for func_body in code_section.bodies() {
+						let code = res.map_instructions(func_body.code().elements());
+
+						let mut func = res.funcs.get_ref(imported_functions + idx).write();
+						match func.origin {
+							ImportedOrDeclared::Declared(ref mut body) => {
+								body.code = code;
+								body.locals = func_body.locals().iter().cloned().collect();
+							},
+							_ => unreachable!("All declared functions added after imported; qed"),
+						}
+					}
+				},
 				elements::Section::Data(data_section) => {
 					for data_segment in data_section.entries() {
-						// TODO: transform instructions
-						// TODO: update parity-wasm and uncomment the above
-						let location = SegmentLocation::Default(Vec::new());
+						// TODO: update parity-wasm and use the same logic as in
+						// commented element segment branch
+						let location = SegmentLocation::Default(
+							res.map_instructions(data_segment.offset().code())
+						);
 
 						res.data.push(DataSegment {
 							value: data_segment.value().to_vec(),
 							location: location,
 						});
 					}
-				}
+				},
 				_ => {
 					res.other.insert(idx, section.clone());
 				}
