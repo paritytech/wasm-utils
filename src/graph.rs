@@ -240,10 +240,8 @@ impl Module {
 						// let location = if element_segment.passive() {
 						// 	SegmentLocation::Passive
 						// } else if element_segment.index() == 0 {
-						// 	// TODO: transform instructions
 						// 	SegmentLocation::Default(Vec::new())
 						// } else {
-						// 	// TODO: transform instructions
 						// 	SegmentLocation::WithIndex(element_segment.index(), Vec::new())
 						// };
 
@@ -492,11 +490,10 @@ impl Module {
 
 				for global in self.globals.iter() {
 					match global.read().origin {
-						Declared(_) => {
+						Declared(ref init_code) => {
 							globals.push(elements::GlobalEntry::new(
 								elements::GlobalType::new(global.read().content, global.read().is_mut),
-								// TODO: generate init expr
-								elements::InitExpr::empty(),
+								elements::InitExpr::new(self.generate_instructions(&init_code[..])),
 							));
 						},
 						_ => continue,
@@ -559,8 +556,7 @@ impl Module {
 							element_segments.push(
 								elements::ElementSegment::new(
 									0,
-									// TODO: generate init expr
-									elements::InitExpr::empty(),
+									elements::InitExpr::new(self.generate_instructions(&offset_expr[..])),
 									element.value.clone(),
 								)
 							);
@@ -584,11 +580,10 @@ impl Module {
 
 				for func in self.funcs.iter() {
 					match func.read().origin {
-						Declared(_) => {
-							// TODO: generate body
+						Declared(ref body) => {
 							funcs.push(elements::FuncBody::new(
-								Vec::new(),
-								elements::Instructions::empty(),
+								body.locals.clone(),
+								elements::Instructions::new(self.generate_instructions(&body.code[..])),
 							));
 						},
 						_ => continue,
@@ -614,8 +609,7 @@ impl Module {
 							data_segments.push(
 								elements::DataSegment::new(
 									0,
-									// TODO: generate init expr
-									elements::InitExpr::empty(),
+									elements::InitExpr::new(self.generate_instructions(&offset_expr[..])),
 									data_entry.value.clone(),
 								)
 							);
