@@ -58,11 +58,16 @@ struct ElementSegment {
 	data: Vec<u32>,
 }
 
-enum Export {
+enum ExportLocal {
 	Func(EntryRef<Func>),
 	Global(EntryRef<Global>),
 	Table(EntryRef<Table>),
 	Memory(EntryRef<Memory>),
+}
+
+struct Export {
+	name: String,
+	local: ExportLocal,
 }
 
 #[derive(Default)]
@@ -157,20 +162,22 @@ impl Module {
 				},
 				elements::Section::Export(export_section) => {
 					for e in export_section.entries() {
-						match e.internal() {
+						let local = match e.internal() {
 							&elements::Internal::Function(func_idx) => {
-								res.exports.push(Export::Func(res.funcs.clone_ref(func_idx as usize)));
+								ExportLocal::Func(res.funcs.clone_ref(func_idx as usize))
 							},
 							&elements::Internal::Global(global_idx) => {
-								res.exports.push(Export::Global(res.globals.clone_ref(global_idx as usize)));
+								ExportLocal::Global(res.globals.clone_ref(global_idx as usize))
 							},
 							&elements::Internal::Memory(mem_idx) => {
-								res.exports.push(Export::Memory(res.memory.clone_ref(mem_idx as usize)));
+								ExportLocal::Memory(res.memory.clone_ref(mem_idx as usize))
 							},
 							&elements::Internal::Table(table_idx) => {
-								res.exports.push(Export::Table(res.tables.clone_ref(table_idx as usize)));
+								ExportLocal::Table(res.tables.clone_ref(table_idx as usize))
 							},
-						}
+						};
+
+						res.exports.push(Export { local: local, name: e.field().to_owned() })
 					}
 				},
 				_ => continue,
