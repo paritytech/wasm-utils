@@ -139,7 +139,7 @@ pub struct ElementSegment {
 	/// Location of the segment in the table space.
 	pub location: SegmentLocation,
 	/// Raw value (function indices) of the element segment.
-	pub value: Vec<u32>,
+	pub value: Vec<EntryRef<Func>>,
 }
 
 /// Export entry reference.
@@ -344,8 +344,13 @@ impl Module {
 							res.map_instructions(element_segment.offset().code())
 						);
 
+						let funcs_map = element_segment
+							.members().iter()
+							.map(|idx| res.funcs.clone_ref(*idx as usize))
+							.collect::<Vec<EntryRef<Func>>>();
+
 						res.elements.push(ElementSegment {
-							value: element_segment.members().to_vec(),
+							value: funcs_map,
 							location: location,
 						});
 					}
@@ -647,11 +652,15 @@ impl Module {
 				for element in self.elements.iter() {
 					match element.location {
 						SegmentLocation::Default(ref offset_expr) => {
+							let elements_map = element.value.iter()
+								.map(|f| f.order().expect("Detached func in element segment!") as u32)
+								.collect();
+
 							element_segments.push(
 								elements::ElementSegment::new(
 									0,
 									elements::InitExpr::new(self.generate_instructions(&offset_expr[..])),
-									element.value.clone(),
+									elements_map,
 								)
 							);
 						},
@@ -773,29 +782,5 @@ mod tests {
 		assert_eq!(f.funcs.get_ref(0).link_count(), 1);
 	}
 
-	#[test]
-	#[ignore]
-	fn simple_round_trip() {
-		let wat = r#"
-			(module
-				(type (func))
-				(import "env" "f1" (func (type 0)))
-				(memory 0 1)
-				(export "simple" (func 0))
-			)
-		"#;
-		let wasm = wabt::wat2wasm(wat).expect("Failed to read fixture");
-
-		let f = super::parse(&wasm[..]);
-		let wasm_new = super::generate(&f);
-
-		let wat_new = wabt::wasm2wat(&wasm_new).expect("Failed to generate expectation");
-
-		if &wasm_new[..] != &wasm[..] {
-			panic!(
-				"{}\n != \n{}", wat, wat_new
-			);
-		}
-	}
 
 }
