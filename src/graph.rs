@@ -1,5 +1,7 @@
 //! Wasm binary graph format
 
+#![warn(missing_docs)]
+
 use parity_wasm::elements;
 use super::ref_list::{RefList, EntryRef};
 use std::vec::Vec;
@@ -168,15 +170,25 @@ pub struct Export {
 /// Module
 #[derive(Debug, Default)]
 pub struct Module {
+	/// Refence-tracking list of types.
 	pub types: RefList<elements::Type>,
+	/// Refence-tracking list of funcs.
 	pub funcs: RefList<Func>,
+	/// Refence-tracking list of memory instances.
 	pub memory: RefList<Memory>,
+	/// Refence-tracking list of table instances.
 	pub tables: RefList<Table>,
+	/// Refence-tracking list of globals.
 	pub globals: RefList<Global>,
+	/// Reference to start function.
 	pub start: Option<EntryRef<Func>>,
+	/// References to exported objects.
 	pub exports: Vec<Export>,
+	/// List of element segments.
 	pub elements: Vec<ElementSegment>,
+	/// List of data segments.
 	pub data: Vec<DataSegment>,
+	/// Other module functions that are not decoded or processed.
 	pub other: BTreeMap<usize, elements::Section>,
 }
 
@@ -210,6 +222,7 @@ impl Module {
 		}).collect()
 	}
 
+	/// Initialize module from parity-wasm `Module`.
 	pub fn from_elements(module: &elements::Module) -> Self {
 
 		let mut idx = 0;
@@ -721,10 +734,12 @@ fn custom_round(
 	}
 }
 
+/// New module from parity-wasm `Module`
 pub fn parse(wasm: &[u8]) -> Module {
 	Module::from_elements(&::parity_wasm::deserialize_buffer(wasm).expect("failed to parse wasm"))
 }
 
+/// Generate parity-wasm `Module`
 pub fn generate(f: &Module) -> Vec<u8> {
 	let pm = f.generate();
 	::parity_wasm::serialize(pm).expect("failed to generate wasm")

@@ -1,3 +1,4 @@
+#![warn(missing_docs)]
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -16,6 +17,7 @@ impl From<usize> for EntryOrigin {
 	}
 }
 
+/// Reference counting, link-handling object.
 #[derive(Debug)]
 pub struct Entry<T> {
 	val: T,
@@ -23,13 +25,15 @@ pub struct Entry<T> {
 }
 
 impl<T> Entry<T> {
-	fn new(val: T, index: usize) -> Entry<T> {
+	/// New entity.
+	pub fn new(val: T, index: usize) -> Entry<T> {
 		Entry {
 			val: val,
 			index: EntryOrigin::Index(index),
 		}
 	}
 
+	/// Index of the element within the reference list.
 	pub fn order(&self) -> Option<usize> {
 		match self.index {
 			EntryOrigin::Detached => None,
@@ -52,6 +56,8 @@ impl<T> ::std::ops::DerefMut for Entry<T> {
 	}
 }
 
+/// Reference to the entry in the rerence list.
+#[derive(Debug)]
 pub struct EntryRef<T>(Rc<RefCell<Entry<T>>>);
 
 impl<T> Clone for EntryRef<T> {
@@ -67,18 +73,24 @@ impl<T> From<Entry<T>> for EntryRef<T> {
 }
 
 impl<T> EntryRef<T> {
+	/// Read the reference data.
 	pub fn read(&self) -> ::std::cell::Ref<Entry<T>> {
 		self.0.borrow()
 	}
 
+	/// Try to modify internal content of the referenced object.
+	///
+	/// May panic if it is already borrowed.
 	pub fn write(&self) -> ::std::cell::RefMut<Entry<T>> {
 		self.0.borrow_mut()
 	}
 
+	/// Index of the element within the reference list.
 	pub fn order(&self) -> Option<usize> {
 		self.0.borrow().order()
 	}
 
+	/// Number of active links to this entity.
 	pub fn link_count(&self) -> usize {
 		Rc::strong_count(&self.0) - 1
 	}
