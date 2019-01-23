@@ -41,7 +41,7 @@ impl fmt::Display for Error {
     }
 }
 
-/// If module has an exported "CREATE_SYMBOL" function we want to pack it into "constructor".
+/// If module has an exported function matching "create" symbol we want to pack it into "constructor".
 /// `raw_module` is the actual contract code
 /// `ctor_module` is the constructor which should return `raw_module`
 pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, target: &TargetRuntime) -> Result<elements::Module, Error> {
@@ -49,15 +49,15 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
     // Total number of constructor module import functions
     let ctor_import_functions = ctor_module.import_section().map(|x| x.functions()).unwrap_or(0);
 
-    // We need to find an internal ID of function witch is exported as "CREATE_SYMBOL"
+    // We need to find an internal ID of function which is exported as `symbols().create`
     // in order to find it in the Code section of the module
     let mut create_func_id = {
         let found_entry = ctor_module.export_section().ok_or(Error::NoExportSection)?.entries().iter()
-            .find(|entry| target.create_symbol == entry.field()).ok_or_else(|| Error::NoCreateSymbol(target.create_symbol))?;
+            .find(|entry| target.symbols().create == entry.field()).ok_or_else(|| Error::NoCreateSymbol(target.symbols().create))?;
 
         let function_index: usize = match found_entry.internal() {
             &Internal::Function(index) => index as usize,
-            _ => { return Err(Error::InvalidCreateMember(target.create_symbol)) },
+            _ => { return Err(Error::InvalidCreateMember(target.symbols().create)) },
         };
 
         // Calculates a function index within module's function section
@@ -73,10 +73,10 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
 
         // Deploy should have no arguments and also should return nothing
         if !func.params().is_empty() {
-            return Err(Error::InvalidCreateSignature(target.create_symbol));
+            return Err(Error::InvalidCreateSignature(target.symbols().create));
         }
         if func.return_type().is_some() {
-            return Err(Error::InvalidCreateSignature(target.create_symbol));
+            return Err(Error::InvalidCreateSignature(target.symbols().create));
         }
 
         function_internal_index
@@ -87,7 +87,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
         let mut found = false;
         for entry in ctor_module.import_section().ok_or(Error::NoImportSection)?.entries().iter() {
             if let External::Function(_) = *entry.external() {
-                if entry.field() == target.return_symbol { found = true; break; }
+                if entry.field() == target.symbols().return_ { found = true; break; }
                 else { id += 1; }
             }
         }
@@ -102,7 +102,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
             mbuilder.push_import(
                 builder::import()
                     .module("env")
-                    .field(&target.return_symbol)
+                    .field(&target.symbols().return_)
                     .external().func(import_sig)
                     .build()
                 );
@@ -195,13 +195,17 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
             ])).build()
             .build()
         .build();
+    
+    if let TargetRuntime::Substrate(_) = target {
+        return Ok(new_module)
+    }
 
     for section in new_module.sections_mut() {
         if let &mut Section::Export(ref mut export_section) = section {
             for entry in export_section.entries_mut().iter_mut() {
-                if target.create_symbol == entry.field() {
-                    // change `create_symbol` export name into default `call_symbol`.
-                    *entry.field_mut() = target.call_symbol.to_owned();
+                if target.symbols().create == entry.field() {
+                    // change `create` symbol export name into default `call` symbol name.
+                    *entry.field_mut() = target.symbols().call.to_owned();
                     *entry.internal_mut() = elements::Internal::Function(last_function_index as u32);
                 }
             }
@@ -221,8 +225,8 @@ mod test {
 
     fn test_packer(mut module: elements::Module, target_runtime: &TargetRuntime) {
         let mut ctor_module = module.clone();
-        optimize(&mut module, vec![target_runtime.call_symbol]).expect("Optimizer to finish without errors");
-        optimize(&mut ctor_module, vec![target_runtime.create_symbol]).expect("Optimizer to finish without errors");
+        optimize(&mut module, vec![target_runtime.symbols().call]).expect("Optimizer to finish without errors");
+        optimize(&mut ctor_module, vec![target_runtime.symbols().create]).expect("Optimizer to finish without errors");
 
         let raw_module = parity_wasm::serialize(module).unwrap();
         let ctor_module = pack_instance(raw_module.clone(), ctor_module, target_runtime).expect("Packing failed");
@@ -269,11 +273,11 @@ mod test {
                     .build()
             .build()
             .export()
-                .field(target_runtime.call_symbol)
+                .field(target_runtime.symbols().call)
                 .internal().func(1)
             .build()
             .export()
-                .field(target_runtime.create_symbol)
+                .field(target_runtime.symbols().create)
                 .internal().func(2)
             .build()
         .build(),
@@ -321,11 +325,11 @@ mod test {
                     .build()
             .build()
             .export()
-                .field(target_runtime.call_symbol)
+                .field(target_runtime.symbols().call)
                 .internal().func(1)
             .build()
             .export()
-                .field(target_runtime.create_symbol)
+                .field(target_runtime.symbols().create)
                 .internal().func(2)
             .build()
         .build(),

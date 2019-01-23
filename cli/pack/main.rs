@@ -31,7 +31,7 @@ fn main() {
     // Invoke packer
     let mut result_module = utils::pack_instance(raw_module, ctor_module, &utils::TargetRuntime::pwasm()).expect("Packing failed");
     // Optimize constructor, since it does not need everything
-    utils::optimize(&mut result_module, vec![target_runtime.call_symbol]).expect("Optimization failed");
+    utils::optimize(&mut result_module, vec![target_runtime.symbols().call]).expect("Optimization failed");
 
     parity_wasm::serialize_to_file(&output, result_module).expect("Serialization failed");
 }
