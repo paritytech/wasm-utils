@@ -218,7 +218,11 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
         inject_gas_counter_func(module, rules, gas_func)
 }
 
-
+/// Injects calls to counter function identified by index.
+/// Assumes gas counter function is already present in import section.
+///
+/// Can only fail if encounters operation forbidden by gas rules,
+/// in this case it returns error with the original module.
 pub fn inject_gas_counter_func(mut module: elements::Module, rules: &rules::Set, gas_counter_func: u32)
 	-> Result<elements::Module, elements::Module>
 {
