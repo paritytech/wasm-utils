@@ -7,8 +7,15 @@ use std::borrow::ToOwned;
 use std::string::String;
 use std::collections::BTreeMap;
 
+/// Imported or declared variant of the same thing.
+///
+/// In WebAssembly, function/global/memory/table instances can either be
+/// imported or declared internally, forming united index space.
+#[derive(Debug)]
 pub enum ImportedOrDeclared<T=()> {
+	/// Variant for imported instances.
 	Imported(String, String),
+	/// Variant for instances declared internally in the module.
 	Declared(T),
 }
 
@@ -18,74 +25,148 @@ impl<T> From<&elements::ImportEntry> for ImportedOrDeclared<T> {
 	}
 }
 
+/// Function origin (imported or internal).
 pub type FuncOrigin = ImportedOrDeclared<FuncBody>;
+/// Global origin (imported or internal).
 pub type GlobalOrigin = ImportedOrDeclared<Vec<Instruction>>;
+/// Memory origin (imported or internal).
 pub type MemoryOrigin = ImportedOrDeclared;
+/// Table origin (imported or internal).
 pub type TableOrigin = ImportedOrDeclared;
 
+/// Function body.
+///
+/// Function consist of declaration (signature, i.e. type reference)
+/// and the actual code. This part is the actual code.
+#[derive(Debug)]
 pub struct FuncBody {
 	pub locals: Vec<elements::Local>,
 	pub code: Vec<Instruction>,
 }
 
+/// Function declaration.
+///
+/// As with other instances, functions can be either imported or declared
+/// within the module - `origin` field is handling this.
+#[derive(Debug)]
 pub struct Func {
+	/// Function signature/type reference.
 	pub type_ref: EntryRef<elements::Type>,
+	/// Where this function comes from (imported or declared).
 	pub origin: FuncOrigin,
 }
 
+/// Global declaration.
+///
+/// As with other instances, globals can be either imported or declared
+/// within the module - `origin` field is handling this.
+#[derive(Debug)]
 pub struct Global {
 	pub content: elements::ValueType,
 	pub is_mut: bool,
 	pub origin: GlobalOrigin,
 }
 
+/// Instruction.
+///
+/// Some instructions don't reference any entities within the WebAssembly module,
+/// while others do. This enum is for tracking references when required.
+#[derive(Debug)]
 pub enum Instruction {
+	/// WebAssembly instruction that does not reference any module entities.
 	Plain(elements::Instruction),
+	/// Call instruction which references the function.
 	Call(EntryRef<Func>),
+	/// Indirect call instruction which references function type (function signature).
 	CallIndirect(EntryRef<elements::Type>, u8),
+	/// get_global instruction which references the global.
 	GetGlobal(EntryRef<Global>),
+	/// set_global instruction which references the global.
 	SetGlobal(EntryRef<Global>),
 }
 
+/// Memory instance decriptor.
+///
+/// As with other similar instances, memory instances can be either imported
+/// or declared within the module - `origin` field is handling this.
+#[derive(Debug)]
 pub struct Memory {
+	/// Declared limits of the table instance.
 	pub limits: elements::ResizableLimits,
+	/// Origin of the memory instance (internal or imported).
 	pub origin: MemoryOrigin,
 }
 
+/// Memory instance decriptor.
+///
+/// As with other similar instances, memory instances can be either imported
+/// or declared within the module - `origin` field is handling this.
+#[derive(Debug)]
 pub struct Table {
-	pub origin: TableOrigin,
+	/// Declared limits of the table instance.
 	pub limits: elements::ResizableLimits,
+	/// Origin of the table instance (internal or imported).
+	pub origin: TableOrigin,
 }
 
+/// Segment location.
+///
+/// Reserved for future use. Currenty only `Default` variant is supported.
+#[derive(Debug)]
 pub enum SegmentLocation {
+	/// Not used currently.
 	Passive,
+	/// Default segment location with index `0`.
 	Default(Vec<Instruction>),
+	/// Not used currently.
 	WithIndex(u32, Vec<Instruction>),
 }
 
+/// Data segment of data section.
+#[derive(Debug)]
 pub struct DataSegment {
+	/// Location of the segment in the linear memory.
 	pub location: SegmentLocation,
+	/// Raw value of the data segment.
 	pub value: Vec<u8>,
 }
 
+/// Element segment of element section.
+#[derive(Debug)]
 pub struct ElementSegment {
+	/// Location of the segment in the table space.
 	pub location: SegmentLocation,
+	/// Raw value (function indices) of the element segment.
 	pub value: Vec<u32>,
 }
 
+/// Export entry reference.
+///
+/// Module can export function, global, table or memory instance
+/// under specific name (field).
+#[derive(Debug)]
 pub enum ExportLocal {
+	/// Function reference.
 	Func(EntryRef<Func>),
+	/// Global reference.
 	Global(EntryRef<Global>),
+	/// Table reference.
 	Table(EntryRef<Table>),
+	/// Memory reference.
 	Memory(EntryRef<Memory>),
 }
 
+/// Export entry description.
+#[derive(Debug)]
 pub struct Export {
+	/// Name (field) of the export entry.
 	pub name: String,
+	/// What entity is exported.
 	pub local: ExportLocal,
 }
 
-#[derive(Default)]
+/// Module
+#[derive(Debug, Default)]
 pub struct Module {
 	pub types: RefList<elements::Type>,
 	pub funcs: RefList<Func>,

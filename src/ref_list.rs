@@ -84,6 +84,8 @@ impl<T> EntryRef<T> {
 	}
 }
 
+/// List that tracks references and indices.
+#[derive(Debug)]
 pub struct RefList<T> {
 	items: Vec<EntryRef<T>>,
 }
@@ -96,8 +98,12 @@ impl<T> Default for RefList<T> {
 
 impl<T> RefList<T> {
 
+	/// New empty list.
 	pub fn new() -> Self { Self::default() }
 
+	/// Push new element in the list.
+	///
+	/// Returns refernce tracking entry.
 	pub fn push(&mut self, t: T) -> EntryRef<T> {
 		let idx = self.items.len();
 		let val: EntryRef<_> = Entry::new(t, idx).into();
@@ -105,6 +111,12 @@ impl<T> RefList<T> {
 		val
 	}
 
+	/// Start deleting.
+	///
+	/// Start deleting some entries in the list. Returns transaction
+	/// that can be populated with number of removed entries.
+	/// When transaction is finailized, all entries are deleted and
+	/// internal indices of other entries are updated.
 	pub fn begin_delete(&mut self) -> DeleteTransaction<T> {
 		DeleteTransaction {
 			list: self,
@@ -112,6 +124,9 @@ impl<T> RefList<T> {
 		}
 	}
 
+	/// Get entry with index (checked).
+	///
+	/// Can return None when index out of bounts.
 	pub fn get(&self, idx: usize) -> Option<EntryRef<T>> {
 		self.items.get(idx).cloned()
 	}
@@ -134,14 +149,19 @@ impl<T> RefList<T> {
 		}
 	}
 
+	/// Delete several items.
 	pub fn delete(&mut self, indices: &[usize]) {
 		self.done_delete(indices)
 	}
 
+	/// Delete one item.
 	pub fn delete_one(&mut self, index: usize) {
 		self.done_delete(&[index])
 	}
 
+	/// Initialize from slice.
+	///
+	/// Slice members are cloned.
 	pub fn from_slice(list: &[T]) -> Self
 		where T: Clone
 	{
@@ -154,23 +174,32 @@ impl<T> RefList<T> {
 		res
 	}
 
+	/// Length of the list.
 	pub fn len(&self) -> usize {
 		self.items.len()
 	}
 
+	/// Clone entry (reference counting object to item) by index.
+	///
+	/// Will panic if index out of bounds.
 	pub fn clone_ref(&self, idx: usize) -> EntryRef<T> {
 		self.items[idx].clone()
 	}
 
+	/// Get reference to entry by index.
+	///
+	/// Will panic if index out of bounds.
 	pub fn get_ref(&self, idx: usize) -> &EntryRef<T> {
 		&self.items[idx]
 	}
 
+	/// Iterate through entries.
 	pub fn iter(&self) -> slice::Iter<EntryRef<T>> {
 		self.items.iter()
 	}
 }
 
+/// Delete transaction.
 #[must_use]
 pub struct DeleteTransaction<'a, T> {
 	list: &'a mut RefList<T>,
@@ -178,12 +207,14 @@ pub struct DeleteTransaction<'a, T> {
 }
 
 impl<'a, T> DeleteTransaction<'a, T> {
+	/// Add new element to the delete list.
 	pub fn push(self, idx: usize) -> Self {
 		let mut tx = self;
 		tx.deleted.push(idx);
 		tx
 	}
 
+	/// Commit transaction.
 	pub fn done(self) {
 		let indices = self.deleted;
 		let list = self.list;
