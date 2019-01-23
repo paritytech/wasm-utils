@@ -759,27 +759,83 @@ mod tests {
 
 	extern crate wabt;
 
+	use parity_wasm::elements;
+
+	fn load_sample(wat: &'static str) -> super::Module {
+		super::parse(&wabt::wat2wasm(wat).expect("faled to parse wat!")[..])
+	}
+
 	#[test]
 	fn smoky() {
-		let wasm = wabt::wat2wasm(r#"
-			(module
-				(type (func))
-				(func (type 0))
-				(memory 0 1)
-				(export "simple" (func 0))
-			)
-		"#).expect("Failed to read fixture");
+		let sample = load_sample(r#"
+(module
+	(type (func))
+	(func (type 0))
+	(memory 0 1)
+	(export "simple" (func 0))
+)
+"#
+		);
 
-		let f = super::parse(&wasm[..]);
+		assert_eq!(sample.types.len(), 1);
+		assert_eq!(sample.funcs.len(), 1);
+		assert_eq!(sample.tables.len(), 0);
+		assert_eq!(sample.memory.len(), 1);
+		assert_eq!(sample.exports.len(), 1);
 
-		assert_eq!(f.types.len(), 1);
-		assert_eq!(f.funcs.len(), 1);
-		assert_eq!(f.tables.len(), 0);
-		assert_eq!(f.memory.len(), 1);
-		assert_eq!(f.exports.len(), 1);
+		assert_eq!(sample.types.get_ref(0).link_count(), 1);
+		assert_eq!(sample.funcs.get_ref(0).link_count(), 1);
+	}
 
-		assert_eq!(f.types.get_ref(0).link_count(), 1);
-		assert_eq!(f.funcs.get_ref(0).link_count(), 1);
+	#[test]
+	fn table() {
+	let mut sample = load_sample(r#"
+(module
+  (import "env" "foo" (func $foo))
+  (func (param i32)
+     get_local 0
+     i32.const 0
+     call $i32.add
+     drop
+  )
+  (func $i32.add (export "i32.add") (param i32 i32) (result i32)
+    get_local 0
+	get_local 1
+	i32.add
+  )
+  (table 10 anyfunc)
+
+  ;; Refer all types of functions: imported, defined not exported and defined exported.
+  (elem (i32.const 0) 0 1 2)
+)"#
+		);
+
+		{
+			let element_func = &sample.elements[0].value[1];
+			let rfunc = element_func.read();
+			let rtype = &**rfunc.type_ref.read();
+			let elements::Type::Function(ref ftype) = rtype;
+
+			// it's func#1 in the function  space
+			assert_eq!(rfunc.order(), Some(1));
+			// it's type#1
+			assert_eq!(ftype.params().len(), 1);
+		}
+
+		sample.funcs.begin_delete().push(0).done();
+
+		{
+			let element_func = &sample.elements[0].value[1];
+			let rfunc = element_func.read();
+			let rtype = &**rfunc.type_ref.read();
+			let elements::Type::Function(ref ftype) = rtype;
+
+			/// import deleted so now it's func #0
+			assert_eq!(rfunc.order(), Some(0));
+			/// type should be the same, #1
+			assert_eq!(ftype.params().len(), 1);
+		}
+
 	}
 
 
