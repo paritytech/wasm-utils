@@ -215,7 +215,7 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 	//    (substract all imports that are NOT functions)
 
 	let gas_func = module.import_count(elements::ImportCountType::Function) as u32 - 1;
-        inject_gas_counter_func(module, rules, gas_func)
+	inject_gas_counter_func(module, rules, gas_func)
 }
 
 /// Injects calls to counter function identified by index.
@@ -272,10 +272,10 @@ pub fn inject_gas_counter_func(mut module: elements::Module, rules: &rules::Set,
 	if error { return Err(module); }
 
 	if need_grow_counter {
-                Ok(add_grow_counter(module, rules, gas_counter_func))
-        } else {
-                Ok(module)
-        }
+		Ok(add_grow_counter(module, rules, gas_counter_func))
+	} else {
+		Ok(module)
+	}
 }
 
 #[cfg(test)]
