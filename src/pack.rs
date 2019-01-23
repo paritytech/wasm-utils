@@ -195,10 +195,6 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
             ])).build()
             .build()
         .build();
-    
-    if let TargetRuntime::Substrate(_) = target {
-        return Ok(new_module)
-    }
 
     for section in new_module.sections_mut() {
         if let &mut Section::Export(ref mut export_section) = section {

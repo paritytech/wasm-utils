@@ -102,17 +102,21 @@ pub fn build(
 		)?;
 	}
 
-	if has_ctor(&ctor_module, target_runtime) {
-		if !skip_optimization {
-			optimize(&mut ctor_module, vec![target_runtime.symbols().create])?;
-		}
-		let ctor_module = pack_instance(
+	if !has_ctor(&ctor_module, target_runtime) {
+		return Ok((module, None))
+	}
+
+	if !skip_optimization {
+		optimize(&mut ctor_module, vec![target_runtime.symbols().create])?;
+	}
+
+	if let TargetRuntime::PWasm(_) = target_runtime {
+		ctor_module = pack_instance(
 			parity_wasm::serialize(module.clone()).map_err(Error::Encoding)?,
 			ctor_module.clone(),
 			target_runtime,
 		)?;
-		Ok((module, Some(ctor_module)))
-	} else {
-		Ok((module, None))
 	}
+
+	Ok((module, Some(ctor_module)))
 }
