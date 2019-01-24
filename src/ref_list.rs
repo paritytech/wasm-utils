@@ -196,12 +196,12 @@ impl<T> RefList<T> {
 	}
 
 	fn done_delete(&mut self, indices: &[usize]) {
-		for index in 0..self.items.len() {
-			let mut next_entry = self.items.get_mut(index).expect("Checked above; qed").write();
+		for mut entry in self.items.iter_mut() {
+			let mut entry = entry.write();
 			let total_less = indices.iter()
-				.take_while(|x| **x < next_entry.order().expect("Items in the list always have order; qed"))
+				.take_while(|x| **x < entry.order().expect("Items in the list always have order; qed"))
 				.count();
-			match next_entry.index {
+			match entry.index {
 				EntryOrigin::Detached => unreachable!("Items in the list always have order!"),
 				EntryOrigin::Index(ref mut idx) => { *idx -= total_less; },
 			};
