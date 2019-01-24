@@ -36,6 +36,8 @@ pub enum Error {
 	InconsistentSource,
 	/// Format error
 	Format(elements::Error),
+	/// Detached entry
+	DetachedEntry,
 }
 
 /// Function origin (imported or internal).
@@ -408,7 +410,7 @@ impl Module {
 		Ok(res)
 	}
 
-	fn generate(&self) -> elements::Module {
+	fn generate(&self) -> Result<elements::Module, Error> {
 		use self::ImportedOrDeclared::*;
 
 		let mut idx = 0;
@@ -445,8 +447,7 @@ impl Module {
 								module.to_owned(),
 								field.to_owned(),
 								elements::External::Function(
-									func.read().type_ref.order()
-										.expect("detached func encountered somehow!") as u32
+									func.read().type_ref.order().ok_or(Error::DetachedEntry)? as u32
 								),
 							)
 						)
@@ -533,8 +534,7 @@ impl Module {
 					match func.read().origin {
 						Declared(_) => {
 							funcs.push(elements::Func::new(
-								func.read().type_ref.order()
-									.expect("detached func encountered somehow!") as u32
+								func.read().type_ref.order().ok_or(Error::DetachedEntry)? as u32
 							));
 						},
 						_ => continue,
@@ -628,16 +628,16 @@ impl Module {
 				for export in self.exports.iter() {
 					let internal = match export.local {
 						ExportLocal::Func(ref func_ref) => {
-							elements::Internal::Function(func_ref.order().expect("detached func ref") as u32)
+							elements::Internal::Function(func_ref.order().ok_or(Error::DetachedEntry)? as u32)
 						},
 						ExportLocal::Global(ref global_ref) => {
-							elements::Internal::Global(global_ref.order().expect("detached global ref") as u32)
+							elements::Internal::Global(global_ref.order().ok_or(Error::DetachedEntry)? as u32)
 						},
 						ExportLocal::Table(ref table_ref) => {
-							elements::Internal::Table(table_ref.order().expect("detached table ref") as u32)
+							elements::Internal::Table(table_ref.order().ok_or(Error::DetachedEntry)? as u32)
 						},
 						ExportLocal::Memory(ref memory_ref) => {
-							elements::Internal::Memory(memory_ref.order().expect("detached memory ref") as u32)
+							elements::Internal::Memory(memory_ref.order().ok_or(Error::DetachedEntry)? as u32)
 						},
 					};
 
@@ -653,7 +653,7 @@ impl Module {
 		if let Some(ref func_ref) = self.start {
 			// START SECTION (8)
 			sections.push(elements::Section::Start(
-				func_ref.order().expect("detached start func") as u32
+				func_ref.order().ok_or(Error::DetachedEntry)? as u32
 			));
 		}
 
@@ -666,9 +666,10 @@ impl Module {
 				for element in self.elements.iter() {
 					match element.location {
 						SegmentLocation::Default(ref offset_expr) => {
-							let elements_map = element.value.iter()
-								.map(|f| f.order().expect("Detached func in element segment!") as u32)
-								.collect();
+							let mut elements_map = Vec::new();
+							for f in element.value.iter() {
+								elements_map.push(f.order().ok_or(Error::DetachedEntry)? as u32);
+							}
 
 							element_segments.push(
 								elements::ElementSegment::new(
@@ -742,7 +743,7 @@ impl Module {
 			custom_round(&self.other, &mut idx, &mut sections);
 		}
 
-		elements::Module::new(sections)
+		Ok(elements::Module::new(sections))
 	}
 }
 
@@ -763,9 +764,9 @@ pub fn parse(wasm: &[u8]) -> Result<Module, Error> {
 }
 
 /// Generate parity-wasm `Module`
-pub fn generate(f: &Module) -> Vec<u8> {
-	let pm = f.generate();
-	::parity_wasm::serialize(pm).expect("failed to generate wasm")
+pub fn generate(f: &Module) -> Result<Vec<u8>, Error> {
+	let pm = f.generate()?;
+	::parity_wasm::serialize(pm).map_err(Error::Format)
 }
 
 #[cfg(test)]
@@ -781,7 +782,7 @@ mod tests {
 	}
 
 	fn validate_sample(module: &super::Module) {
-		let binary = super::generate(module);
+		let binary = super::generate(module).expect("Failed to generate binary");
 		wabt::Module::read_binary(&binary, &Default::default())
 			.expect("Wabt failed to read final binary")
 			.validate()
