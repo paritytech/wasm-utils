@@ -192,11 +192,6 @@ impl<T> RefList<T> {
 	}
 
 	fn done_delete(&mut self, indices: &[usize]) {
-		for idx in indices {
-			let mut detached = self.items.remove(*idx);
-			detached.write().index = EntryOrigin::Detached;
-		}
-
 		for index in 0..self.items.len() {
 			let mut next_entry = self.items.get_mut(index).expect("Checked above; qed").write();
 			let total_less = indices.iter()
@@ -207,6 +202,14 @@ impl<T> RefList<T> {
 				EntryOrigin::Index(ref mut idx) => { *idx -= total_less; },
 			};
 		}
+
+		let mut total_removed = 0;
+		for idx in indices {
+			let mut detached = self.items.remove(*idx - total_removed);
+			detached.write().index = EntryOrigin::Detached;
+			total_removed += 1;
+		}
+
 	}
 
 	fn done_insert(&mut self, index: usize, mut items: Vec<EntryRef<T>>) {
@@ -354,6 +357,34 @@ mod tests {
 		assert_eq!(item10.order(), Some(0));
 		assert_eq!(item30.order(), Some(1));
 		assert_eq!(item20.order(), None);
+	}
+
+	#[test]
+	fn complex_delete() {
+		let mut list = RefList::<u32>::new();
+		let item00 = list.push(0);
+		let item10 = list.push(10);
+		let item20 = list.push(20);
+		let item30 = list.push(30);
+		let item40 = list.push(40);
+		let item50 = list.push(50);
+		let item60 = list.push(60);
+		let item70 = list.push(70);
+		let item80 = list.push(80);
+		let item90 = list.push(90);
+
+		list.begin_delete().push(1).push(2).push(4).push(6).done();
+
+		assert_eq!(item00.order(), Some(0));
+		assert_eq!(item10.order(), None);
+		assert_eq!(item20.order(), None);
+		assert_eq!(item30.order(), Some(1));
+		assert_eq!(item40.order(), None);
+		assert_eq!(item50.order(), Some(2));
+		assert_eq!(item60.order(), None);
+		assert_eq!(item70.order(), Some(3));
+		assert_eq!(item80.order(), Some(4));
+		assert_eq!(item90.order(), Some(5));
 	}
 
 	#[test]

@@ -895,7 +895,7 @@ mod tests {
 							_ => panic!("instruction #2 should be a call!"),
 						}
 					},
-					_ => panic!("func #4 should be declared!"),
+					_ => panic!("func #3 should be declared!"),
 				},
 				Some(2),
 				"Call should be recalculated to 2"
@@ -903,5 +903,70 @@ mod tests {
 		}
 
 		validate_sample(&sample);
+	}
+
+	#[test]
+	fn simple_opt() {
+		let mut sample = load_sample(r#"
+(module
+  (type (;0;) (func))
+  (type (;1;) (func (param i32 i32) (result i32)))
+  (type (;2;) (func (param i32 i32) (result i32)))
+  (type (;3;) (func (param i32 i32) (result i32)))
+  (import "env" "foo" (func (type 1)))
+  (import "env" "foo2" (func (type 2)))
+  (import "env" "foo3" (func (type 3)))
+  (func (type 0)
+     i32.const 1
+     i32.const 1
+     call 0
+     drop
+  )
+  (func (type 0)
+     i32.const 2
+     i32.const 2
+     call 1
+     drop
+  )
+  (func (type 0)
+     i32.const 3
+     i32.const 3
+     call 2
+     drop
+  )
+  (func (type 0)
+	call 3
+  )
+
+)"#
+		);
+
+		validate_sample(&sample);
+
+		// we'll delete functions #4 and #5, nobody references it so it should be fine;
+
+		sample.funcs.begin_delete().push(4).push(5).done();
+		validate_sample(&sample);
+
+		// now we'll delete functions #1 and #2 (imported and called from the deleted above),
+		// should also be fine
+		sample.funcs.begin_delete().push(1).push(2).done();
+		validate_sample(&sample);
+
+		// now the last declared function left should call another one before it (which is index #1)
+		let declared_func_2 = sample.funcs.clone_ref(2);
+		assert_eq!(
+			match &declared_func_2.read().origin {
+				super::ImportedOrDeclared::Declared(ref body) => {
+					match body.code[0] {
+						super::Instruction::Call(ref called_func) => called_func.order(),
+						ref wrong_instruction => panic!("instruction #2 should be a call but got {:?}!", wrong_instruction),
+					}
+				},
+				_ => panic!("func #0 should be declared!"),
+			},
+			Some(1),
+			"Call should be recalculated to 1"
+		);
 	}
 }
