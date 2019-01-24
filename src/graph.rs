@@ -368,6 +368,8 @@ impl Module {
 							},
 							_ => unreachable!("All declared functions added after imported; qed"),
 						}
+
+						idx += 1;
 					}
 				},
 				elements::Section::Data(data_section) => {
@@ -858,6 +860,10 @@ mod tests {
      call 0
      drop
   )
+  (func (type 0)
+	i32.const 0
+	call 1
+  )
 )"#
 		);
 
@@ -866,17 +872,19 @@ mod tests {
 
 			let mut tx = sample.funcs.begin_insert_not_until(
 				|f| match f.origin {
-					super::ImportedOrDeclared::Imported(_, _) => false,
-					_ => true,
+					super::ImportedOrDeclared::Imported(_, _) => true,
+					_ => false,
 				}
 			);
 
-			tx.push(super::Func {
+			let new_import_func = tx.push(super::Func {
 				type_ref: type_ref_0,
 				origin: super::ImportedOrDeclared::Imported("env".to_owned(), "bar".to_owned()),
 			});
 
 			tx.done();
+
+			assert_eq!(new_import_func.order(), Some(1));
 		}
 
 		validate_sample(&sample);
