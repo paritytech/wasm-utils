@@ -29,6 +29,15 @@ impl<T> From<&elements::ImportEntry> for ImportedOrDeclared<T> {
 	}
 }
 
+/// Error for this module
+#[derive(Debug)]
+pub enum Error {
+	/// Inconsistent source representation
+	InconsistentSource,
+	/// Format error
+	Format(elements::Error),
+}
+
 /// Function origin (imported or internal).
 pub type FuncOrigin = ImportedOrDeclared<FuncBody>;
 /// Global origin (imported or internal).
@@ -225,7 +234,7 @@ impl Module {
 	}
 
 	/// Initialize module from parity-wasm `Module`.
-	pub fn from_elements(module: &elements::Module) -> Self {
+	pub fn from_elements(module: &elements::Module) -> Result<Self, Error> {
 
 		let mut idx = 0;
 		let mut res = Module::default();
@@ -242,7 +251,7 @@ impl Module {
 						match *entry.external() {
 							elements::External::Function(f) => {
 								res.funcs.push(Func {
-									type_ref: res.types.get(f as usize).expect("validated; qed").clone(),
+									type_ref: res.types.get(f as usize).ok_or(Error::InconsistentSource)?.clone(),
 									origin: entry.into(),
 								});
 								imported_functions += 1;
@@ -272,7 +281,8 @@ impl Module {
 				elements::Section::Function(function_section) => {
 					for f in function_section.entries() {
 						res.funcs.push(Func {
-							type_ref: res.types.get(f.type_ref() as usize).expect("validated; qed").clone(),
+							type_ref: res.types.get(f.type_ref() as usize)
+								.ok_or(Error::InconsistentSource)?.clone(),
 							origin: ImportedOrDeclared::Declared(FuncBody {
 								locals: Vec::new(),
 								// code will be populated later
@@ -368,7 +378,7 @@ impl Module {
 								body.code = code;
 								body.locals = func_body.locals().iter().cloned().collect();
 							},
-							_ => unreachable!("All declared functions added after imported; qed"),
+							_ => { return Err(Error::InconsistentSource); }
 						}
 
 						idx += 1;
@@ -395,7 +405,7 @@ impl Module {
 			idx += 1;
 		}
 
-		res
+		Ok(res)
 	}
 
 	fn generate(&self) -> elements::Module {
@@ -748,8 +758,8 @@ fn custom_round(
 }
 
 /// New module from parity-wasm `Module`
-pub fn parse(wasm: &[u8]) -> Module {
-	Module::from_elements(&::parity_wasm::deserialize_buffer(wasm).expect("failed to parse wasm"))
+pub fn parse(wasm: &[u8]) -> Result<Module, Error> {
+	Module::from_elements(&::parity_wasm::deserialize_buffer(wasm).map_err(Error::Format)?)
 }
 
 /// Generate parity-wasm `Module`
@@ -767,6 +777,7 @@ mod tests {
 
 	fn load_sample(wat: &'static str) -> super::Module {
 		super::parse(&wabt::wat2wasm(wat).expect("faled to parse wat!")[..])
+			.expect("error making representation")
 	}
 
 	fn validate_sample(module: &super::Module) {
