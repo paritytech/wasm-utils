@@ -32,7 +32,7 @@ pub use gas::inject_gas_counter;
 pub use optimizer::{optimize, Error as OptimizerError};
 pub use pack::{pack_instance, Error as PackingError};
 pub use runtime_type::inject_runtime_type;
-pub use graph::{Module, parse, generate};
+pub use graph::{Module, parse as graph_parse, generate as graph_generate};
 pub use ref_list::{RefList, Entry, EntryRef, DeleteTransaction};
 
 pub struct TargetSymbols {

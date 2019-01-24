@@ -410,7 +410,8 @@ impl Module {
 		Ok(res)
 	}
 
-	fn generate(&self) -> Result<elements::Module, Error> {
+	/// Generate raw format representation.
+	pub fn generate(&self) -> Result<elements::Module, Error> {
 		use self::ImportedOrDeclared::*;
 
 		let mut idx = 0;
