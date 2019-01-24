@@ -765,6 +765,14 @@ mod tests {
 		super::parse(&wabt::wat2wasm(wat).expect("faled to parse wat!")[..])
 	}
 
+	fn validate_sample(module: &super::Module) {
+		let binary = super::generate(module);
+		wabt::Module::read_binary(&binary, &Default::default())
+			.expect("Wabt failed to read final binary")
+			.validate()
+			.expect("Invalid module");
+	}
+
 	#[test]
 	fn smoky() {
 		let sample = load_sample(r#"
@@ -789,7 +797,7 @@ mod tests {
 
 	#[test]
 	fn table() {
-	let mut sample = load_sample(r#"
+		let mut sample = load_sample(r#"
 (module
   (import "env" "foo" (func $foo))
   (func (param i32)
@@ -835,5 +843,42 @@ mod tests {
 			/// type should be the same, #1
 			assert_eq!(ftype.params().len(), 1);
 		}
+	}
+
+	#[test]
+	fn new_import() {
+		let mut sample = load_sample(r#"
+(module
+  (type (;0;) (func))
+  (type (;1;) (func (param i32 i32) (result i32)))
+  (import "env" "foo" (func (type 1)))
+  (func (param i32)
+     get_local 0
+     i32.const 0
+     call 0
+     drop
+  )
+)"#
+		);
+
+		{
+			let type_ref_0 = sample.types.clone_ref(0);
+
+			let mut tx = sample.funcs.begin_insert_not_until(
+				|f| match f.origin {
+					super::ImportedOrDeclared::Imported(_, _) => false,
+					_ => true,
+				}
+			);
+
+			tx.push(super::Func {
+				type_ref: type_ref_0,
+				origin: super::ImportedOrDeclared::Imported("env".to_owned(), "bar".to_owned()),
+			});
+
+			tx.done();
+		}
+
+		validate_sample(&sample);
 	}
 }

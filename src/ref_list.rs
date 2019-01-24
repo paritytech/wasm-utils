@@ -158,7 +158,7 @@ impl<T> RefList<T> {
 		}
 	}
 
-	/// Start inserting after the condition match (or at the end).
+	/// Start inserting after the condition first matches (or at the end).
 	///
 	/// Start inserting some entries in the list at he designated position.
 	/// Returns transaction that can be populated with some entries.
@@ -168,6 +168,19 @@ impl<T> RefList<T> {
 		where F : FnMut(&T) -> bool
 	{
 		let pos = self.items.iter().position(|rf| f(&**rf.read())).map(|x| x + 1).unwrap_or(self.items.len());
+		self.begin_insert(pos)
+	}
+
+	/// Start inserting after the condition first no longer true (or at the end).
+	///
+	/// Start inserting some entries in the list at he designated position.
+	/// Returns transaction that can be populated with some entries.
+	/// When transaction is finailized, all entries are inserted and
+	/// internal indices of other entries might be updated.
+	pub fn begin_insert_not_until<F>(&mut self, mut f: F) -> InsertTransaction<T>
+		where F : FnMut(&T) -> bool
+	{
+		let pos = self.items.iter().take_while(|rf| f(&**rf.read())).count();
 		self.begin_insert(pos)
 	}
 
@@ -407,6 +420,26 @@ mod tests {
 	}
 
 	#[test]
+	fn insert_not_until() {
+		let mut list = RefList::<u32>::new();
+		let item10 = list.push(10);
+		let item20 = list.push(20);
+		let item30 = list.push(30);
+
+		let mut insert_tx = list.begin_insert_not_until(|i| *i <= 20);
+
+		let item23 = insert_tx.push(23);
+		let item27 = insert_tx.push(27);
+		insert_tx.done();
+
+		assert_eq!(item10.order(), Some(0));
+		assert_eq!(item20.order(), Some(1));
+		assert_eq!(item23.order(), Some(2));
+		assert_eq!(item27.order(), Some(3));
+		assert_eq!(item30.order(), Some(4));
+	}
+
+	#[test]
 	fn insert_after_none() {
 		let mut list = RefList::<u32>::new();
 		let item10 = list.push(10);
@@ -414,6 +447,26 @@ mod tests {
 		let item30 = list.push(30);
 
 		let mut insert_tx = list.begin_insert_after(|i| *i == 50);
+
+		let item55 = insert_tx.push(23);
+		let item59 = insert_tx.push(27);
+		insert_tx.done();
+
+		assert_eq!(item10.order(), Some(0));
+		assert_eq!(item20.order(), Some(1));
+		assert_eq!(item30.order(), Some(2));
+		assert_eq!(item55.order(), Some(3));
+		assert_eq!(item59.order(), Some(4));
+	}
+
+	#[test]
+	fn insert_not_until_none() {
+		let mut list = RefList::<u32>::new();
+		let item10 = list.push(10);
+		let item20 = list.push(20);
+		let item30 = list.push(30);
+
+		let mut insert_tx = list.begin_insert_not_until(|i| *i < 50);
 
 		let item55 = insert_tx.push(23);
 		let item59 = insert_tx.push(27);
