@@ -87,7 +87,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
         let mut found = false;
         for entry in ctor_module.import_section().ok_or(Error::NoImportSection)?.entries().iter() {
             if let External::Function(_) = *entry.external() {
-                if entry.field() == target.symbols().return_ { found = true; break; }
+                if entry.field() == target.symbols().ret { found = true; break; }
                 else { id += 1; }
             }
         }
@@ -102,7 +102,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
             mbuilder.push_import(
                 builder::import()
                     .module("env")
-                    .field(&target.symbols().return_)
+                    .field(&target.symbols().ret)
                     .external().func(import_sig)
                     .build()
                 );

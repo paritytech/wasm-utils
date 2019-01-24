@@ -34,7 +34,7 @@ pub use runtime_type::inject_runtime_type;
 pub struct TargetSymbols {
     pub create: &'static str,
     pub call: &'static str,
-    pub return_: &'static str,
+    pub ret: &'static str,
 }
 
 pub enum TargetRuntime {
@@ -48,7 +48,7 @@ impl TargetRuntime {
         TargetRuntime::Substrate(TargetSymbols {
             create: "deploy",
             call: "call",
-            return_: "ext_return",
+            ret: "ext_return",
         })
     }
 
@@ -56,7 +56,7 @@ impl TargetRuntime {
         TargetRuntime::PWasm(TargetSymbols {
             create: "deploy",
             call: "call",
-            return_: "ret",
+            ret: "ret",
         })
     }
 
