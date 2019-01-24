@@ -24,12 +24,12 @@ fn main() {
                             .short("e")
                             .takes_value(true)
                             .value_name("functions")
-                            .help(&format!("Comma-separated list of exported functions to keep. Default: '{}'", target_runtime.call_symbol)))
+                            .help(&format!("Comma-separated list of exported functions to keep. Default: '{}'", target_runtime.symbols().call)))
                         .get_matches();
 
     let exports = matches
                     .value_of("exports")
-                    .unwrap_or(target_runtime.call_symbol)
+                    .unwrap_or(target_runtime.symbols().call)
                     .split(',')
                     .collect();
 

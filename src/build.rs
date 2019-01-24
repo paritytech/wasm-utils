@@ -51,7 +51,7 @@ impl std::fmt::Display for Error {
 
 fn has_ctor(module: &elements::Module, target_runtime: &TargetRuntime) -> bool {
 	if let Some(ref section) = module.export_section() {
-		section.entries().iter().any(|e| target_runtime.create_symbol == e.field())
+		section.entries().iter().any(|e| target_runtime.symbols().create == e.field())
 	} else {
 		false
 	}
@@ -94,25 +94,30 @@ pub fn build(
 	let mut ctor_module = module.clone();
 
 	let mut public_api_entries = public_api_entries.to_vec();
-	public_api_entries.push(target_runtime.call_symbol);
+	public_api_entries.push(target_runtime.symbols().call);
 	if !skip_optimization {
-		optimize(
-			&mut module,
-			public_api_entries,
-		)?;
+		optimize(&mut module, public_api_entries)?;
 	}
 
-	if has_ctor(&ctor_module, target_runtime) {
-		if !skip_optimization {
-			optimize(&mut ctor_module, vec![target_runtime.create_symbol])?;
-		}
-		let ctor_module = pack_instance(
+	if !has_ctor(&ctor_module, target_runtime) {
+		return Ok((module, None))
+	}
+
+	if !skip_optimization {
+		let preserved_exports = match target_runtime {
+			TargetRuntime::PWasm(_) => vec![target_runtime.symbols().call],
+			TargetRuntime::Substrate(_) => vec![target_runtime.symbols().call, target_runtime.symbols().create],
+		};
+		optimize(&mut ctor_module, preserved_exports)?;
+	}
+
+	if let TargetRuntime::PWasm(_) = target_runtime {
+		ctor_module = pack_instance(
 			parity_wasm::serialize(module.clone()).map_err(Error::Encoding)?,
 			ctor_module.clone(),
 			target_runtime,
 		)?;
-		Ok((module, Some(ctor_module)))
-	} else {
-		Ok((module, None))
 	}
+
+	Ok((module, Some(ctor_module)))
 }
