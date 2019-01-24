@@ -869,6 +869,7 @@ mod tests {
 
 		{
 			let type_ref_0 = sample.types.clone_ref(0);
+			let declared_func_2 = sample.funcs.clone_ref(2);
 
 			let mut tx = sample.funcs.begin_insert_not_until(
 				|f| match f.origin {
@@ -885,6 +886,20 @@ mod tests {
 			tx.done();
 
 			assert_eq!(new_import_func.order(), Some(1));
+			assert_eq!(declared_func_2.order(), Some(3));
+			assert_eq!(
+				match &declared_func_2.read().origin {
+					super::ImportedOrDeclared::Declared(ref body) => {
+						match body.code[1] {
+							super::Instruction::Call(ref called_func) => called_func.order(),
+							_ => panic!("instruction #2 should be a call!"),
+						}
+					},
+					_ => panic!("func #4 should be declared!"),
+				},
+				Some(2),
+				"Call should be recalculated to 2"
+			);
 		}
 
 		validate_sample(&sample);
