@@ -96,10 +96,7 @@ pub fn build(
 	let mut public_api_entries = public_api_entries.to_vec();
 	public_api_entries.push(target_runtime.symbols().call);
 	if !skip_optimization {
-		optimize(
-			&mut module,
-			public_api_entries,
-		)?;
+		optimize(&mut module, public_api_entries)?;
 	}
 
 	if !has_ctor(&ctor_module, target_runtime) {
@@ -107,7 +104,11 @@ pub fn build(
 	}
 
 	if !skip_optimization {
-		optimize(&mut ctor_module, vec![target_runtime.symbols().create])?;
+		let preserved_exports = match target_runtime {
+			TargetRuntime::PWasm(_) => vec![target_runtime.symbols().call],
+			TargetRuntime::Substrate(_) => vec![target_runtime.symbols().call, target_runtime.symbols().create],
+		};
+		optimize(&mut ctor_module, preserved_exports)?;
 	}
 
 	if let TargetRuntime::PWasm(_) = target_runtime {
