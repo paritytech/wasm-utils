@@ -167,7 +167,11 @@ impl<T> RefList<T> {
 	pub fn begin_insert_after<F>(&mut self, mut f: F) -> InsertTransaction<T>
 		where F : FnMut(&T) -> bool
 	{
-		let pos = self.items.iter().position(|rf| f(&**rf.read())).map(|x| x + 1).unwrap_or(self.items.len());
+		let pos = self
+			.items.iter()
+			.position(|rf| f(&**rf.read())).map(|x| x + 1)
+			.unwrap_or(self.items.len());
+
 		self.begin_insert(pos)
 	}
 
@@ -209,7 +213,6 @@ impl<T> RefList<T> {
 			detached.write().index = EntryOrigin::Detached;
 			total_removed += 1;
 		}
-
 	}
 
 	fn done_insert(&mut self, index: usize, mut items: Vec<EntryRef<T>>) {
