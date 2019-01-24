@@ -335,14 +335,17 @@ mod tests {
 	#[test]
 	fn order() {
 		let mut list = RefList::<u32>::new();
+		let item00 = list.push(0);
 		let item10 = list.push(10);
 		let item20 = list.push(20);
 		let item30 = list.push(30);
 
-		assert_eq!(item10.order(), Some(0));
-		assert_eq!(item20.order(), Some(1));
-		assert_eq!(item30.order(), Some(2));
+		assert_eq!(item00.order(), Some(0));
+		assert_eq!(item10.order(), Some(1));
+		assert_eq!(item20.order(), Some(2));
+		assert_eq!(item30.order(), Some(3));
 
+		assert_eq!(**item00.read(), 0);
 		assert_eq!(**item10.read(), 10);
 		assert_eq!(**item20.read(), 20);
 		assert_eq!(**item30.read(), 30);
@@ -351,14 +354,18 @@ mod tests {
 	#[test]
 	fn delete() {
 		let mut list = RefList::<u32>::new();
+		let item00 = list.push(0);
 		let item10 = list.push(10);
 		let item20 = list.push(20);
 		let item30 = list.push(30);
 
-		list.begin_delete().push(1).done();
+		list.begin_delete().push(2).done();
 
-		assert_eq!(item10.order(), Some(0));
-		assert_eq!(item30.order(), Some(1));
+		assert_eq!(item00.order(), Some(0));
+		assert_eq!(item10.order(), Some(1));
+		assert_eq!(item30.order(), Some(2));
+
+		// but this was detached
 		assert_eq!(item20.order(), None);
 	}
 
@@ -393,20 +400,22 @@ mod tests {
 	#[test]
 	fn insert() {
 		let mut list = RefList::<u32>::new();
+		let item00 = list.push(0);
 		let item10 = list.push(10);
 		let item20 = list.push(20);
 		let item30 = list.push(30);
 
-		let mut insert_tx = list.begin_insert(2);
+		let mut insert_tx = list.begin_insert(3);
 		let item23 = insert_tx.push(23);
 		let item27 = insert_tx.push(27);
 		insert_tx.done();
 
-		assert_eq!(item10.order(), Some(0));
-		assert_eq!(item20.order(), Some(1));
-		assert_eq!(item23.order(), Some(2));
-		assert_eq!(item27.order(), Some(3));
-		assert_eq!(item30.order(), Some(4));
+		assert_eq!(item00.order(), Some(0));
+		assert_eq!(item10.order(), Some(1));
+		assert_eq!(item20.order(), Some(2));
+		assert_eq!(item23.order(), Some(3));
+		assert_eq!(item27.order(), Some(4));
+		assert_eq!(item30.order(), Some(5));
 	}
 
 	#[test]
@@ -436,6 +445,7 @@ mod tests {
 	#[test]
 	fn insert_after() {
 		let mut list = RefList::<u32>::new();
+		let item00 = list.push(0);
 		let item10 = list.push(10);
 		let item20 = list.push(20);
 		let item30 = list.push(30);
@@ -446,11 +456,12 @@ mod tests {
 		let item27 = insert_tx.push(27);
 		insert_tx.done();
 
-		assert_eq!(item10.order(), Some(0));
-		assert_eq!(item20.order(), Some(1));
-		assert_eq!(item23.order(), Some(2));
-		assert_eq!(item27.order(), Some(3));
-		assert_eq!(item30.order(), Some(4));
+		assert_eq!(item00.order(), Some(0));
+		assert_eq!(item10.order(), Some(1));
+		assert_eq!(item20.order(), Some(2));
+		assert_eq!(item23.order(), Some(3));
+		assert_eq!(item27.order(), Some(4));
+		assert_eq!(item30.order(), Some(5));
 	}
 
 	#[test]
