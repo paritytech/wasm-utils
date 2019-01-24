@@ -33,6 +33,14 @@ impl<T> Entry<T> {
 		}
 	}
 
+	/// New detached entry.
+	pub fn new_detached(val: T) -> Entry<T> {
+		Entry {
+			val: val,
+			index: EntryOrigin::Detached,
+		}
+	}
+
 	/// Index of the element within the reference list.
 	pub fn order(&self) -> Option<usize> {
 		match self.index {
@@ -136,6 +144,33 @@ impl<T> RefList<T> {
 		}
 	}
 
+	/// Start inserting.
+	///
+	/// Start inserting some entries in the list at he designated position.
+	/// Returns transaction that can be populated with some entries.
+	/// When transaction is finailized, all entries are inserted and
+	/// internal indices of other entries might be updated.
+	pub fn begin_insert(&mut self, at: usize) -> InsertTransaction<T> {
+		InsertTransaction {
+			at: at,
+			list: self,
+			items: Vec::new(),
+		}
+	}
+
+	/// Start inserting after the condition match (or at the end).
+	///
+	/// Start inserting some entries in the list at he designated position.
+	/// Returns transaction that can be populated with some entries.
+	/// When transaction is finailized, all entries are inserted and
+	/// internal indices of other entries might be updated.
+	pub fn begin_insert_after<F>(&mut self, mut f: F) -> InsertTransaction<T>
+		where F : FnMut(&T) -> bool
+	{
+		let pos = self.items.iter().position(|rf| f(&**rf.read())).map(|x| x + 1).unwrap_or(self.items.len());
+		self.begin_insert(pos)
+	}
+
 	/// Get entry with index (checked).
 	///
 	/// Can return None when index out of bounts.
@@ -158,6 +193,19 @@ impl<T> RefList<T> {
 				EntryOrigin::Detached => unreachable!("Items in the list always have order!"),
 				EntryOrigin::Index(ref mut idx) => { *idx -= total_less; },
 			};
+		}
+	}
+
+	fn done_insert(&mut self, index: usize, mut items: Vec<EntryRef<T>>) {
+		let mut offset = 0;
+		for item in items.drain(..) {
+			item.write().index = EntryOrigin::Index(index + offset);
+			self.items.insert(index + offset, item);
+			offset += 1;
+		}
+
+		for idx in (index+offset)..self.items.len() {
+			self.get_ref(idx).write().index = EntryOrigin::Index(idx);
 		}
 	}
 
@@ -234,6 +282,32 @@ impl<'a, T> DeleteTransaction<'a, T> {
 	}
 }
 
+/// Insert transaction
+#[must_use]
+pub struct InsertTransaction<'a, T> {
+	at: usize,
+	list: &'a mut RefList<T>,
+	items: Vec<EntryRef<T>>,
+}
+
+impl<'a, T> InsertTransaction<'a, T> {
+	/// Add new element to the delete list.
+	pub fn push(&mut self, val: T) -> EntryRef<T> {
+		let val: EntryRef<_> = Entry::new_detached(val).into();
+		self.items.push(val.clone());
+		val
+	}
+
+	/// Commit transaction.
+	pub fn done(self) {
+		let items = self.items;
+		let list = self.list;
+		let at = self.at;
+		list.done_insert(at, items);
+	}
+}
+
+
 #[cfg(test)]
 mod tests {
 
@@ -246,7 +320,7 @@ mod tests {
 		let item20 = list.push(20);
 		let item30 = list.push(30);
 
-		assert_eq!(item10.order(), Some(0usize));
+		assert_eq!(item10.order(), Some(0));
 		assert_eq!(item20.order(), Some(1));
 		assert_eq!(item30.order(), Some(2));
 
@@ -267,5 +341,124 @@ mod tests {
 		assert_eq!(item10.order(), Some(0));
 		assert_eq!(item30.order(), Some(1));
 		assert_eq!(item20.order(), None);
+	}
+
+	#[test]
+	fn insert() {
+		let mut list = RefList::<u32>::new();
+		let item10 = list.push(10);
+		let item20 = list.push(20);
+		let item30 = list.push(30);
+
+		let mut insert_tx = list.begin_insert(2);
+		let item23 = insert_tx.push(23);
+		let item27 = insert_tx.push(27);
+		insert_tx.done();
+
+		assert_eq!(item10.order(), Some(0));
+		assert_eq!(item20.order(), Some(1));
+		assert_eq!(item23.order(), Some(2));
+		assert_eq!(item27.order(), Some(3));
+		assert_eq!(item30.order(), Some(4));
+	}
+
+	#[test]
+	fn insert_end() {
+		let mut list = RefList::<u32>::new();
+
+		let mut insert_tx = list.begin_insert(0);
+		let item0 = insert_tx.push(0);
+		insert_tx.done();
+
+		assert_eq!(item0.order(), Some(0));
+	}
+
+	#[test]
+	fn insert_end_more() {
+		let mut list = RefList::<u32>::new();
+		let item0 = list.push(0);
+
+		let mut insert_tx = list.begin_insert(1);
+		let item1 = insert_tx.push(1);
+		insert_tx.done();
+
+		assert_eq!(item0.order(), Some(0));
+		assert_eq!(item1.order(), Some(1));
+	}
+
+	#[test]
+	fn insert_after() {
+		let mut list = RefList::<u32>::new();
+		let item10 = list.push(10);
+		let item20 = list.push(20);
+		let item30 = list.push(30);
+
+		let mut insert_tx = list.begin_insert_after(|i| *i == 20);
+
+		let item23 = insert_tx.push(23);
+		let item27 = insert_tx.push(27);
+		insert_tx.done();
+
+		assert_eq!(item10.order(), Some(0));
+		assert_eq!(item20.order(), Some(1));
+		assert_eq!(item23.order(), Some(2));
+		assert_eq!(item27.order(), Some(3));
+		assert_eq!(item30.order(), Some(4));
+	}
+
+	#[test]
+	fn insert_after_none() {
+		let mut list = RefList::<u32>::new();
+		let item10 = list.push(10);
+		let item20 = list.push(20);
+		let item30 = list.push(30);
+
+		let mut insert_tx = list.begin_insert_after(|i| *i == 50);
+
+		let item55 = insert_tx.push(23);
+		let item59 = insert_tx.push(27);
+		insert_tx.done();
+
+		assert_eq!(item10.order(), Some(0));
+		assert_eq!(item20.order(), Some(1));
+		assert_eq!(item30.order(), Some(2));
+		assert_eq!(item55.order(), Some(3));
+		assert_eq!(item59.order(), Some(4));
+	}
+
+	#[test]
+	fn insert_after_empty() {
+		let mut list = RefList::<u32>::new();
+
+		let mut insert_tx = list.begin_insert_after(|x| *x == 100);
+		let item0 = insert_tx.push(0);
+		insert_tx.done();
+
+		assert_eq!(item0.order(), Some(0));
+	}
+
+	#[test]
+	fn insert_more() {
+		let mut list = RefList::<u32>::new();
+		let item10 = list.push(10);
+		let item20 = list.push(20);
+		let item30 = list.push(30);
+		let item40 = list.push(10);
+		let item50 = list.push(20);
+		let item60 = list.push(30);
+
+		let mut insert_tx = list.begin_insert(3);
+		let item35 = insert_tx.push(23);
+		let item37 = insert_tx.push(27);
+		insert_tx.done();
+
+		assert_eq!(item10.order(), Some(0));
+		assert_eq!(item20.order(), Some(1));
+		assert_eq!(item30.order(), Some(2));
+		assert_eq!(item35.order(), Some(3));
+		assert_eq!(item37.order(), Some(4));
+		assert_eq!(item40.order(), Some(5));
+		assert_eq!(item50.order(), Some(6));
+		assert_eq!(item60.order(), Some(7));
 	}
 }

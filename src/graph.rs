@@ -835,8 +835,5 @@ mod tests {
 			/// type should be the same, #1
 			assert_eq!(ftype.params().len(), 1);
 		}
-
 	}
-
-
 }
