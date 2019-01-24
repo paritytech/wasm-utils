@@ -41,7 +41,7 @@ impl fmt::Display for Error {
     }
 }
 
-/// If module has an exported function matching "create" symbol we want to pack it into "constructor".
+/// If a pwasm module has an exported function matching "create" symbol we want to pack it into "constructor".
 /// `raw_module` is the actual contract code
 /// `ctor_module` is the constructor which should return `raw_module`
 pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, target: &TargetRuntime) -> Result<elements::Module, Error> {
