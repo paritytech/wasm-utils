@@ -7,8 +7,9 @@ extern crate alloc;
 
 extern crate byteorder;
 extern crate parity_wasm;
-#[macro_use]
-extern crate log;
+#[macro_use] extern crate log;
+#[cfg(test)] #[macro_use] extern crate indoc;
+
 
 pub mod rules;
 

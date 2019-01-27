@@ -792,15 +792,13 @@ mod tests {
 
 	#[test]
 	fn smoky() {
-		let sample = load_sample(r#"
-(module
-	(type (func))
-	(func (type 0))
-	(memory 0 1)
-	(export "simple" (func 0))
-)
-"#
-		);
+		let sample = load_sample(indoc!(r#"
+			(module
+				(type (func))
+				(func (type 0))
+				(memory 0 1)
+				(export "simple" (func 0)))"#
+		));
 
 		assert_eq!(sample.types.len(), 1);
 		assert_eq!(sample.funcs.len(), 1);
@@ -814,26 +812,26 @@ mod tests {
 
 	#[test]
 	fn table() {
-		let mut sample = load_sample(r#"
-(module
-  (import "env" "foo" (func $foo))
-  (func (param i32)
-     get_local 0
-     i32.const 0
-     call $i32.add
-     drop
-  )
-  (func $i32.add (export "i32.add") (param i32 i32) (result i32)
-    get_local 0
-	get_local 1
-	i32.add
-  )
-  (table 10 anyfunc)
+		let mut sample = load_sample(indoc!(r#"
+			(module
+				(import "env" "foo" (func $foo))
+				(func (param i32)
+					get_local 0
+					i32.const 0
+					call $i32.add
+					drop
+				)
+				(func $i32.add (export "i32.add") (param i32 i32) (result i32)
+					get_local 0
+					get_local 1
+					i32.add
+				)
+				(table 10 anyfunc)
 
-  ;; Refer all types of functions: imported, defined not exported and defined exported.
-  (elem (i32.const 0) 0 1 2)
-)"#
-		);
+				;; Refer all types of functions: imported, defined not exported and defined exported.
+				(elem (i32.const 0) 0 1 2)
+			)"#
+		));
 
 		{
 			let element_func = &sample.elements[0].value[1];
@@ -864,23 +862,23 @@ mod tests {
 
 	#[test]
 	fn new_import() {
-		let mut sample = load_sample(r#"
-(module
-  (type (;0;) (func))
-  (type (;1;) (func (param i32 i32) (result i32)))
-  (import "env" "foo" (func (type 1)))
-  (func (param i32)
-     get_local 0
-     i32.const 0
-     call 0
-     drop
-  )
-  (func (type 0)
-	i32.const 0
-	call 1
-  )
-)"#
-		);
+		let mut sample = load_sample(indoc!(r#"
+			(module
+				(type (;0;) (func))
+				(type (;1;) (func (param i32 i32) (result i32)))
+				(import "env" "foo" (func (type 1)))
+				(func (param i32)
+					get_local 0
+					i32.const 0
+					call 0
+					drop
+				)
+				(func (type 0)
+					i32.const 0
+					call 1
+				)
+			)"#
+		));
 
 		{
 			let type_ref_0 = sample.types.clone_ref(0);
@@ -922,39 +920,38 @@ mod tests {
 
 	#[test]
 	fn simple_opt() {
-		let mut sample = load_sample(r#"
-(module
-  (type (;0;) (func))
-  (type (;1;) (func (param i32 i32) (result i32)))
-  (type (;2;) (func (param i32 i32) (result i32)))
-  (type (;3;) (func (param i32 i32) (result i32)))
-  (import "env" "foo" (func (type 1)))
-  (import "env" "foo2" (func (type 2)))
-  (import "env" "foo3" (func (type 3)))
-  (func (type 0)
-     i32.const 1
-     i32.const 1
-     call 0
-     drop
-  )
-  (func (type 0)
-     i32.const 2
-     i32.const 2
-     call 1
-     drop
-  )
-  (func (type 0)
-     i32.const 3
-     i32.const 3
-     call 2
-     drop
-  )
-  (func (type 0)
-	call 3
-  )
-
-)"#
-		);
+		let mut sample = load_sample(indoc!(r#"
+			(module
+				(type (;0;) (func))
+				(type (;1;) (func (param i32 i32) (result i32)))
+				(type (;2;) (func (param i32 i32) (result i32)))
+				(type (;3;) (func (param i32 i32) (result i32)))
+				(import "env" "foo" (func (type 1)))
+				(import "env" "foo2" (func (type 2)))
+				(import "env" "foo3" (func (type 3)))
+				(func (type 0)
+					i32.const 1
+					i32.const 1
+					call 0
+					drop
+				)
+				(func (type 0)
+					i32.const 2
+					i32.const 2
+					call 1
+					drop
+				)
+				(func (type 0)
+					i32.const 3
+					i32.const 3
+					call 2
+					drop
+				)
+				(func (type 0)
+					call 3
+				)
+			)"#
+		));
 
 		validate_sample(&sample);
 

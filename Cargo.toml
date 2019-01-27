@@ -16,6 +16,7 @@ byteorder = { version = "1", default-features = false }
 tempdir = "0.3"
 wabt = "0.2"
 diff = "0.1.11"
+indoc = "0.3"
 
 [features]
 default = ["std"]
