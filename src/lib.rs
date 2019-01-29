@@ -7,8 +7,9 @@ extern crate alloc;
 
 extern crate byteorder;
 extern crate parity_wasm;
-#[macro_use]
-extern crate log;
+#[macro_use] extern crate log;
+#[cfg(test)] #[macro_use] extern crate indoc;
+
 
 pub mod rules;
 
@@ -18,6 +19,8 @@ mod gas;
 mod optimizer;
 mod pack;
 mod runtime_type;
+mod graph;
+mod ref_list;
 mod symbols;
 
 pub mod stack_height;
@@ -30,6 +33,8 @@ pub use gas::inject_gas_counter;
 pub use optimizer::{optimize, Error as OptimizerError};
 pub use pack::{pack_instance, Error as PackingError};
 pub use runtime_type::inject_runtime_type;
+pub use graph::{Module, parse as graph_parse, generate as graph_generate};
+pub use ref_list::{RefList, Entry, EntryRef, DeleteTransaction};
 
 pub struct TargetSymbols {
     pub create: &'static str,
@@ -74,7 +79,11 @@ mod std {
     pub use alloc::{borrow, boxed, string, vec};
     pub use core::*;
 
-    pub mod collections {
-        pub use alloc::collections::{BTreeMap, BTreeSet};
-    }
+	pub mod rc {
+		pub use alloc::rc::Rc;
+	}
+
+	pub mod collections {
+		pub use alloc::collections::{BTreeMap, BTreeSet};
+	}
 }

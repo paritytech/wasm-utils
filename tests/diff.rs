@@ -30,6 +30,7 @@ fn validate_wasm(binary: &[u8]) -> Result<(), wabt::Error> {
 }
 
 fn run_diff_test<F: FnOnce(&[u8]) -> Vec<u8>>(test_dir: &str, name: &str, test: F) {
+	// FIXME: not going to work on windows?
 	let mut fixture_path = PathBuf::from(concat!(
 		env!("CARGO_MANIFEST_DIR"),
 		"/tests/fixtures/",
@@ -37,6 +38,7 @@ fn run_diff_test<F: FnOnce(&[u8]) -> Vec<u8>>(test_dir: &str, name: &str, test: 
 	fixture_path.push(test_dir);
 	fixture_path.push(name);
 
+	// FIXME: not going to work on windows?
 	let mut expected_path = PathBuf::from(concat!(
 		env!("CARGO_MANIFEST_DIR"),
 		"/tests/expectations/"
