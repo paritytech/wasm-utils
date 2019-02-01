@@ -16,6 +16,7 @@ pub mod rules;
 mod build;
 mod ext;
 mod gas;
+mod gas2;
 mod optimizer;
 mod pack;
 mod runtime_type;
@@ -30,6 +31,7 @@ pub use ext::{
     externalize, externalize_mem, shrink_unknown_stack, underscore_funcs, ununderscore_funcs,
 };
 pub use gas::inject_gas_counter;
+pub use gas2::{inject_gas_counter2, GasPrecision};
 pub use optimizer::{optimize, Error as OptimizerError};
 pub use pack::{pack_instance, Error as PackingError};
 pub use runtime_type::inject_runtime_type;
