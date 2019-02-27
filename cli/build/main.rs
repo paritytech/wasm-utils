@@ -1,8 +1,9 @@
 //! Experimental build tool for cargo
 
+#[macro_use]
+extern crate clap;
 extern crate glob;
 extern crate pwasm_utils as utils;
-extern crate clap;
 extern crate parity_wasm;
 extern crate pwasm_utils_cli as logger;
 
@@ -69,6 +70,7 @@ fn do_main() -> Result<(), Error> {
 	logger::init_log();
 
 	let matches = App::new("wasm-build")
+		.version(crate_version!())
 		.arg(Arg::with_name("target")
 			.index(1)
 			.required(true)
