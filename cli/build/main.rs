@@ -122,8 +122,9 @@ fn do_main() -> Result<(), Error> {
 
 		.get_matches();
 
-    let target_dir = matches.value_of("target").expect("is required; qed");
-    let wasm_binary = matches.value_of("wasm").expect("is required; qed");
+	let target_dir = matches.value_of("target").expect("is required; qed");
+	let wasm_binary = matches.value_of("wasm").expect("is required; qed");
+
 	let mut source_input = source::SourceInput::new(target_dir, wasm_binary);
 
 	let source_target_val = matches.value_of("source_target").unwrap_or_else(|| source::EMSCRIPTEN_TRIPLET);

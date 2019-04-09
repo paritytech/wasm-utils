@@ -9,10 +9,10 @@ use std::path::{Path, PathBuf};
 use parity_wasm::elements;
 
 fn slurp<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
-    let mut f = fs::File::open(path)?;
-    let mut buf = vec![];
-    f.read_to_end(&mut buf)?;
-    Ok(buf)
+	let mut f = fs::File::open(path)?;
+	let mut buf = vec![];
+	f.read_to_end(&mut buf)?;
+	Ok(buf)
 }
 
 fn dump<P: AsRef<Path>>(path: P, buf: &[u8]) -> io::Result<()> {
