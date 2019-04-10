@@ -497,19 +497,19 @@ mod tests {
 (module
   (memory 0)
   (func
-    ;; Push two values and then pop them.
-    ;; This will make max depth to be equal to 2.
-    i32.const 0
-    i32.const 1
-    drop
-    drop
+	;; Push two values and then pop them.
+	;; This will make max depth to be equal to 2.
+	i32.const 0
+	i32.const 1
+	drop
+	drop
 
-    ;; Code after `unreachable` shouldn't have an effect
-    ;; on the max depth.
-    unreachable
-    i32.const 0
-    i32.const 1
-    i32.const 2
+	;; Code after `unreachable` shouldn't have an effect
+	;; on the max depth.
+	unreachable
+	i32.const 0
+	i32.const 1
+	i32.const 2
   )
 )
 "#;
