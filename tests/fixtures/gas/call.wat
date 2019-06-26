@@ -2,7 +2,6 @@
 	(func $add_locals (param $x i32) (param $y i32) (result i32)
 		(local $t i32)
 
-		;; This looks 
 		get_local $x
 		get_local $y
 		call $add
