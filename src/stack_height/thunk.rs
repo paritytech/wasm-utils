@@ -21,9 +21,9 @@ pub(crate) fn generate_thunks(
 	ctx: &mut Context,
 	module: elements::Module,
 ) -> Result<elements::Module, Error> {
-	// First, we need to collect all function indicies that should be replaced by thunks
+	// First, we need to collect all function indices that should be replaced by thunks
 
-	// Function indicies which needs to generate thunks.
+	// Function indices which needs to generate thunks.
 	let mut need_thunks: Vec<u32> = Vec::new();
 
 	let mut replacement_map: Map<u32, Thunk> = {
@@ -38,11 +38,11 @@ pub(crate) fn generate_thunks(
 		let start_func_idx = module
 			.start_section();
 
-		let exported_func_indicies = exports.iter().filter_map(|entry| match *entry.internal() {
+		let exported_func_indices = exports.iter().filter_map(|entry| match *entry.internal() {
 			Internal::Function(ref function_idx) => Some(*function_idx),
 			_ => None,
 		});
-		let table_func_indicies = elem_segments
+		let table_func_indices = elem_segments
 			.iter()
 			.flat_map(|segment| segment.members())
 			.cloned();
@@ -50,7 +50,7 @@ pub(crate) fn generate_thunks(
 		// Replacement map is at least export section size.
 		let mut replacement_map: Map<u32, Thunk> = Map::new();
 
-		for func_idx in exported_func_indicies.chain(table_func_indicies).chain(start_func_idx.into_iter()) {
+		for func_idx in exported_func_indices.chain(table_func_indices).chain(start_func_idx.into_iter()) {
 			let callee_stack_cost = ctx.stack_cost(func_idx).ok_or_else(|| {
 				Error(format!("function with idx {} isn't found", func_idx))
 			})?;
