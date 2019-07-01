@@ -122,4 +122,5 @@ mod gas {
 	def_gas_test!(simple);
 	def_gas_test!(start);
 	def_gas_test!(call);
+	def_gas_test!(branch);
 }

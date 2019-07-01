@@ -1,3 +1,9 @@
+//! This module is used to instrument a Wasm module with gas metering code.
+//!
+//! The primary public interface is the `inject_gas_counter` function which transforms a given
+//! module into one that charges gas for code to be executed. See function documentation for usage
+//! and details.
+
 use std::vec::Vec;
 
 use parity_wasm::{elements, builder};
@@ -185,10 +191,37 @@ pub fn inject_counter(
 	Ok(())
 }
 
-/// Injects gas counter.
+/// Transforms a given module into one that charges gas for code to be executed by proxy of an
+/// imported gas metering function.
 ///
-/// Can only fail if encounters operation forbidden by gas rules,
-/// in this case it returns error with the original module.
+/// The output module imports a function "gas" from the module "env" with type signature
+/// [i32] -> []. The argument is the amount of gas required to continue execution. The external
+/// function is meant to keep track of the total amount of gas used and trap or otherwise halt
+/// execution of the runtime if the gas usage exceeds some allowed limit.
+///
+/// The calls to charge gas are inserted at the beginning of every block of code. A block is
+/// defined by `block`, `if`, `else`, `loop`, and `end` boundaries. Blocks form a nested hierarchy
+/// where `block`, `if`, `else`, and `loop` begin a new nested block, and `end` and `else` mark the
+/// end of a block. The gas cost of a block is determined statically as 1 plus the gas cost of all
+/// instructions directly in that block. Each instruction is only counted in the most deeply
+/// nested block containing it (ie. a block's cost does not include the cost of instructions in any
+/// blocks nested within it). The cost of the `begin`, `if`, and `loop` instructions is counted
+/// towards the block containing them, not the nested block that they open. There is no gas cost
+/// added for `end`/`else`, as they are pseudo-instructions. The gas cost of each instruction is
+/// determined by a `rules::Set` parameter. At the beginning of each block, this procedure injects
+/// new instructions to call the "gas" function with the gas cost of the block as an argument.
+///
+/// Additionally, each `memory.grow` instruction found in the module is instrumented to first make
+/// a call to charge gas for the additional pages requested. This cannot be done as part of the
+/// block level gas charges as the gas cost is not static and depends on the stack argument to
+/// `memory.grow`.
+///
+/// The above transformations are performed for every function body defined in the module. This
+/// function also rewrites all function indices references by code, table elements, etc., since
+/// the addition of an imported functions changes the indices of module-defined functions.
+///
+/// The function fails if the module contains any operation forbidden by gas rule set, returning
+/// the original module as an Err.
 pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 	-> Result<elements::Module, elements::Module>
 {
@@ -212,7 +245,7 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 	let mut module = mbuilder.build();
 
 	// calculate actual function index of the imported definition
-	//    (substract all imports that are NOT functions)
+	//    (subtract all imports that are NOT functions)
 
 	let gas_func = module.import_count(elements::ImportCountType::Function) as u32 - 1;
 	let total_func = module.functions_space() as u32;
@@ -244,6 +277,8 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 				}
 			},
 			&mut elements::Section::Element(ref mut elements_section) => {
+				// Note that we do not need to check the element type referenced because in the
+				// WebAssembly 1.0 spec, the only allowed element type is funcref.
 				for ref mut segment in elements_section.entries_mut() {
 					// update all indirect call addresses initial values
 					for func_index in segment.members_mut() {

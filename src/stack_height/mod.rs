@@ -39,7 +39,7 @@
 //!
 //! All values are treated equally, as they have the same size.
 //!
-//! The rationale for this it makes it possible to use this very naive wasm executor, that is:
+//! The rationale is that this makes it possible to use the following very naive wasm executor:
 //!
 //! - values are implemented by a union, so each value takes a size equal to
 //!   the size of the largest possible value type this union can hold. (In MVP it is 8 bytes)
@@ -93,35 +93,20 @@ mod thunk;
 pub struct Error(String);
 
 pub(crate) struct Context {
-	stack_height_global_idx: Option<u32>,
-	func_stack_costs: Option<Vec<u32>>,
+	stack_height_global_idx: u32,
+	func_stack_costs: Vec<u32>,
 	stack_limit: u32,
 }
 
 impl Context {
 	/// Returns index in a global index space of a stack_height global variable.
-	///
-	/// Panics if it haven't generated yet.
 	fn stack_height_global_idx(&self) -> u32 {
-		self.stack_height_global_idx.expect(
-			"stack_height_global_idx isn't yet generated;
-			Did you call `inject_stack_counter_global`",
-		)
+		self.stack_height_global_idx
 	}
 
 	/// Returns `stack_cost` for `func_idx`.
-	///
-	/// Panics if stack costs haven't computed yet or `func_idx` is greater
-	/// than the last function index.
 	fn stack_cost(&self, func_idx: u32) -> Option<u32> {
-		self.func_stack_costs
-			.as_ref()
-			.expect(
-				"func_stack_costs isn't yet computed;
-				Did you call `compute_stack_costs`?",
-			)
-			.get(func_idx as usize)
-			.cloned()
+		self.func_stack_costs.get(func_idx as usize).cloned()
 	}
 
 	/// Returns stack limit specified by the rules.
@@ -142,13 +127,11 @@ pub fn inject_limiter(
 	stack_limit: u32,
 ) -> Result<elements::Module, Error> {
 	let mut ctx = Context {
-		stack_height_global_idx: None,
-		func_stack_costs: None,
+		stack_height_global_idx: generate_stack_height_global(&mut module),
+		func_stack_costs: compute_stack_costs(&module)?,
 		stack_limit,
 	};
 
-	generate_stack_height_global(&mut ctx, &mut module);
-	compute_stack_costs(&mut ctx, &module)?;
 	instrument_functions(&mut ctx, &mut module)?;
 	let module = thunk::generate_thunks(&mut ctx, module)?;
 
@@ -156,7 +139,7 @@ pub fn inject_limiter(
 }
 
 /// Generate a new global that will be used for tracking current stack height.
-fn generate_stack_height_global(ctx: &mut Context, module: &mut elements::Module) {
+fn generate_stack_height_global(module: &mut elements::Module) -> u32 {
 	let global_entry = builder::global()
 		.value_type()
 		.i32()
@@ -168,10 +151,7 @@ fn generate_stack_height_global(ctx: &mut Context, module: &mut elements::Module
 	for section in module.sections_mut() {
 		if let elements::Section::Global(ref mut gs) = *section {
 			gs.entries_mut().push(global_entry);
-
-			let stack_height_global_idx = (gs.entries().len() as u32) - 1;
-			ctx.stack_height_global_idx = Some(stack_height_global_idx);
-			return;
+			return (gs.entries().len() as u32) - 1;
 		}
 	}
 
@@ -179,25 +159,26 @@ fn generate_stack_height_global(ctx: &mut Context, module: &mut elements::Module
 	module.sections_mut().push(elements::Section::Global(
 		elements::GlobalSection::with_entries(vec![global_entry]),
 	));
-	ctx.stack_height_global_idx = Some(0);
+	0
 }
 
 /// Calculate stack costs for all functions.
 ///
 /// Returns a vector with a stack cost for each function, including imports.
-fn compute_stack_costs(ctx: &mut Context, module: &elements::Module) -> Result<(), Error> {
+fn compute_stack_costs(module: &elements::Module) -> Result<Vec<u32>, Error> {
 	let func_imports = module.import_count(elements::ImportCountType::Function);
-	let mut func_stack_costs = vec![0; module.functions_space()];
-	// TODO: optimize!
-	for (func_idx, func_stack_cost) in func_stack_costs.iter_mut().enumerate() {
-		// We can't calculate stack_cost of the import functions.
-		if func_idx >= func_imports {
-			*func_stack_cost = compute_stack_cost(func_idx as u32, &module)?;
-		}
-	}
 
-	ctx.func_stack_costs = Some(func_stack_costs);
-	Ok(())
+	// TODO: optimize!
+	(0..module.functions_space())
+		.map(|func_idx| {
+			if func_idx < func_imports {
+				// We can't calculate stack_cost of the import functions.
+				Ok(0)
+			} else {
+				compute_stack_cost(func_idx as u32, &module)
+			}
+		})
+		.collect()
 }
 
 /// Stack cost of the given *defined* function is the sum of it's locals count (that is,
