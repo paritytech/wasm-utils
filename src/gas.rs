@@ -342,6 +342,14 @@ mod tests {
 	use super::*;
 	use rules;
 
+	fn get_function_body(module: &elements::Module, index: usize)
+		-> Option<&[elements::Instruction]>
+	{
+		module.code_section()
+			.and_then(|code_section| code_section.bodies().get(index))
+			.map(|func_body| func_body.code().elements())
+	}
+
 	#[test]
 	fn simple_grow() {
 		use parity_wasm::elements::Instruction::*;
@@ -367,18 +375,17 @@ mod tests {
 		let injected_module = inject_gas_counter(module, &rules::Set::default().with_grow_cost(10000)).unwrap();
 
 		assert_eq!(
+			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
 				I32Const(3),
 				Call(0),
 				GetGlobal(0),
 				Call(2),
 				End
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[0]
-				.code().elements()
+			][..]
 		);
 		assert_eq!(
+			get_function_body(&injected_module, 1).unwrap(),
 			&vec![
 				GetLocal(0),
 				GetLocal(0),
@@ -387,10 +394,7 @@ mod tests {
 				Call(0),
 				GrowMemory(0),
 				End,
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[1]
-				.code().elements()
+			][..]
 		);
 
 		let binary = serialize(injected_module).expect("serialization failed");
@@ -422,16 +426,14 @@ mod tests {
 		let injected_module = inject_gas_counter(module, &rules::Set::default()).unwrap();
 
 		assert_eq!(
+			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
 				I32Const(3),
 				Call(0),
 				GetGlobal(0),
 				GrowMemory(0),
 				End
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[0]
-				.code().elements()
+			][..]
 		);
 
 		assert_eq!(injected_module.functions_space(), 2);
@@ -464,15 +466,13 @@ mod tests {
 		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
 
 		assert_eq!(
+			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
 				I32Const(2),
 				Call(0),
 				GetGlobal(0),
 				End
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[0]
-				.code().elements()
+			][..]
 		);
 	}
 
@@ -506,6 +506,7 @@ mod tests {
 		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
 
 		assert_eq!(
+			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
 				I32Const(4),
 				Call(0),
@@ -519,10 +520,7 @@ mod tests {
 				End,
 				GetGlobal(0),
 				End
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[0]
-				.code().elements()
+			][..]
 		);
 	}
 
@@ -559,6 +557,7 @@ mod tests {
 		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
 
 		assert_eq!(
+			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
 				I32Const(4),
 				Call(0),
@@ -577,10 +576,7 @@ mod tests {
 				End,
 				GetGlobal(0),
 				End
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[0]
-				.code().elements()
+			][..]
 		);
 	}
 
@@ -621,6 +617,7 @@ mod tests {
 		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
 
 		assert_eq!(
+			get_function_body(&injected_module, 1).unwrap(),
 			&vec![
 				I32Const(4),
 				Call(0),
@@ -639,10 +636,7 @@ mod tests {
 				End,
 				Call(1),
 				End
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[1]
-				.code().elements()
+			][..]
 		);
 	}
 
