@@ -4,6 +4,7 @@
 //! module into one that charges gas for code to be executed. See function documentation for usage
 //! and details.
 
+use std::cmp::min;
 use std::mem;
 use std::vec::Vec;
 
@@ -19,9 +20,9 @@ pub fn update_call_index(instructions: &mut elements::Instructions, inserted_ind
 	}
 }
 
-/// A block of code represented by it's start position and cost.
-///
-/// The block typically starts with instructions such as `loop`, `block`, `if`, etc.
+/// A control flow block is opened with the `block`, `loop`, and `if` instructions and is closed
+/// with `end`. Each block implicitly defines a new label. The control blocks form a stack during
+/// program execution.
 ///
 /// An example of block:
 ///
@@ -38,54 +39,181 @@ pub fn update_call_index(instructions: &mut elements::Instructions, inserted_ind
 /// The start of the block is `i32.const 1`.
 ///
 #[derive(Debug)]
-struct BlockEntry {
+struct ControlBlock {
+	/// The lowest control stack index corresponding to a forward jump targeted by a br, br_if, or
+	/// br_table instruction within this control block. The index must refer to a control block
+	/// that is not a loop, meaning it is a forward jump.
+	///
+	/// This value will always be at most the index of the block itself, even if there is no
+	/// explicit br instruction targeting this control block. This does not affect how the value is
+	/// used in the metering algorithm.
+	lowest_forward_br: usize,
+
+	/// The active metering block that new instructions contribute a gas cost towards.
+	active_metered_block: MeteredBlock,
+
+	/// Whether the control block is a loop. Loops have the distinguishing feature that branches to
+	/// them jump to the beginning of the block, not the end as with the other control blocks.
+	is_loop: bool,
+}
+
+/// A block of code that metering instructions will be inserted at the beginning of. Metered blocks
+/// are constructed with the property that, in the absence of any traps, either all instructions in
+/// the block are executed or none are.
+#[derive(Debug)]
+struct MeteredBlock {
 	/// Index of the first instruction (aka `Opcode`) in the block.
 	start_pos: usize,
 	/// Sum of costs of all instructions until end of the block.
 	cost: u32,
 }
 
+/// Counter is used to manage state during the gas metering algorithm implemented by
+/// `inject_counter`.
 struct Counter {
-	/// All blocks in the order of theirs start position.
-	blocks: Vec<BlockEntry>,
+	/// A stack of control blocks. This stack grows when new control blocks are opened with
+	/// `block`, `loop`, and `if` and shrinks when control blocks are closed with `end`. The first
+	/// block on the stack corresponds to the function body, not to any labelled block. Therefore
+	/// the actual Wasm label index associated with each control block is 1 less than its position
+	/// in this stack.
+	stack: Vec<ControlBlock>,
 
-	// Stack of blocks. Each element is an index to a `self.blocks` vector.
-	stack: Vec<usize>,
+	/// A list of metered blocks that have been finalized, meaning they will no longer change.
+	finalized_blocks: Vec<MeteredBlock>,
 }
 
 impl Counter {
 	fn new() -> Counter {
 		Counter {
 			stack: Vec::new(),
-			blocks: Vec::new(),
+			finalized_blocks: Vec::new(),
 		}
 	}
 
-	/// Begin a new block.
-	fn begin(&mut self, cursor: usize) {
-		let block_idx = self.blocks.len();
-		self.blocks.push(BlockEntry {
-			start_pos: cursor,
-			cost: 1,
-		});
-		self.stack.push(block_idx);
+	/// Open a new control block. The cursor is the position of the first instruction in the block.
+	fn begin_control_block(&mut self, cursor: usize, is_loop: bool) {
+		let index = self.stack.len();
+		self.stack.push(ControlBlock {
+			lowest_forward_br: index,
+			active_metered_block: MeteredBlock {
+				start_pos: cursor,
+				cost: 0,
+			},
+			is_loop,
+		})
 	}
 
-	/// Finalize the current block.
+	/// Close the last control block. The cursor is the position of the final (pseudo-)instruction
+	/// in the block.
+	fn finalize_control_block(&mut self, cursor: usize) -> Result<(), ()> {
+		// This either finalizes the active metered block or merges its cost into the active
+		// metered block in the previous control block on the stack.
+		self.finalize_metered_block(cursor)?;
+
+		// Pop the control block stack.
+		let closing_control_block = self.stack.pop().ok_or_else(|| ())?;
+		let closing_control_index = self.stack.len();
+
+		if self.stack.is_empty() {
+			return Ok(())
+		}
+
+		// Update the lowest_forward_br for the control block now on top of the stack.
+		{
+			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
+			control_block.lowest_forward_br = min(
+				control_block.lowest_forward_br, closing_control_block.lowest_forward_br
+			);
+		}
+
+		// If there may have been a branch to a lower index, then also finalize the active metered
+		// block for the previous control block. Otherwise, finalize it and begin a new one.
+		//
+		// TODO: handle diverging function calls.
+		let may_br_out = closing_control_block.lowest_forward_br < closing_control_index;
+		if may_br_out {
+			self.finalize_metered_block(cursor)?;
+		}
+
+		Ok(())
+	}
+
+	/// Finalize the current active metered block.
 	///
 	/// Finalized blocks have final cost which will not change later.
-	fn finalize(&mut self) -> Result<(), ()> {
-		self.stack.pop().ok_or_else(|| ())?;
+	fn finalize_metered_block(&mut self, cursor: usize) -> Result<(), ()> {
+		let closing_metered_block = {
+			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
+			mem::replace(
+				&mut control_block.active_metered_block,
+				MeteredBlock {
+					start_pos: cursor + 1,
+					cost: 0,
+				}
+			)
+		};
+
+		// If the block was opened with a `begin`, then its start position will be set to that of
+		// the active metered block in the control block one higher on the stack. This is because
+		// any instructions between a `begin` and the first branch are part of the same basic block
+		// as the preceding instruction. In this case, instead of finalizing the block, merge its
+		// cost into the other active metered block to avoid injecting unnecessary instructions.
+		let last_index = self.stack.len() - 1;
+		if last_index > 0 {
+			let prev_control_block = self.stack.get_mut(last_index - 1)
+				.expect("last_index is greater than 0; last_index is stack size - 1; qed");
+			let prev_metered_block = &mut prev_control_block.active_metered_block;
+			if closing_metered_block.start_pos == prev_metered_block.start_pos {
+				prev_metered_block.cost += closing_metered_block.cost;
+				return Ok(())
+			}
+		}
+
+		if closing_metered_block.cost > 0 {
+			self.finalized_blocks.push(closing_metered_block);
+		}
 		Ok(())
+	}
+
+	/// Handle a branch instruction in the program. The cursor is the index of the branch
+	/// instruction in the program. The indices are the stack positions of the target control
+	/// blocks. Recall that the index is 0 for a `return` and relatively indexed from the top of
+	/// the stack by the label of `br`, `br_if`, and `br_table` instructions.
+	fn branch(&mut self, cursor: usize, indices: &[usize]) -> Result<(), ()> {
+		self.finalize_metered_block(cursor)?;
+
+		// Update the lowest_forward_br of the current control block.
+		for index in indices.iter().cloned() {
+			let target_is_loop = {
+				let target_block = self.stack.get(index).ok_or_else(|| ())?;
+				target_block.is_loop
+			};
+			if target_is_loop {
+				continue;
+			}
+
+			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
+			control_block.lowest_forward_br = min(control_block.lowest_forward_br, index);
+		}
+
+		Ok(())
+	}
+
+	/// Returns the height of the control stack.
+	fn stack_height(&self) -> usize {
+		self.stack.len()
+	}
+
+	/// Get a reference to the currently active metered block.
+	fn active_block(&mut self) -> Result<&mut MeteredBlock, ()> {
+		let top_block = self.stack.last_mut().ok_or_else(|| ())?;
+		Ok(&mut top_block.active_metered_block)
 	}
 
 	/// Increment the cost of the current block by the specified value.
 	fn increment(&mut self, val: u32) -> Result<(), ()> {
-		let stack_top = self.stack.last_mut().ok_or_else(|| ())?;
-		let top_block = self.blocks.get_mut(*stack_top).ok_or_else(|| ())?;
-
+		let top_block = self.active_block()?;
 		top_block.cost = top_block.cost.checked_add(val).ok_or_else(|| ())?;
-
 		Ok(())
 	}
 }
@@ -137,53 +265,74 @@ pub fn inject_counter(
 	let mut counter = Counter::new();
 
 	// Begin an implicit function (i.e. `func...end`) block.
-	counter.begin(0);
+	counter.begin_control_block(0, false);
 
 	for cursor in 0..instructions.elements().len() {
 		let instruction = &instructions.elements()[cursor];
+		let instruction_cost = rules.process(instruction)?;
 		match *instruction {
-			Block(_) | If(_) | Loop(_) => {
-				// Increment previous block with the cost of the current opcode.
-				let instruction_cost = rules.process(instruction)?;
+			Block(_) => {
 				counter.increment(instruction_cost)?;
 
-				// Begin new block. The cost of the following opcodes until `End` or `Else` will
-				// be included into this block.
-				counter.begin(cursor + 1);
+				// Begin new block. The cost of the following opcodes until `end` or `else` will
+				// be included into this block. The start position is set to that of the previous
+				// active metered block to signal that they should be merged in order to reduce
+				// unnecessary metering instructions.
+				let top_block_start_pos = counter.active_block()
+					.expect("stack is not empty; qed")
+					.start_pos;
+				counter.begin_control_block(top_block_start_pos, false);
+			}
+			If(_) => {
+				counter.increment(instruction_cost)?;
+				counter.begin_control_block(cursor + 1, false);
+			}
+			Loop(_) => {
+				counter.increment(instruction_cost)?;
+				counter.begin_control_block(cursor + 1, true);
 			}
 			End => {
-				// Just finalize current block.
-				counter.finalize()?;
+				counter.finalize_control_block(cursor)?;
 			},
 			Else => {
-				// `Else` opcode is being encountered. So the case we are looking at:
-				//
-				// if
-				//   ...
-				// else <-- cursor
-				//   ...
-				// end
-				//
-				// Finalize the current block ('then' part of the if statement),
-				// and begin another one for the 'else' part.
-				counter.finalize()?;
-				counter.begin(cursor + 1);
+				counter.finalize_metered_block(cursor)?;
+			}
+			Br(label) | BrIf(label) => {
+				counter.increment(instruction_cost)?;
+
+				// Label is a relative index into the control stack.
+				let index = counter.stack_height().checked_sub(1 + label as usize)
+					.ok_or_else(|| ())?;
+				counter.branch(cursor, &[index])?;
+			}
+			BrTable(ref label_vec, label_default) => {
+				counter.increment(instruction_cost)?;
+
+				let stack_height = counter.stack_height();
+				let indices = [label_default].iter().chain(label_vec.iter())
+					.map(|label| stack_height.checked_sub(1 + *label as usize))
+					.collect::<Option<Vec<_>>>()
+					.ok_or_else(|| ())?;
+				counter.branch(cursor, &indices)?;
+			}
+			Return => {
+				counter.increment(instruction_cost)?;
+				counter.branch(cursor, &[0])?;
 			}
 			_ => {
-				// An ordinal non control flow instruction. Just increment the cost of the current block.
-				let instruction_cost = rules.process(instruction)?;
+				// An ordinal non control flow instruction increments the cost of the current block.
 				counter.increment(instruction_cost)?;
 			}
 		}
 	}
 
-	insert_metering_calls(instructions, counter.blocks, gas_func)
+	insert_metering_calls(instructions, counter.finalized_blocks, gas_func)
 }
 
 // Then insert metering calls into a sequence of instructions given the block locations and costs.
 fn insert_metering_calls(
 	instructions: &mut elements::Instructions,
-	blocks: Vec<BlockEntry>,
+	mut blocks: Vec<MeteredBlock>,
 	gas_func: u32,
 )
 	-> Result<(), ()>
@@ -198,8 +347,10 @@ fn insert_metering_calls(
 	);
 	let new_instrs = instructions.elements_mut();
 
-	let mut original_pos = 0;
+	blocks.sort_unstable_by_key(|block| block.start_pos);
 	let mut block_iter = blocks.into_iter().peekable();
+
+	let mut original_pos = 0;
 	for instr in original_instrs.into_iter() {
 		// If there the next block starts at this position, inject metering instructions.
 		let used_block = if let Some(ref block) = block_iter.peek() {
@@ -339,6 +490,7 @@ mod tests {
 	extern crate wabt;
 
 	use parity_wasm::{serialize, builder, elements};
+	use parity_wasm::elements::Instruction::*;
 	use super::*;
 	use rules;
 
@@ -352,8 +504,6 @@ mod tests {
 
 	#[test]
 	fn simple_grow() {
-		use parity_wasm::elements::Instruction::*;
-
 		let module = builder::module()
 			.global()
 				.value_type().i32()
@@ -377,7 +527,7 @@ mod tests {
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
-				I32Const(3),
+				I32Const(2),
 				Call(0),
 				GetGlobal(0),
 				Call(2),
@@ -403,8 +553,6 @@ mod tests {
 
 	#[test]
 	fn grow_no_gas_no_track() {
-		use parity_wasm::elements::Instruction::*;
-
 		let module = builder::module()
 			.global()
 				.value_type().i32()
@@ -428,7 +576,7 @@ mod tests {
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
-				I32Const(3),
+				I32Const(2),
 				Call(0),
 				GetGlobal(0),
 				GrowMemory(0),
@@ -444,8 +592,6 @@ mod tests {
 
 	#[test]
 	fn simple() {
-		use parity_wasm::elements::Instruction::*;
-
 		let module = builder::module()
 			.global()
 				.value_type().i32()
@@ -468,7 +614,7 @@ mod tests {
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
-				I32Const(2),
+				I32Const(1),
 				Call(0),
 				GetGlobal(0),
 				End
@@ -478,8 +624,6 @@ mod tests {
 
 	#[test]
 	fn nested() {
-		use parity_wasm::elements::Instruction::*;
-
 		let module = builder::module()
 			.global()
 				.value_type().i32()
@@ -508,12 +652,10 @@ mod tests {
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
-				I32Const(4),
+				I32Const(6),
 				Call(0),
 				GetGlobal(0),
 				Block(elements::BlockType::NoResult),
-					I32Const(4),
-					Call(0),
 					GetGlobal(0),
 					GetGlobal(0),
 					GetGlobal(0),
@@ -526,8 +668,6 @@ mod tests {
 
 	#[test]
 	fn ifelse() {
-		use parity_wasm::elements::Instruction::*;
-
 		let module = builder::module()
 			.global()
 				.value_type().i32()
@@ -559,17 +699,17 @@ mod tests {
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
-				I32Const(4),
+				I32Const(3),
 				Call(0),
 				GetGlobal(0),
 				If(elements::BlockType::NoResult),
-					I32Const(4),
+					I32Const(3),
 					Call(0),
 					GetGlobal(0),
 					GetGlobal(0),
 					GetGlobal(0),
 				Else,
-					I32Const(3),
+					I32Const(2),
 					Call(0),
 					GetGlobal(0),
 					GetGlobal(0),
@@ -582,8 +722,6 @@ mod tests {
 
 	#[test]
 	fn call_index() {
-		use parity_wasm::elements::Instruction::*;
-
 		let module = builder::module()
 			.global()
 				.value_type().i32()
@@ -619,17 +757,17 @@ mod tests {
 		assert_eq!(
 			get_function_body(&injected_module, 1).unwrap(),
 			&vec![
-				I32Const(4),
+				I32Const(3),
 				Call(0),
 				Call(1),
 				If(elements::BlockType::NoResult),
-					I32Const(4),
+					I32Const(3),
 					Call(0),
 					Call(1),
 					Call(1),
 					Call(1),
 				Else,
-					I32Const(3),
+					I32Const(2),
 					Call(0),
 					Call(1),
 					Call(1),
@@ -643,8 +781,6 @@ mod tests {
 
 	#[test]
 	fn forbidden() {
-		use parity_wasm::elements::Instruction::*;
-
 		let module = builder::module()
 			.global()
 				.value_type().i32()
@@ -669,4 +805,225 @@ mod tests {
 
 	}
 
+	#[test]
+	fn branch_innermost() {
+		let module = builder::module()
+			.global()
+				.value_type().i32()
+				.build()
+			.function()
+				.signature().param().i32().build()
+				.body()
+					.with_instructions(elements::Instructions::new(
+						vec![
+							GetGlobal(0),
+							Block(elements::BlockType::NoResult),
+								GetGlobal(0),
+								Drop,
+								Br(0),
+								GetGlobal(0),
+								Drop,
+							End,
+							GetGlobal(0),
+							End
+						]
+					))
+					.build()
+				.build()
+			.build();
+
+		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
+
+		assert_eq!(
+			get_function_body(&injected_module, 0).unwrap(),
+			&vec![
+				I32Const(6),
+				Call(0),
+				GetGlobal(0),
+				Block(elements::BlockType::NoResult),
+					GetGlobal(0),
+					Drop,
+					Br(0),
+					I32Const(2),
+					Call(0),
+					GetGlobal(0),
+					Drop,
+				End,
+				GetGlobal(0),
+				End
+			][..]
+		);
+	}
+
+	#[test]
+	fn branch_outer_block() {
+		let module = builder::module()
+			.global()
+				.value_type().i32()
+				.build()
+			.function()
+				.signature().param().i32().build()
+				.body()
+					.with_instructions(elements::Instructions::new(
+						vec![
+							GetGlobal(0),
+							Block(elements::BlockType::NoResult),
+								GetGlobal(0),
+								If(elements::BlockType::NoResult),
+									GetGlobal(0),
+									GetGlobal(0),
+									Drop,
+									BrIf(1),
+								End,
+								GetGlobal(0),
+								Drop,
+							End,
+							GetGlobal(0),
+							End,
+						]
+					))
+					.build()
+				.build()
+			.build();
+
+		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
+
+		assert_eq!(
+			get_function_body(&injected_module, 0).unwrap(),
+			&vec![
+				I32Const(5),
+				Call(0),
+				GetGlobal(0),
+				Block(elements::BlockType::NoResult),
+					GetGlobal(0),
+					If(elements::BlockType::NoResult),
+						I32Const(4),
+						Call(0),
+						GetGlobal(0),
+						GetGlobal(0),
+						Drop,
+						BrIf(1),
+					End,
+					I32Const(2),
+					Call(0),
+					GetGlobal(0),
+					Drop,
+				End,
+				GetGlobal(0),
+				End,
+			][..]
+		);
+	}
+
+	#[test]
+	fn branch_outer_loop() {
+		let module = builder::module()
+			.global()
+				.value_type().i32()
+				.build()
+			.function()
+				.signature().param().i32().build()
+				.body()
+					.with_instructions(elements::Instructions::new(
+						vec![
+							GetGlobal(0),
+							Loop(elements::BlockType::NoResult),
+								GetGlobal(0),
+								If(elements::BlockType::NoResult),
+									GetGlobal(0),
+									BrIf(0),
+								Else,
+									GetGlobal(0),
+									GetGlobal(0),
+									Drop,
+									BrIf(1),
+								End,
+								GetGlobal(0),
+								Drop,
+							End,
+							GetGlobal(0),
+							End,
+						]
+					))
+					.build()
+				.build()
+			.build();
+
+		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
+
+		assert_eq!(
+			get_function_body(&injected_module, 0).unwrap(),
+			&vec![
+				I32Const(3),
+				Call(0),
+				GetGlobal(0),
+				Loop(elements::BlockType::NoResult),
+					I32Const(4),
+					Call(0),
+					GetGlobal(0),
+					If(elements::BlockType::NoResult),
+						I32Const(2),
+						Call(0),
+						GetGlobal(0),
+						BrIf(0),
+					Else,
+						I32Const(4),
+						Call(0),
+						GetGlobal(0),
+						GetGlobal(0),
+						Drop,
+						BrIf(1),
+					End,
+					GetGlobal(0),
+					Drop,
+				End,
+				GetGlobal(0),
+				End,
+			][..]
+		);
+	}
+
+	#[test]
+	fn return_from_func() {
+		let module = builder::module()
+			.global()
+				.value_type().i32()
+				.build()
+			.function()
+				.signature().param().i32().build()
+				.body()
+					.with_instructions(elements::Instructions::new(
+						vec![
+							GetGlobal(0),
+							If(elements::BlockType::NoResult),
+								Return,
+							End,
+							GetGlobal(0),
+							End,
+						]
+					))
+					.build()
+				.build()
+			.build();
+
+		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
+
+		assert_eq!(
+			get_function_body(&injected_module, 0).unwrap(),
+			&vec![
+				I32Const(2),
+				Call(0),
+				GetGlobal(0),
+				If(elements::BlockType::NoResult),
+					I32Const(1),
+					Call(0),
+					Return,
+				End,
+				I32Const(1),
+				Call(0),
+				GetGlobal(0),
+				End,
+			][..]
+		);
+	}
 }
