@@ -4,6 +4,7 @@
 //! module into one that charges gas for code to be executed. See function documentation for usage
 //! and details.
 
+use std::mem;
 use std::vec::Vec;
 
 use parity_wasm::{elements, builder};
@@ -176,16 +177,50 @@ pub fn inject_counter(
 		}
 	}
 
-	// Then insert metering calls.
-	let mut cumulative_offset = 0;
-	for block in counter.blocks {
-		let effective_pos = block.start_pos + cumulative_offset;
+	insert_metering_calls(instructions, counter.blocks, gas_func)
+}
 
-		instructions.elements_mut().insert(effective_pos, I32Const(block.cost as i32));
-		instructions.elements_mut().insert(effective_pos+1, Call(gas_func));
+// Then insert metering calls into a sequence of instructions given the block locations and costs.
+fn insert_metering_calls(
+	instructions: &mut elements::Instructions,
+	blocks: Vec<BlockEntry>,
+	gas_func: u32,
+)
+	-> Result<(), ()>
+{
+	use parity_wasm::elements::Instruction::*;
 
-		// Take into account these two inserted instructions.
-		cumulative_offset += 2;
+	// To do this in linear time, construct a new vector of instructions, copying over old
+	// instructions one by one and injecting new ones as required.
+	let new_instrs_len = instructions.elements().len() + 2 * blocks.len();
+	let original_instrs = mem::replace(
+		instructions.elements_mut(), Vec::with_capacity(new_instrs_len)
+	);
+	let new_instrs = instructions.elements_mut();
+
+	let mut original_pos = 0;
+	let mut block_iter = blocks.into_iter().peekable();
+	for instr in original_instrs.into_iter() {
+		// If there the next block starts at this position, inject metering instructions.
+		let used_block = if let Some(ref block) = block_iter.peek() {
+			if block.start_pos == original_pos {
+				new_instrs.push(I32Const(block.cost as i32));
+				new_instrs.push(Call(gas_func));
+				true
+			} else { false }
+		} else { false };
+
+		if used_block {
+			block_iter.next();
+		}
+
+		// Copy over the original instruction.
+		new_instrs.push(instr);
+		original_pos += 1;
+	}
+
+	if block_iter.next().is_some() {
+		return Err(());
 	}
 
 	Ok(())
