@@ -385,17 +385,18 @@ fn insert_metering_calls(
 /// function is meant to keep track of the total amount of gas used and trap or otherwise halt
 /// execution of the runtime if the gas usage exceeds some allowed limit.
 ///
-/// The calls to charge gas are inserted at the beginning of every block of code. A block is
-/// defined by `block`, `if`, `else`, `loop`, and `end` boundaries. Blocks form a nested hierarchy
-/// where `block`, `if`, `else`, and `loop` begin a new nested block, and `end` and `else` mark the
-/// end of a block. The gas cost of a block is determined statically as 1 plus the gas cost of all
-/// instructions directly in that block. Each instruction is only counted in the most deeply
-/// nested block containing it (ie. a block's cost does not include the cost of instructions in any
-/// blocks nested within it). The cost of the `begin`, `if`, and `loop` instructions is counted
-/// towards the block containing them, not the nested block that they open. There is no gas cost
-/// added for `end`/`else`, as they are pseudo-instructions. The gas cost of each instruction is
-/// determined by a `rules::Set` parameter. At the beginning of each block, this procedure injects
-/// new instructions to call the "gas" function with the gas cost of the block as an argument.
+/// The body of each function is divided into metered blocks, and the calls to charge gas are
+/// inserted at the beginning of every such block of code. A metered block is defined so that,
+/// unless there is a trap, either all of the instructions are executed or none are. These are
+/// similar to basic blocks in a control flow graph, except that in some cases multiple basic
+/// blocks can be merged into a single metered block. This is the case if any path through the
+/// control flow graph containing one basic block also contains another.
+///
+/// Charging gas is at the beginning of each metered block ensures that 1) all instructions
+/// executed are already paid for, 2) instructions that will not be executed are not charged for
+/// unless execution traps, and 3) the number of calls to "gas" is minimized. The corollary is that
+/// modules instrumented with this metering code may charge gas for instructions not executed in
+/// the event of a trap.
 ///
 /// Additionally, each `memory.grow` instruction found in the module is instrumented to first make
 /// a call to charge gas for the additional pages requested. This cannot be done as part of the
@@ -405,6 +406,8 @@ fn insert_metering_calls(
 /// The above transformations are performed for every function body defined in the module. This
 /// function also rewrites all function indices references by code, table elements, etc., since
 /// the addition of an imported functions changes the indices of module-defined functions.
+///
+/// This routine runs in time linear in the size of the input module.
 ///
 /// The function fails if the module contains any operation forbidden by gas rule set, returning
 /// the original module as an Err.
