@@ -128,8 +128,6 @@ impl Counter {
 
 		// If there may have been a branch to a lower index, then also finalize the active metered
 		// block for the previous control block. Otherwise, finalize it and begin a new one.
-		//
-		// TODO: handle diverging function calls.
 		let may_br_out = closing_control_block.lowest_forward_br < closing_control_index;
 		if may_br_out {
 			self.finalize_metered_block(cursor)?;
@@ -153,9 +151,9 @@ impl Counter {
 			)
 		};
 
-		// If the block was opened with a `begin`, then its start position will be set to that of
+		// If the block was opened with a `block`, then its start position will be set to that of
 		// the active metered block in the control block one higher on the stack. This is because
-		// any instructions between a `begin` and the first branch are part of the same basic block
+		// any instructions between a `block` and the first branch are part of the same basic block
 		// as the preceding instruction. In this case, instead of finalizing the block, merge its
 		// cost into the other active metered block to avoid injecting unnecessary instructions.
 		let last_index = self.stack.len() - 1;
@@ -183,7 +181,7 @@ impl Counter {
 		self.finalize_metered_block(cursor)?;
 
 		// Update the lowest_forward_br of the current control block.
-		for index in indices.iter().cloned() {
+		for &index in indices {
 			let target_is_loop = {
 				let target_block = self.stack.get(index).ok_or_else(|| ())?;
 				target_block.is_loop
@@ -199,20 +197,20 @@ impl Counter {
 		Ok(())
 	}
 
-	/// Returns the height of the control stack.
-	fn stack_height(&self) -> usize {
-		self.stack.len()
+	/// Returns the stack index of the active control block. Returns None if stack is empty.
+	fn active_control_block_index(&self) -> Option<usize> {
+		self.stack.len().checked_sub(1)
 	}
 
 	/// Get a reference to the currently active metered block.
-	fn active_block(&mut self) -> Result<&mut MeteredBlock, ()> {
+	fn active_metered_block(&mut self) -> Result<&mut MeteredBlock, ()> {
 		let top_block = self.stack.last_mut().ok_or_else(|| ())?;
 		Ok(&mut top_block.active_metered_block)
 	}
 
 	/// Increment the cost of the current block by the specified value.
 	fn increment(&mut self, val: u32) -> Result<(), ()> {
-		let top_block = self.active_block()?;
+		let top_block = self.active_metered_block()?;
 		top_block.cost = top_block.cost.checked_add(val).ok_or_else(|| ())?;
 		Ok(())
 	}
@@ -278,9 +276,7 @@ pub fn inject_counter(
 				// be included into this block. The start position is set to that of the previous
 				// active metered block to signal that they should be merged in order to reduce
 				// unnecessary metering instructions.
-				let top_block_start_pos = counter.active_block()
-					.expect("stack is not empty; qed")
-					.start_pos;
+				let top_block_start_pos = counter.active_metered_block()?.start_pos;
 				counter.begin_control_block(top_block_start_pos, false);
 			}
 			If(_) => {
@@ -301,19 +297,19 @@ pub fn inject_counter(
 				counter.increment(instruction_cost)?;
 
 				// Label is a relative index into the control stack.
-				let index = counter.stack_height().checked_sub(1 + label as usize)
-					.ok_or_else(|| ())?;
-				counter.branch(cursor, &[index])?;
+				let active_index = counter.active_control_block_index().ok_or_else(|| ())?;
+				let target_index = active_index.checked_sub(label as usize).ok_or_else(|| ())?;
+				counter.branch(cursor, &[target_index])?;
 			}
 			BrTable(ref label_vec, label_default) => {
 				counter.increment(instruction_cost)?;
 
-				let stack_height = counter.stack_height();
-				let indices = [label_default].iter().chain(label_vec.iter())
-					.map(|label| stack_height.checked_sub(1 + *label as usize))
+				let active_index = counter.active_control_block_index().ok_or_else(|| ())?;
+				let target_indices = [label_default].iter().chain(label_vec.iter())
+					.map(|label| active_index.checked_sub(*label as usize))
 					.collect::<Option<Vec<_>>>()
 					.ok_or_else(|| ())?;
-				counter.branch(cursor, &indices)?;
+				counter.branch(cursor, &target_indices)?;
 			}
 			Return => {
 				counter.increment(instruction_cost)?;
@@ -350,8 +346,7 @@ fn insert_metering_calls(
 	blocks.sort_unstable_by_key(|block| block.start_pos);
 	let mut block_iter = blocks.into_iter().peekable();
 
-	let mut original_pos = 0;
-	for instr in original_instrs.into_iter() {
+	for (original_pos, instr) in original_instrs.into_iter().enumerate() {
 		// If there the next block starts at this position, inject metering instructions.
 		let used_block = if let Some(ref block) = block_iter.peek() {
 			if block.start_pos == original_pos {
@@ -367,7 +362,6 @@ fn insert_metering_calls(
 
 		// Copy over the original instruction.
 		new_instrs.push(instr);
-		original_pos += 1;
 	}
 
 	if block_iter.next().is_some() {
