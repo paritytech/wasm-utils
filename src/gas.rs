@@ -42,12 +42,13 @@ pub fn update_call_index(instructions: &mut elements::Instructions, inserted_ind
 struct ControlBlock {
 	/// The lowest control stack index corresponding to a forward jump targeted by a br, br_if, or
 	/// br_table instruction within this control block. The index must refer to a control block
-	/// that is not a loop, meaning it is a forward jump.
+	/// that is not a loop, meaning it is a forward jump. Given the way Wasm control flow is
+	/// structured, the lowest index on the stack represents the furthest forward branch target.
 	///
 	/// This value will always be at most the index of the block itself, even if there is no
 	/// explicit br instruction targeting this control block. This does not affect how the value is
 	/// used in the metering algorithm.
-	lowest_forward_br: usize,
+	lowest_forward_br_target: usize,
 
 	/// The active metering block that new instructions contribute a gas cost towards.
 	active_metered_block: MeteredBlock,
@@ -94,7 +95,7 @@ impl Counter {
 	fn begin_control_block(&mut self, cursor: usize, is_loop: bool) {
 		let index = self.stack.len();
 		self.stack.push(ControlBlock {
-			lowest_forward_br: index,
+			lowest_forward_br_target: index,
 			active_metered_block: MeteredBlock {
 				start_pos: cursor,
 				cost: 0,
@@ -118,17 +119,18 @@ impl Counter {
 			return Ok(())
 		}
 
-		// Update the lowest_forward_br for the control block now on top of the stack.
+		// Update the lowest_forward_br_target for the control block now on top of the stack.
 		{
 			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
-			control_block.lowest_forward_br = min(
-				control_block.lowest_forward_br, closing_control_block.lowest_forward_br
+			control_block.lowest_forward_br_target = min(
+				control_block.lowest_forward_br_target,
+				closing_control_block.lowest_forward_br_target
 			);
 		}
 
 		// If there may have been a branch to a lower index, then also finalize the active metered
 		// block for the previous control block. Otherwise, finalize it and begin a new one.
-		let may_br_out = closing_control_block.lowest_forward_br < closing_control_index;
+		let may_br_out = closing_control_block.lowest_forward_br_target < closing_control_index;
 		if may_br_out {
 			self.finalize_metered_block(cursor)?;
 		}
@@ -180,7 +182,7 @@ impl Counter {
 	fn branch(&mut self, cursor: usize, indices: &[usize]) -> Result<(), ()> {
 		self.finalize_metered_block(cursor)?;
 
-		// Update the lowest_forward_br of the current control block.
+		// Update the lowest_forward_br_target of the current control block.
 		for &index in indices {
 			let target_is_loop = {
 				let target_block = self.stack.get(index).ok_or_else(|| ())?;
@@ -191,7 +193,8 @@ impl Counter {
 			}
 
 			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
-			control_block.lowest_forward_br = min(control_block.lowest_forward_br, index);
+			control_block.lowest_forward_br_target =
+				min(control_block.lowest_forward_br_target, index);
 		}
 
 		Ok(())
