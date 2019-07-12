@@ -588,136 +588,6 @@ mod tests {
 	}
 
 	#[test]
-	fn simple() {
-		let module = builder::module()
-			.global()
-				.value_type().i32()
-				.build()
-			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							GetGlobal(0),
-							End
-						]
-					))
-					.build()
-				.build()
-			.build();
-
-		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
-
-		assert_eq!(
-			get_function_body(&injected_module, 0).unwrap(),
-			&vec![
-				I32Const(1),
-				Call(0),
-				GetGlobal(0),
-				End
-			][..]
-		);
-	}
-
-	#[test]
-	fn nested() {
-		let module = builder::module()
-			.global()
-				.value_type().i32()
-				.build()
-			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							GetGlobal(0),
-							Block(elements::BlockType::NoResult),
-								GetGlobal(0),
-								GetGlobal(0),
-								GetGlobal(0),
-							End,
-							GetGlobal(0),
-							End
-						]
-					))
-					.build()
-				.build()
-			.build();
-
-		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
-
-		assert_eq!(
-			get_function_body(&injected_module, 0).unwrap(),
-			&vec![
-				I32Const(6),
-				Call(0),
-				GetGlobal(0),
-				Block(elements::BlockType::NoResult),
-					GetGlobal(0),
-					GetGlobal(0),
-					GetGlobal(0),
-				End,
-				GetGlobal(0),
-				End
-			][..]
-		);
-	}
-
-	#[test]
-	fn ifelse() {
-		let module = builder::module()
-			.global()
-				.value_type().i32()
-				.build()
-			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							GetGlobal(0),
-							If(elements::BlockType::NoResult),
-								GetGlobal(0),
-								GetGlobal(0),
-								GetGlobal(0),
-							Else,
-								GetGlobal(0),
-								GetGlobal(0),
-							End,
-							GetGlobal(0),
-							End
-						]
-					))
-					.build()
-				.build()
-			.build();
-
-		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
-
-		assert_eq!(
-			get_function_body(&injected_module, 0).unwrap(),
-			&vec![
-				I32Const(3),
-				Call(0),
-				GetGlobal(0),
-				If(elements::BlockType::NoResult),
-					I32Const(3),
-					Call(0),
-					GetGlobal(0),
-					GetGlobal(0),
-					GetGlobal(0),
-				Else,
-					I32Const(2),
-					Call(0),
-					GetGlobal(0),
-					GetGlobal(0),
-				End,
-				GetGlobal(0),
-				End
-			][..]
-		);
-	}
-
-	#[test]
 	fn call_index() {
 		let module = builder::module()
 			.global()
@@ -775,7 +645,6 @@ mod tests {
 		);
 	}
 
-
 	#[test]
 	fn forbidden() {
 		let module = builder::module()
@@ -802,225 +671,247 @@ mod tests {
 
 	}
 
-	#[test]
-	fn branch_innermost() {
-		let module = builder::module()
-			.global()
-				.value_type().i32()
-				.build()
-			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							GetGlobal(0),
-							Block(elements::BlockType::NoResult),
-								GetGlobal(0),
-								Drop,
-								Br(0),
-								GetGlobal(0),
-								Drop,
-							End,
-							GetGlobal(0),
-							End
-						]
-					))
-					.build()
-				.build()
-			.build();
-
-		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
-
-		assert_eq!(
-			get_function_body(&injected_module, 0).unwrap(),
-			&vec![
-				I32Const(6),
-				Call(0),
-				GetGlobal(0),
-				Block(elements::BlockType::NoResult),
-					GetGlobal(0),
-					Drop,
-					Br(0),
-					I32Const(2),
-					Call(0),
-					GetGlobal(0),
-					Drop,
-				End,
-				GetGlobal(0),
-				End
-			][..]
-		);
+	fn parse_wat(source: &str) -> elements::Module {
+		let module_bytes = wabt::Wat2Wasm::new()
+			.validate(false)
+			.convert(source)
+			.expect("failed to parse module");
+		elements::deserialize_buffer(module_bytes.as_ref())
+			.expect("failed to parse module")
 	}
 
-	#[test]
-	fn branch_outer_block() {
-		let module = builder::module()
-			.global()
-				.value_type().i32()
-				.build()
-			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							GetGlobal(0),
-							Block(elements::BlockType::NoResult),
-								GetGlobal(0),
-								If(elements::BlockType::NoResult),
-									GetGlobal(0),
-									GetGlobal(0),
-									Drop,
-									BrIf(1),
-								End,
-								GetGlobal(0),
-								Drop,
-							End,
-							GetGlobal(0),
-							End,
-						]
-					))
-					.build()
-				.build()
-			.build();
+	macro_rules! test_gas_counter_injection {
+		(name = $name:ident; input = $input:expr; expected = $expected:expr) => {
+			#[test]
+			fn $name() {
+				let input_module = parse_wat($input);
+				let expected_module = parse_wat($expected);
 
-		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
+				let injected_module = inject_gas_counter(input_module, &Default::default())
+					.expect("inject_gas_counter call failed");
 
-		assert_eq!(
-			get_function_body(&injected_module, 0).unwrap(),
-			&vec![
-				I32Const(5),
-				Call(0),
-				GetGlobal(0),
-				Block(elements::BlockType::NoResult),
-					GetGlobal(0),
-					If(elements::BlockType::NoResult),
-						I32Const(4),
-						Call(0),
-						GetGlobal(0),
-						GetGlobal(0),
-						Drop,
-						BrIf(1),
-					End,
-					I32Const(2),
-					Call(0),
-					GetGlobal(0),
-					Drop,
-				End,
-				GetGlobal(0),
-				End,
-			][..]
-		);
+				let actual_func_body = get_function_body(&injected_module, 0)
+					.expect("injected module must have a function body");
+				let expected_func_body = get_function_body(&expected_module, 0)
+					.expect("post-module must have a function body");
+
+				assert_eq!(actual_func_body, expected_func_body);
+			}
+		}
 	}
 
-	#[test]
-	fn branch_outer_loop() {
-		let module = builder::module()
-			.global()
-				.value_type().i32()
-				.build()
-			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							GetGlobal(0),
-							Loop(elements::BlockType::NoResult),
-								GetGlobal(0),
-								If(elements::BlockType::NoResult),
-									GetGlobal(0),
-									BrIf(0),
-								Else,
-									GetGlobal(0),
-									GetGlobal(0),
-									Drop,
-									BrIf(1),
-								End,
-								GetGlobal(0),
-								Drop,
-							End,
-							GetGlobal(0),
-							End,
-						]
-					))
-					.build()
-				.build()
-			.build();
-
-		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
-
-		assert_eq!(
-			get_function_body(&injected_module, 0).unwrap(),
-			&vec![
-				I32Const(3),
-				Call(0),
-				GetGlobal(0),
-				Loop(elements::BlockType::NoResult),
-					I32Const(4),
-					Call(0),
-					GetGlobal(0),
-					If(elements::BlockType::NoResult),
-						I32Const(2),
-						Call(0),
-						GetGlobal(0),
-						BrIf(0),
-					Else,
-						I32Const(4),
-						Call(0),
-						GetGlobal(0),
-						GetGlobal(0),
-						Drop,
-						BrIf(1),
-					End,
-					GetGlobal(0),
-					Drop,
-				End,
-				GetGlobal(0),
-				End,
-			][..]
-		);
+	test_gas_counter_injection! {
+		name = simple;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 1))
+				(get_global 0)))
+		"#
 	}
 
-	#[test]
-	fn return_from_func() {
-		let module = builder::module()
-			.global()
-				.value_type().i32()
-				.build()
-			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							GetGlobal(0),
-							If(elements::BlockType::NoResult),
-								Return,
-							End,
-							GetGlobal(0),
-							End,
-						]
-					))
-					.build()
-				.build()
-			.build();
+	test_gas_counter_injection! {
+		name = nested;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(block
+					(get_global 0)
+					(get_global 0)
+					(get_global 0))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 6))
+				(get_global 0)
+				(block
+					(get_global 0)
+					(get_global 0)
+					(get_global 0))
+				(get_global 0)))
+		"#
+	}
 
-		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
+	test_gas_counter_injection! {
+		name = ifelse;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(if
+					(then
+						(get_global 0)
+						(get_global 0)
+						(get_global 0))
+					(else
+						(get_global 0)
+						(get_global 0)))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 3))
+				(get_global 0)
+				(if
+					(then
+						(call 0 (i32.const 3))
+						(get_global 0)
+						(get_global 0)
+						(get_global 0))
+					(else
+						(call 0 (i32.const 2))
+						(get_global 0)
+						(get_global 0)))
+				(get_global 0)))
+		"#
+	}
 
-		assert_eq!(
-			get_function_body(&injected_module, 0).unwrap(),
-			&vec![
-				I32Const(2),
-				Call(0),
-				GetGlobal(0),
-				If(elements::BlockType::NoResult),
-					I32Const(1),
-					Call(0),
-					Return,
-				End,
-				I32Const(1),
-				Call(0),
-				GetGlobal(0),
-				End,
-			][..]
-		);
+	test_gas_counter_injection! {
+		name = branch_innermost;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(block
+					(get_global 0)
+					(drop)
+					(br 0)
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 6))
+				(get_global 0)
+				(block
+					(get_global 0)
+					(drop)
+					(br 0)
+					(call 0 (i32.const 2))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#
+	}
+
+	test_gas_counter_injection! {
+		name = branch_outer_block;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(block
+					(get_global 0)
+					(if
+						(then
+							(get_global 0)
+							(get_global 0)
+							(drop)
+							(br_if 1)))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 5))
+				(get_global 0)
+				(block
+					(get_global 0)
+					(if
+						(then
+							(call 0 (i32.const 4))
+							(get_global 0)
+							(get_global 0)
+							(drop)
+							(br_if 1)))
+					(call 0 (i32.const 2))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#
+	}
+
+	test_gas_counter_injection! {
+		name = branch_outer_loop;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(loop
+					(get_global 0)
+					(if
+						(then
+							(get_global 0)
+							(br_if 0))
+						(else
+							(get_global 0)
+							(get_global 0)
+							(drop)
+							(br_if 1)))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 3))
+				(get_global 0)
+				(loop
+					(call 0 (i32.const 4))
+					(get_global 0)
+					(if
+						(then
+							(call 0 (i32.const 2))
+							(get_global 0)
+							(br_if 0))
+						(else
+							(call 0 (i32.const 4))
+							(get_global 0)
+							(get_global 0)
+							(drop)
+							(br_if 1)))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#
+	}
+
+	test_gas_counter_injection! {
+		name = return_from_func;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(if
+					(then
+						(return)))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 2))
+				(get_global 0)
+				(if
+					(then
+						(call 0 (i32.const 1))
+						(return)))
+				(call 0 (i32.const 1))
+				(get_global 0)))
+		"#
 	}
 }
