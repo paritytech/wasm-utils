@@ -4,6 +4,9 @@
 //! module into one that charges gas for code to be executed. See function documentation for usage
 //! and details.
 
+#[cfg(test)]
+mod validation;
+
 use std::cmp::min;
 use std::mem;
 use std::vec::Vec;
@@ -62,7 +65,7 @@ struct ControlBlock {
 /// are constructed with the property that, in the absence of any traps, either all instructions in
 /// the block are executed or none are.
 #[derive(Debug)]
-struct MeteredBlock {
+pub(crate) struct MeteredBlock {
 	/// Index of the first instruction (aka `Opcode`) in the block.
 	start_pos: usize,
 	/// Sum of costs of all instructions until end of the block.
@@ -256,11 +259,10 @@ fn add_grow_counter(module: elements::Module, rules: &rules::Set, gas_func: u32)
 	b.build()
 }
 
-pub fn inject_counter(
-	instructions: &mut elements::Instructions,
+pub(crate) fn determine_metered_blocks(
+	instructions: &elements::Instructions,
 	rules: &rules::Set,
-	gas_func: u32,
-) -> Result<(), ()> {
+) -> Result<Vec<MeteredBlock>, ()> {
 	use parity_wasm::elements::Instruction::*;
 
 	let mut counter = Counter::new();
@@ -325,13 +327,23 @@ pub fn inject_counter(
 		}
 	}
 
-	insert_metering_calls(instructions, counter.finalized_blocks, gas_func)
+	counter.finalized_blocks.sort_unstable_by_key(|block| block.start_pos);
+	Ok(counter.finalized_blocks)
+}
+
+pub fn inject_counter(
+	instructions: &mut elements::Instructions,
+	rules: &rules::Set,
+	gas_func: u32,
+) -> Result<(), ()> {
+	let blocks = determine_metered_blocks(instructions, rules)?;
+	insert_metering_calls(instructions, blocks, gas_func)
 }
 
 // Then insert metering calls into a sequence of instructions given the block locations and costs.
 fn insert_metering_calls(
 	instructions: &mut elements::Instructions,
-	mut blocks: Vec<MeteredBlock>,
+	blocks: Vec<MeteredBlock>,
 	gas_func: u32,
 )
 	-> Result<(), ()>
@@ -346,9 +358,7 @@ fn insert_metering_calls(
 	);
 	let new_instrs = instructions.elements_mut();
 
-	blocks.sort_unstable_by_key(|block| block.start_pos);
 	let mut block_iter = blocks.into_iter().peekable();
-
 	for (original_pos, instr) in original_instrs.into_iter().enumerate() {
 		// If there the next block starts at this position, inject metering instructions.
 		let used_block = if let Some(ref block) = block_iter.peek() {
@@ -494,7 +504,7 @@ mod tests {
 	use super::*;
 	use rules;
 
-	fn get_function_body(module: &elements::Module, index: usize)
+	pub fn get_function_body(module: &elements::Module, index: usize)
 		-> Option<&[elements::Instruction]>
 	{
 		module.code_section()

@@ -17,6 +17,8 @@ tempdir = "0.3"
 wabt = "0.2"
 diff = "0.1.11"
 indoc = "0.3"
+rand = "0.7"
+binaryen = "0.8"
 
 [features]
 default = ["std"]
