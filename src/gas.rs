@@ -914,4 +914,40 @@ mod tests {
 				(get_global 0)))
 		"#
 	}
+
+	test_gas_counter_injection! {
+		name = branch_from_if_not_else;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(block
+					(get_global 0)
+					(if
+						(then (br 1))
+						(else (br 0)))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 5))
+				(get_global 0)
+				(block
+					(get_global 0)
+					(if
+						(then
+							(call 0 (i32.const 1))
+							(br 1))
+						(else
+							(call 0 (i32.const 1))
+							(br 0)))
+					(call 0 (i32.const 2))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#
+	}
 }
