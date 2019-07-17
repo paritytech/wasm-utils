@@ -196,7 +196,7 @@ impl<T> RefList<T> {
 	}
 
 	fn done_delete(&mut self, indices: &[usize]) {
-		for mut entry in self.items.iter_mut() {
+		for entry in self.items.iter_mut() {
 			let mut entry = entry.write();
 			let total_less = indices.iter()
 				.take_while(|x| **x < entry.order().expect("Items in the list always have order; qed"))
@@ -209,7 +209,7 @@ impl<T> RefList<T> {
 
 		let mut total_removed = 0;
 		for idx in indices {
-			let mut detached = self.items.remove(*idx - total_removed);
+			let detached = self.items.remove(*idx - total_removed);
 			detached.write().index = EntryOrigin::Detached;
 			total_removed += 1;
 		}
