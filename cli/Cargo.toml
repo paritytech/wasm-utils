@@ -1,6 +1,6 @@
 [package]
 name = "pwasm-utils-cli"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Nikolay Volf <nikvolf@gmail.com>", "Sergey Pepyakin <s.pepyakin@gmail.com>"]
 license = "MIT/Apache-2.0"
 readme = "README.md"
@@ -39,7 +39,7 @@ path = "check/main.rs"
 
 [dependencies]
 parity-wasm = "0.31"
-pwasm-utils = { path = "..", version = "0.7" }
+pwasm-utils = { path = "..", version = "0.8" }
 glob = "0.2"
 clap = "2.24"
 log = "0.4"
