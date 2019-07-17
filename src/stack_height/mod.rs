@@ -214,7 +214,7 @@ fn instrument_functions(ctx: &mut Context, module: &mut elements::Module) -> Res
 	for section in module.sections_mut() {
 		if let elements::Section::Code(ref mut code_section) = *section {
 			for func_body in code_section.bodies_mut() {
-				let mut opcodes = func_body.code_mut();
+				let opcodes = func_body.code_mut();
 				instrument_function(ctx, opcodes)?;
 			}
 		}

@@ -853,9 +853,9 @@ mod tests {
 			let rtype = &**rfunc.type_ref.read();
 			let elements::Type::Function(ref ftype) = rtype;
 
-			/// import deleted so now it's func #0
+			// import deleted so now it's func #0
 			assert_eq!(rfunc.order(), Some(0));
-			/// type should be the same, #1
+			// type should be the same, #1
 			assert_eq!(ftype.params().len(), 1);
 		}
 	}
