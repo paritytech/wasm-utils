@@ -4,6 +4,8 @@
 //! module into one that charges gas for code to be executed. See function documentation for usage
 //! and details.
 
+use std::cmp::min;
+use std::mem;
 use std::vec::Vec;
 
 use parity_wasm::{elements, builder};
@@ -18,9 +20,9 @@ pub fn update_call_index(instructions: &mut elements::Instructions, inserted_ind
 	}
 }
 
-/// A block of code represented by it's start position and cost.
-///
-/// The block typically starts with instructions such as `loop`, `block`, `if`, etc.
+/// A control flow block is opened with the `block`, `loop`, and `if` instructions and is closed
+/// with `end`. Each block implicitly defines a new label. The control blocks form a stack during
+/// program execution.
 ///
 /// An example of block:
 ///
@@ -37,54 +39,182 @@ pub fn update_call_index(instructions: &mut elements::Instructions, inserted_ind
 /// The start of the block is `i32.const 1`.
 ///
 #[derive(Debug)]
-struct BlockEntry {
+struct ControlBlock {
+	/// The lowest control stack index corresponding to a forward jump targeted by a br, br_if, or
+	/// br_table instruction within this control block. The index must refer to a control block
+	/// that is not a loop, meaning it is a forward jump. Given the way Wasm control flow is
+	/// structured, the lowest index on the stack represents the furthest forward branch target.
+	///
+	/// This value will always be at most the index of the block itself, even if there is no
+	/// explicit br instruction targeting this control block. This does not affect how the value is
+	/// used in the metering algorithm.
+	lowest_forward_br_target: usize,
+
+	/// The active metering block that new instructions contribute a gas cost towards.
+	active_metered_block: MeteredBlock,
+
+	/// Whether the control block is a loop. Loops have the distinguishing feature that branches to
+	/// them jump to the beginning of the block, not the end as with the other control blocks.
+	is_loop: bool,
+}
+
+/// A block of code that metering instructions will be inserted at the beginning of. Metered blocks
+/// are constructed with the property that, in the absence of any traps, either all instructions in
+/// the block are executed or none are.
+#[derive(Debug)]
+struct MeteredBlock {
 	/// Index of the first instruction (aka `Opcode`) in the block.
 	start_pos: usize,
 	/// Sum of costs of all instructions until end of the block.
 	cost: u32,
 }
 
+/// Counter is used to manage state during the gas metering algorithm implemented by
+/// `inject_counter`.
 struct Counter {
-	/// All blocks in the order of theirs start position.
-	blocks: Vec<BlockEntry>,
+	/// A stack of control blocks. This stack grows when new control blocks are opened with
+	/// `block`, `loop`, and `if` and shrinks when control blocks are closed with `end`. The first
+	/// block on the stack corresponds to the function body, not to any labelled block. Therefore
+	/// the actual Wasm label index associated with each control block is 1 less than its position
+	/// in this stack.
+	stack: Vec<ControlBlock>,
 
-	// Stack of blocks. Each element is an index to a `self.blocks` vector.
-	stack: Vec<usize>,
+	/// A list of metered blocks that have been finalized, meaning they will no longer change.
+	finalized_blocks: Vec<MeteredBlock>,
 }
 
 impl Counter {
 	fn new() -> Counter {
 		Counter {
 			stack: Vec::new(),
-			blocks: Vec::new(),
+			finalized_blocks: Vec::new(),
 		}
 	}
 
-	/// Begin a new block.
-	fn begin(&mut self, cursor: usize) {
-		let block_idx = self.blocks.len();
-		self.blocks.push(BlockEntry {
-			start_pos: cursor,
-			cost: 1,
-		});
-		self.stack.push(block_idx);
+	/// Open a new control block. The cursor is the position of the first instruction in the block.
+	fn begin_control_block(&mut self, cursor: usize, is_loop: bool) {
+		let index = self.stack.len();
+		self.stack.push(ControlBlock {
+			lowest_forward_br_target: index,
+			active_metered_block: MeteredBlock {
+				start_pos: cursor,
+				cost: 0,
+			},
+			is_loop,
+		})
 	}
 
-	/// Finalize the current block.
+	/// Close the last control block. The cursor is the position of the final (pseudo-)instruction
+	/// in the block.
+	fn finalize_control_block(&mut self, cursor: usize) -> Result<(), ()> {
+		// This either finalizes the active metered block or merges its cost into the active
+		// metered block in the previous control block on the stack.
+		self.finalize_metered_block(cursor)?;
+
+		// Pop the control block stack.
+		let closing_control_block = self.stack.pop().ok_or_else(|| ())?;
+		let closing_control_index = self.stack.len();
+
+		if self.stack.is_empty() {
+			return Ok(())
+		}
+
+		// Update the lowest_forward_br_target for the control block now on top of the stack.
+		{
+			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
+			control_block.lowest_forward_br_target = min(
+				control_block.lowest_forward_br_target,
+				closing_control_block.lowest_forward_br_target
+			);
+		}
+
+		// If there may have been a branch to a lower index, then also finalize the active metered
+		// block for the previous control block. Otherwise, finalize it and begin a new one.
+		let may_br_out = closing_control_block.lowest_forward_br_target < closing_control_index;
+		if may_br_out {
+			self.finalize_metered_block(cursor)?;
+		}
+
+		Ok(())
+	}
+
+	/// Finalize the current active metered block.
 	///
 	/// Finalized blocks have final cost which will not change later.
-	fn finalize(&mut self) -> Result<(), ()> {
-		self.stack.pop().ok_or_else(|| ())?;
+	fn finalize_metered_block(&mut self, cursor: usize) -> Result<(), ()> {
+		let closing_metered_block = {
+			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
+			mem::replace(
+				&mut control_block.active_metered_block,
+				MeteredBlock {
+					start_pos: cursor + 1,
+					cost: 0,
+				}
+			)
+		};
+
+		// If the block was opened with a `block`, then its start position will be set to that of
+		// the active metered block in the control block one higher on the stack. This is because
+		// any instructions between a `block` and the first branch are part of the same basic block
+		// as the preceding instruction. In this case, instead of finalizing the block, merge its
+		// cost into the other active metered block to avoid injecting unnecessary instructions.
+		let last_index = self.stack.len() - 1;
+		if last_index > 0 {
+			let prev_control_block = self.stack.get_mut(last_index - 1)
+				.expect("last_index is greater than 0; last_index is stack size - 1; qed");
+			let prev_metered_block = &mut prev_control_block.active_metered_block;
+			if closing_metered_block.start_pos == prev_metered_block.start_pos {
+				prev_metered_block.cost += closing_metered_block.cost;
+				return Ok(())
+			}
+		}
+
+		if closing_metered_block.cost > 0 {
+			self.finalized_blocks.push(closing_metered_block);
+		}
 		Ok(())
+	}
+
+	/// Handle a branch instruction in the program. The cursor is the index of the branch
+	/// instruction in the program. The indices are the stack positions of the target control
+	/// blocks. Recall that the index is 0 for a `return` and relatively indexed from the top of
+	/// the stack by the label of `br`, `br_if`, and `br_table` instructions.
+	fn branch(&mut self, cursor: usize, indices: &[usize]) -> Result<(), ()> {
+		self.finalize_metered_block(cursor)?;
+
+		// Update the lowest_forward_br_target of the current control block.
+		for &index in indices {
+			let target_is_loop = {
+				let target_block = self.stack.get(index).ok_or_else(|| ())?;
+				target_block.is_loop
+			};
+			if target_is_loop {
+				continue;
+			}
+
+			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
+			control_block.lowest_forward_br_target =
+				min(control_block.lowest_forward_br_target, index);
+		}
+
+		Ok(())
+	}
+
+	/// Returns the stack index of the active control block. Returns None if stack is empty.
+	fn active_control_block_index(&self) -> Option<usize> {
+		self.stack.len().checked_sub(1)
+	}
+
+	/// Get a reference to the currently active metered block.
+	fn active_metered_block(&mut self) -> Result<&mut MeteredBlock, ()> {
+		let top_block = self.stack.last_mut().ok_or_else(|| ())?;
+		Ok(&mut top_block.active_metered_block)
 	}
 
 	/// Increment the cost of the current block by the specified value.
 	fn increment(&mut self, val: u32) -> Result<(), ()> {
-		let stack_top = self.stack.last_mut().ok_or_else(|| ())?;
-		let top_block = self.blocks.get_mut(*stack_top).ok_or_else(|| ())?;
-
+		let top_block = self.active_metered_block()?;
 		top_block.cost = top_block.cost.checked_add(val).ok_or_else(|| ())?;
-
 		Ok(())
 	}
 }
@@ -136,56 +266,109 @@ pub fn inject_counter(
 	let mut counter = Counter::new();
 
 	// Begin an implicit function (i.e. `func...end`) block.
-	counter.begin(0);
+	counter.begin_control_block(0, false);
 
 	for cursor in 0..instructions.elements().len() {
 		let instruction = &instructions.elements()[cursor];
+		let instruction_cost = rules.process(instruction)?;
 		match *instruction {
-			Block(_) | If(_) | Loop(_) => {
-				// Increment previous block with the cost of the current opcode.
-				let instruction_cost = rules.process(instruction)?;
+			Block(_) => {
 				counter.increment(instruction_cost)?;
 
-				// Begin new block. The cost of the following opcodes until `End` or `Else` will
-				// be included into this block.
-				counter.begin(cursor + 1);
+				// Begin new block. The cost of the following opcodes until `end` or `else` will
+				// be included into this block. The start position is set to that of the previous
+				// active metered block to signal that they should be merged in order to reduce
+				// unnecessary metering instructions.
+				let top_block_start_pos = counter.active_metered_block()?.start_pos;
+				counter.begin_control_block(top_block_start_pos, false);
+			}
+			If(_) => {
+				counter.increment(instruction_cost)?;
+				counter.begin_control_block(cursor + 1, false);
+			}
+			Loop(_) => {
+				counter.increment(instruction_cost)?;
+				counter.begin_control_block(cursor + 1, true);
 			}
 			End => {
-				// Just finalize current block.
-				counter.finalize()?;
+				counter.finalize_control_block(cursor)?;
 			},
 			Else => {
-				// `Else` opcode is being encountered. So the case we are looking at:
-				//
-				// if
-				//   ...
-				// else <-- cursor
-				//   ...
-				// end
-				//
-				// Finalize the current block ('then' part of the if statement),
-				// and begin another one for the 'else' part.
-				counter.finalize()?;
-				counter.begin(cursor + 1);
+				counter.finalize_metered_block(cursor)?;
+			}
+			Br(label) | BrIf(label) => {
+				counter.increment(instruction_cost)?;
+
+				// Label is a relative index into the control stack.
+				let active_index = counter.active_control_block_index().ok_or_else(|| ())?;
+				let target_index = active_index.checked_sub(label as usize).ok_or_else(|| ())?;
+				counter.branch(cursor, &[target_index])?;
+			}
+			BrTable(ref label_vec, label_default) => {
+				counter.increment(instruction_cost)?;
+
+				let active_index = counter.active_control_block_index().ok_or_else(|| ())?;
+				let target_indices = [label_default].iter().chain(label_vec.iter())
+					.map(|label| active_index.checked_sub(*label as usize))
+					.collect::<Option<Vec<_>>>()
+					.ok_or_else(|| ())?;
+				counter.branch(cursor, &target_indices)?;
+			}
+			Return => {
+				counter.increment(instruction_cost)?;
+				counter.branch(cursor, &[0])?;
 			}
 			_ => {
-				// An ordinal non control flow instruction. Just increment the cost of the current block.
-				let instruction_cost = rules.process(instruction)?;
+				// An ordinal non control flow instruction increments the cost of the current block.
 				counter.increment(instruction_cost)?;
 			}
 		}
 	}
 
-	// Then insert metering calls.
-	let mut cumulative_offset = 0;
-	for block in counter.blocks {
-		let effective_pos = block.start_pos + cumulative_offset;
+	insert_metering_calls(instructions, counter.finalized_blocks, gas_func)
+}
 
-		instructions.elements_mut().insert(effective_pos, I32Const(block.cost as i32));
-		instructions.elements_mut().insert(effective_pos+1, Call(gas_func));
+// Then insert metering calls into a sequence of instructions given the block locations and costs.
+fn insert_metering_calls(
+	instructions: &mut elements::Instructions,
+	mut blocks: Vec<MeteredBlock>,
+	gas_func: u32,
+)
+	-> Result<(), ()>
+{
+	use parity_wasm::elements::Instruction::*;
 
-		// Take into account these two inserted instructions.
-		cumulative_offset += 2;
+	// To do this in linear time, construct a new vector of instructions, copying over old
+	// instructions one by one and injecting new ones as required.
+	let new_instrs_len = instructions.elements().len() + 2 * blocks.len();
+	let original_instrs = mem::replace(
+		instructions.elements_mut(), Vec::with_capacity(new_instrs_len)
+	);
+	let new_instrs = instructions.elements_mut();
+
+	blocks.sort_unstable_by_key(|block| block.start_pos);
+	let mut block_iter = blocks.into_iter().peekable();
+
+	for (original_pos, instr) in original_instrs.into_iter().enumerate() {
+		// If there the next block starts at this position, inject metering instructions.
+		let used_block = if let Some(ref block) = block_iter.peek() {
+			if block.start_pos == original_pos {
+				new_instrs.push(I32Const(block.cost as i32));
+				new_instrs.push(Call(gas_func));
+				true
+			} else { false }
+		} else { false };
+
+		if used_block {
+			block_iter.next();
+		}
+
+		// Copy over the original instruction.
+		new_instrs.push(instr);
+	}
+
+	if block_iter.next().is_some() {
+		return Err(());
 	}
 
 	Ok(())
@@ -199,17 +382,18 @@ pub fn inject_counter(
 /// function is meant to keep track of the total amount of gas used and trap or otherwise halt
 /// execution of the runtime if the gas usage exceeds some allowed limit.
 ///
-/// The calls to charge gas are inserted at the beginning of every block of code. A block is
-/// defined by `block`, `if`, `else`, `loop`, and `end` boundaries. Blocks form a nested hierarchy
-/// where `block`, `if`, `else`, and `loop` begin a new nested block, and `end` and `else` mark the
-/// end of a block. The gas cost of a block is determined statically as 1 plus the gas cost of all
-/// instructions directly in that block. Each instruction is only counted in the most deeply
-/// nested block containing it (ie. a block's cost does not include the cost of instructions in any
-/// blocks nested within it). The cost of the `begin`, `if`, and `loop` instructions is counted
-/// towards the block containing them, not the nested block that they open. There is no gas cost
-/// added for `end`/`else`, as they are pseudo-instructions. The gas cost of each instruction is
-/// determined by a `rules::Set` parameter. At the beginning of each block, this procedure injects
-/// new instructions to call the "gas" function with the gas cost of the block as an argument.
+/// The body of each function is divided into metered blocks, and the calls to charge gas are
+/// inserted at the beginning of every such block of code. A metered block is defined so that,
+/// unless there is a trap, either all of the instructions are executed or none are. These are
+/// similar to basic blocks in a control flow graph, except that in some cases multiple basic
+/// blocks can be merged into a single metered block. This is the case if any path through the
+/// control flow graph containing one basic block also contains another.
+///
+/// Charging gas is at the beginning of each metered block ensures that 1) all instructions
+/// executed are already paid for, 2) instructions that will not be executed are not charged for
+/// unless execution traps, and 3) the number of calls to "gas" is minimized. The corollary is that
+/// modules instrumented with this metering code may charge gas for instructions not executed in
+/// the event of a trap.
 ///
 /// Additionally, each `memory.grow` instruction found in the module is instrumented to first make
 /// a call to charge gas for the additional pages requested. This cannot be done as part of the
@@ -219,6 +403,8 @@ pub fn inject_counter(
 /// The above transformations are performed for every function body defined in the module. This
 /// function also rewrites all function indices references by code, table elements, etc., since
 /// the addition of an imported functions changes the indices of module-defined functions.
+///
+/// This routine runs in time linear in the size of the input module.
 ///
 /// The function fails if the module contains any operation forbidden by gas rule set, returning
 /// the original module as an Err.
@@ -304,13 +490,20 @@ mod tests {
 	extern crate wabt;
 
 	use parity_wasm::{serialize, builder, elements};
+	use parity_wasm::elements::Instruction::*;
 	use super::*;
 	use rules;
 
+	fn get_function_body(module: &elements::Module, index: usize)
+		-> Option<&[elements::Instruction]>
+	{
+		module.code_section()
+			.and_then(|code_section| code_section.bodies().get(index))
+			.map(|func_body| func_body.code().elements())
+	}
+
 	#[test]
 	fn simple_grow() {
-		use parity_wasm::elements::Instruction::*;
-
 		let module = builder::module()
 			.global()
 				.value_type().i32()
@@ -332,18 +525,17 @@ mod tests {
 		let injected_module = inject_gas_counter(module, &rules::Set::default().with_grow_cost(10000)).unwrap();
 
 		assert_eq!(
+			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
-				I32Const(3),
+				I32Const(2),
 				Call(0),
 				GetGlobal(0),
 				Call(2),
 				End
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[0]
-				.code().elements()
+			][..]
 		);
 		assert_eq!(
+			get_function_body(&injected_module, 1).unwrap(),
 			&vec![
 				GetLocal(0),
 				GetLocal(0),
@@ -352,10 +544,7 @@ mod tests {
 				Call(0),
 				GrowMemory(0),
 				End,
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[1]
-				.code().elements()
+			][..]
 		);
 
 		let binary = serialize(injected_module).expect("serialization failed");
@@ -364,8 +553,6 @@ mod tests {
 
 	#[test]
 	fn grow_no_gas_no_track() {
-		use parity_wasm::elements::Instruction::*;
-
 		let module = builder::module()
 			.global()
 				.value_type().i32()
@@ -387,16 +574,14 @@ mod tests {
 		let injected_module = inject_gas_counter(module, &rules::Set::default()).unwrap();
 
 		assert_eq!(
+			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
-				I32Const(3),
+				I32Const(2),
 				Call(0),
 				GetGlobal(0),
 				GrowMemory(0),
 				End
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[0]
-				.code().elements()
+			][..]
 		);
 
 		assert_eq!(injected_module.functions_space(), 2);
@@ -406,153 +591,7 @@ mod tests {
 	}
 
 	#[test]
-	fn simple() {
-		use parity_wasm::elements::Instruction::*;
-
-		let module = builder::module()
-			.global()
-				.value_type().i32()
-				.build()
-			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							GetGlobal(0),
-							End
-						]
-					))
-					.build()
-				.build()
-			.build();
-
-		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
-
-		assert_eq!(
-			&vec![
-				I32Const(2),
-				Call(0),
-				GetGlobal(0),
-				End
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[0]
-				.code().elements()
-		);
-	}
-
-	#[test]
-	fn nested() {
-		use parity_wasm::elements::Instruction::*;
-
-		let module = builder::module()
-			.global()
-				.value_type().i32()
-				.build()
-			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							GetGlobal(0),
-							Block(elements::BlockType::NoResult),
-								GetGlobal(0),
-								GetGlobal(0),
-								GetGlobal(0),
-							End,
-							GetGlobal(0),
-							End
-						]
-					))
-					.build()
-				.build()
-			.build();
-
-		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
-
-		assert_eq!(
-			&vec![
-				I32Const(4),
-				Call(0),
-				GetGlobal(0),
-				Block(elements::BlockType::NoResult),
-					I32Const(4),
-					Call(0),
-					GetGlobal(0),
-					GetGlobal(0),
-					GetGlobal(0),
-				End,
-				GetGlobal(0),
-				End
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[0]
-				.code().elements()
-		);
-	}
-
-	#[test]
-	fn ifelse() {
-		use parity_wasm::elements::Instruction::*;
-
-		let module = builder::module()
-			.global()
-				.value_type().i32()
-				.build()
-			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							GetGlobal(0),
-							If(elements::BlockType::NoResult),
-								GetGlobal(0),
-								GetGlobal(0),
-								GetGlobal(0),
-							Else,
-								GetGlobal(0),
-								GetGlobal(0),
-							End,
-							GetGlobal(0),
-							End
-						]
-					))
-					.build()
-				.build()
-			.build();
-
-		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
-
-		assert_eq!(
-			&vec![
-				I32Const(4),
-				Call(0),
-				GetGlobal(0),
-				If(elements::BlockType::NoResult),
-					I32Const(4),
-					Call(0),
-					GetGlobal(0),
-					GetGlobal(0),
-					GetGlobal(0),
-				Else,
-					I32Const(3),
-					Call(0),
-					GetGlobal(0),
-					GetGlobal(0),
-				End,
-				GetGlobal(0),
-				End
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[0]
-				.code().elements()
-		);
-	}
-
-	#[test]
 	fn call_index() {
-		use parity_wasm::elements::Instruction::*;
-
 		let module = builder::module()
 			.global()
 				.value_type().i32()
@@ -586,36 +625,31 @@ mod tests {
 		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
 
 		assert_eq!(
+			get_function_body(&injected_module, 1).unwrap(),
 			&vec![
-				I32Const(4),
+				I32Const(3),
 				Call(0),
 				Call(1),
 				If(elements::BlockType::NoResult),
-					I32Const(4),
+					I32Const(3),
 					Call(0),
 					Call(1),
 					Call(1),
 					Call(1),
 				Else,
-					I32Const(3),
+					I32Const(2),
 					Call(0),
 					Call(1),
 					Call(1),
 				End,
 				Call(1),
 				End
-			][..],
-			injected_module
-				.code_section().expect("function section should exist").bodies()[1]
-				.code().elements()
+			][..]
 		);
 	}
 
-
 	#[test]
 	fn forbidden() {
-		use parity_wasm::elements::Instruction::*;
-
 		let module = builder::module()
 			.global()
 				.value_type().i32()
@@ -640,4 +674,283 @@ mod tests {
 
 	}
 
+	fn parse_wat(source: &str) -> elements::Module {
+		let module_bytes = wabt::Wat2Wasm::new()
+			.validate(false)
+			.convert(source)
+			.expect("failed to parse module");
+		elements::deserialize_buffer(module_bytes.as_ref())
+			.expect("failed to parse module")
+	}
+
+	macro_rules! test_gas_counter_injection {
+		(name = $name:ident; input = $input:expr; expected = $expected:expr) => {
+			#[test]
+			fn $name() {
+				let input_module = parse_wat($input);
+				let expected_module = parse_wat($expected);
+
+				let injected_module = inject_gas_counter(input_module, &Default::default())
+					.expect("inject_gas_counter call failed");
+
+				let actual_func_body = get_function_body(&injected_module, 0)
+					.expect("injected module must have a function body");
+				let expected_func_body = get_function_body(&expected_module, 0)
+					.expect("post-module must have a function body");
+
+				assert_eq!(actual_func_body, expected_func_body);
+			}
+		}
+	}
+
+	test_gas_counter_injection! {
+		name = simple;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 1))
+				(get_global 0)))
+		"#
+	}
+
+	test_gas_counter_injection! {
+		name = nested;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(block
+					(get_global 0)
+					(get_global 0)
+					(get_global 0))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 6))
+				(get_global 0)
+				(block
+					(get_global 0)
+					(get_global 0)
+					(get_global 0))
+				(get_global 0)))
+		"#
+	}
+
+	test_gas_counter_injection! {
+		name = ifelse;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(if
+					(then
+						(get_global 0)
+						(get_global 0)
+						(get_global 0))
+					(else
+						(get_global 0)
+						(get_global 0)))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 3))
+				(get_global 0)
+				(if
+					(then
+						(call 0 (i32.const 3))
+						(get_global 0)
+						(get_global 0)
+						(get_global 0))
+					(else
+						(call 0 (i32.const 2))
+						(get_global 0)
+						(get_global 0)))
+				(get_global 0)))
+		"#
+	}
+
+	test_gas_counter_injection! {
+		name = branch_innermost;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(block
+					(get_global 0)
+					(drop)
+					(br 0)
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 6))
+				(get_global 0)
+				(block
+					(get_global 0)
+					(drop)
+					(br 0)
+					(call 0 (i32.const 2))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#
+	}
+
+	test_gas_counter_injection! {
+		name = branch_outer_block;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(block
+					(get_global 0)
+					(if
+						(then
+							(get_global 0)
+							(get_global 0)
+							(drop)
+							(br_if 1)))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 5))
+				(get_global 0)
+				(block
+					(get_global 0)
+					(if
+						(then
+							(call 0 (i32.const 4))
+							(get_global 0)
+							(get_global 0)
+							(drop)
+							(br_if 1)))
+					(call 0 (i32.const 2))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#
+	}
+
+	test_gas_counter_injection! {
+		name = branch_outer_loop;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(loop
+					(get_global 0)
+					(if
+						(then
+							(get_global 0)
+							(br_if 0))
+						(else
+							(get_global 0)
+							(get_global 0)
+							(drop)
+							(br_if 1)))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 3))
+				(get_global 0)
+				(loop
+					(call 0 (i32.const 4))
+					(get_global 0)
+					(if
+						(then
+							(call 0 (i32.const 2))
+							(get_global 0)
+							(br_if 0))
+						(else
+							(call 0 (i32.const 4))
+							(get_global 0)
+							(get_global 0)
+							(drop)
+							(br_if 1)))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#
+	}
+
+	test_gas_counter_injection! {
+		name = return_from_func;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(if
+					(then
+						(return)))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 2))
+				(get_global 0)
+				(if
+					(then
+						(call 0 (i32.const 1))
+						(return)))
+				(call 0 (i32.const 1))
+				(get_global 0)))
+		"#
+	}
+
+	test_gas_counter_injection! {
+		name = branch_from_if_not_else;
+		input = r#"
+		(module
+			(func (result i32)
+				(get_global 0)
+				(block
+					(get_global 0)
+					(if
+						(then (br 1))
+						(else (br 0)))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#;
+		expected = r#"
+		(module
+			(func (result i32)
+				(call 0 (i32.const 5))
+				(get_global 0)
+				(block
+					(get_global 0)
+					(if
+						(then
+							(call 0 (i32.const 1))
+							(br 1))
+						(else
+							(call 0 (i32.const 1))
+							(br 0)))
+					(call 0 (i32.const 2))
+					(get_global 0)
+					(drop))
+				(get_global 0)))
+		"#
+	}
 }
