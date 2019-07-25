@@ -9,8 +9,8 @@ extern crate byteorder;
 extern crate parity_wasm;
 #[macro_use] extern crate log;
 #[cfg(test)] #[macro_use] extern crate indoc;
-extern crate rand;
-extern crate binaryen;
+#[cfg(test)] extern crate rand;
+#[cfg(test)] extern crate binaryen;
 
 
 pub mod rules;
