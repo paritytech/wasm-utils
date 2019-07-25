@@ -5,7 +5,7 @@
 //! functionality, then ensure for all functions defined, in all execution paths though the
 //! function body that do not trap that the amount of gas charged by the proposed metering
 //! instructions is correct. This is done by constructing a control flow graph and exhaustively
-//! searching though all paths, which may take exponential time in the size of the function body in
+//! searching through all paths, which may take exponential time in the size of the function body in
 //! the worst case.
 
 use super::MeteredBlock;
