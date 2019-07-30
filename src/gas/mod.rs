@@ -306,11 +306,13 @@ pub(crate) fn determine_metered_blocks(
 				let target_index = active_index.checked_sub(label as usize).ok_or_else(|| ())?;
 				counter.branch(cursor, &[target_index])?;
 			}
-			BrTable(ref label_vec, label_default) => {
+			BrTable(ref br_table_data) => {
 				counter.increment(instruction_cost)?;
 
 				let active_index = counter.active_control_block_index().ok_or_else(|| ())?;
-				let target_indices = [label_default].iter().chain(label_vec.iter())
+				let target_indices = [br_table_data.default]
+					.iter()
+					.chain(br_table_data.table.iter())
 					.map(|label| active_index.checked_sub(*label as usize))
 					.collect::<Option<Vec<_>>>()
 					.ok_or_else(|| ())?;

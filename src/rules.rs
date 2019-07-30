@@ -83,7 +83,7 @@ impl InstructionType {
 			End => InstructionType::ControlFlow,
 			Br(_) => InstructionType::ControlFlow,
 			BrIf(_) => InstructionType::ControlFlow,
-			BrTable(_, _) => InstructionType::ControlFlow,
+			BrTable(_) => InstructionType::ControlFlow,
 			Return => InstructionType::ControlFlow,
 			Call(_) => InstructionType::ControlFlow,
 			CallIndirect(_, _) => InstructionType::ControlFlow,

@@ -46,12 +46,28 @@ pub fn optimize(
 	let mut init_symbols = Vec::new();
 	if let Some(data_section) = module.data_section() {
 		for segment in data_section.entries() {
-			push_code_symbols(&module, segment.offset().code(), &mut init_symbols);
+			push_code_symbols(
+				&module,
+				segment
+					.offset()
+					.as_ref()
+					.expect("parity-wasm is compiled without bulk-memory operations")
+					.code(),
+				&mut init_symbols,
+			);
 		}
 	}
 	if let Some(elements_section) = module.elements_section() {
 		for segment in elements_section.entries() {
-			push_code_symbols(&module, segment.offset().code(), &mut init_symbols);
+			push_code_symbols(
+				&module,
+				segment
+					.offset()
+					.as_ref()
+					.expect("parity-wasm is compiled without bulk-memory operations")
+					.code(),
+				&mut init_symbols
+			);
 			for func_index in segment.members() {
 				stay.insert(resolve_function(&module, *func_index));
 			}
@@ -256,12 +272,26 @@ pub fn optimize(
 				},
 				&mut elements::Section::Data(ref mut data_section) => {
 					for ref mut segment in data_section.entries_mut() {
-						update_global_index(segment.offset_mut().code_mut(), &eliminated_globals)
+						update_global_index(
+							segment
+								.offset_mut()
+								.as_mut()
+								.expect("parity-wasm is compiled without bulk-memory operations")
+								.code_mut(),
+							&eliminated_globals,
+						)
 					}
 				},
 				&mut elements::Section::Element(ref mut elements_section) => {
 					for ref mut segment in elements_section.entries_mut() {
-						update_global_index(segment.offset_mut().code_mut(), &eliminated_globals);
+						update_global_index(
+							segment
+							.offset_mut()
+							.as_mut()
+							.expect("parity-wasm is compiled without bulk-memory operations")
+							.code_mut(),
+							&eliminated_globals
+						);
 						// update all indirect call addresses initial values
 						for func_index in segment.members_mut() {
 							let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < *func_index).count();
@@ -270,31 +300,29 @@ pub fn optimize(
 					}
 				},
 				&mut elements::Section::Name(ref mut name_section) => {
-					match name_section {
-						&mut elements::NameSection::Function(ref mut func_name) => {
-							let mut func_name_map = mem::replace(func_name.names_mut(), elements::IndexMap::default());
-							for index in &eliminated_funcs {
-								func_name_map.remove(*index as u32);
-							}
-							let updated_map = func_name_map.into_iter().map(|(index, value)| {
-								let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < index).count() as u32;
-								(index - totalle, value)
-							}).collect();
-							mem::replace(func_name.names_mut(), updated_map);
+					if let Some(ref mut func_name) = name_section.functions_mut() {
+						let mut func_name_map = mem::replace(func_name.names_mut(), elements::IndexMap::default());
+						for index in &eliminated_funcs {
+							func_name_map.remove(*index as u32);
 						}
-						&mut elements::NameSection::Local(ref mut local_name) => {
-							let mut local_names_map = mem::replace(local_name.local_names_mut(), elements::IndexMap::default());
-							for index in &eliminated_funcs {
-								local_names_map.remove(*index as u32);
-							}
-							let updated_map = local_names_map.into_iter().map(|(index, value)| {
-								let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < index).count() as u32;
-								(index - totalle, value)
-							}).collect();
+						let updated_map = func_name_map.into_iter().map(|(index, value)| {
+							let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < index).count() as u32;
+							(index - totalle, value)
+						}).collect();
+						mem::replace(func_name.names_mut(), updated_map);
+					}
 
-							mem::replace(local_name.local_names_mut(), updated_map);
+					if let Some(ref mut local_name) = name_section.locals_mut() {
+						let mut local_names_map = mem::replace(local_name.local_names_mut(), elements::IndexMap::default());
+						for index in &eliminated_funcs {
+							local_names_map.remove(*index as u32);
 						}
-						_ => {}
+						let updated_map = local_names_map.into_iter().map(|(index, value)| {
+							let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < index).count() as u32;
+							(index - totalle, value)
+						}).collect();
+
+						mem::replace(local_name.local_names_mut(), updated_map);
 					}
 				}
 				_ => { }

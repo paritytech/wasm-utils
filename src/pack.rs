@@ -162,7 +162,12 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
 	for section in ctor_module.sections_mut() {
 		if let &mut Section::Data(ref mut data_section) = section {
 			let (index, offset) = if let Some(ref entry) = data_section.entries().iter().last() {
-				if let Instruction::I32Const(offst) = entry.offset().code()[0] {
+				let init_expr = entry
+					.offset()
+					.as_ref()
+					.expect("parity-wasm is compiled without bulk-memory operations")
+					.code();
+				if let Instruction::I32Const(offst) = init_expr[0] {
 					let len = entry.value().len() as i32;
 					let offst = offst as i32;
 					(entry.index(), offst + (len + 4) - len % 4)
@@ -174,7 +179,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
 			};
 			let code_data = DataSegment::new(
 				index,
-				InitExpr::new(vec![Instruction::I32Const(offset), Instruction::End]),
+				Some(InitExpr::new(vec![Instruction::I32Const(offset), Instruction::End])),
 				raw_module.clone()
 			);
 			data_section.entries_mut().push(code_data);

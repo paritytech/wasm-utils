@@ -241,11 +241,11 @@ fn build_control_flow_graph(
 				graph.new_forward_edge(active_node_id, new_node_id);
 				graph.set_first_instr_pos(new_node_id, cursor + 1);
 			}
-			Instruction::BrTable(ref label_vec, label_default) => {
+			Instruction::BrTable(ref br_table_data) => {
 				graph.increment_actual_cost(active_node_id, instruction_cost);
 
 				let active_frame_idx = stack.len() - 1;
-				for &label in [label_default].iter().chain(label_vec.iter()) {
+				for &label in [br_table_data.default].iter().chain(br_table_data.table.iter()) {
 					let target_frame_idx = active_frame_idx - (label as usize);
 					graph.new_edge(active_node_id, &stack[target_frame_idx]);
 				}
