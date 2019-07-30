@@ -8,6 +8,8 @@ description = "Collection of command-line utilities and corresponding Rust api f
 keywords = ["wasm", "webassembly", "pwasm"]
 
 [dependencies]
+# If you add the feature "bulk", make sure you fixed all expects that say
+# "parity-wasm is compiled without bulk-memory operations"
 parity-wasm = { version = "0.39", default-features = false }
 log = { version = "0.4", default-features = false }
 byteorder = { version = "1", default-features = false }
