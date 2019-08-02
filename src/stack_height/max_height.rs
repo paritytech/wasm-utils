@@ -245,11 +245,11 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 				// Push values back.
 				stack.push_values(target_arity)?;
 			}
-			BrTable(ref targets, default_target) => {
-				let arity_of_default = stack.frame(default_target)?.branch_arity;
+			BrTable(ref br_table_data) => {
+				let arity_of_default = stack.frame(br_table_data.default)?.branch_arity;
 
 				// Check that all jump targets have an equal arities.
-				for target in targets.iter() {
+				for target in &*br_table_data.table {
 					let arity = stack.frame(*target)?.branch_arity;
 					if arity != arity_of_default {
 						return Err(Error(

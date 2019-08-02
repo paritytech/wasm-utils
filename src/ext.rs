@@ -98,7 +98,12 @@ pub fn shrink_unknown_stack(
 		match section {
 			&mut elements::Section::Data(ref mut data_section) => {
 				for ref mut data_segment in data_section.entries_mut() {
-					if data_segment.offset().code() == &[elements::Instruction::I32Const(4), elements::Instruction::End] {
+					if data_segment
+						.offset()
+						.as_ref()
+						.expect("parity-wasm is compiled without bulk-memory operations")
+						.code() == &[elements::Instruction::I32Const(4), elements::Instruction::End]
+					{
 						assert_eq!(data_segment.value().len(), 4);
 						let current_val = LittleEndian::read_u32(data_segment.value());
 						let new_val = current_val - shrink_amount;

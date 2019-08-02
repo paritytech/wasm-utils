@@ -354,9 +354,12 @@ impl Module {
 						// };
 
 						// TODO: update parity-wasm and uncomment the above instead
-						let location = SegmentLocation::Default(
-							res.map_instructions(element_segment.offset().code())
-						);
+						let init_expr = element_segment
+							.offset()
+							.as_ref()
+							.expect("parity-wasm is compiled without bulk-memory operations")
+							.code();
+						let location = SegmentLocation::Default(res.map_instructions(init_expr));
 
 						let funcs_map = element_segment
 							.members().iter()
@@ -390,9 +393,12 @@ impl Module {
 					for data_segment in data_section.entries() {
 						// TODO: update parity-wasm and use the same logic as in
 						// commented element segment branch
-						let location = SegmentLocation::Default(
-							res.map_instructions(data_segment.offset().code())
-						);
+						let init_expr = data_segment
+							.offset()
+							.as_ref()
+							.expect("parity-wasm is compiled without bulk-memory operations")
+							.code();
+						let location = SegmentLocation::Default(res.map_instructions(init_expr));
 
 						res.data.push(DataSegment {
 							value: data_segment.value().to_vec(),
@@ -675,7 +681,7 @@ impl Module {
 							element_segments.push(
 								elements::ElementSegment::new(
 									0,
-									elements::InitExpr::new(self.generate_instructions(&offset_expr[..])),
+									Some(elements::InitExpr::new(self.generate_instructions(&offset_expr[..]))),
 									elements_map,
 								)
 							);
@@ -728,7 +734,7 @@ impl Module {
 							data_segments.push(
 								elements::DataSegment::new(
 									0,
-									elements::InitExpr::new(self.generate_instructions(&offset_expr[..])),
+									Some(elements::InitExpr::new(self.generate_instructions(&offset_expr[..]))),
 									data_entry.value.clone(),
 								)
 							);

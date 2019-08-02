@@ -38,7 +38,7 @@ name = "wasm-check"
 path = "check/main.rs"
 
 [dependencies]
-parity-wasm = "0.31"
+parity-wasm = "0.39"
 pwasm-utils = { path = "..", version = "0.8" }
 glob = "0.2"
 clap = "2.24"
