@@ -1,14 +1,18 @@
 use std::fmt;
 use std::vec::Vec;
 use std::borrow::ToOwned;
+use std::ops::Div;
 
 use parity_wasm::elements::{
 	self, Section, DataSection, Instruction, DataSegment, InitExpr, Internal, External,
-	ImportCountType,
+	ImportCountType, MemoryType
 };
 use parity_wasm::builder;
 use super::TargetRuntime;
 use super::gas::update_call_index;
+
+/// Size in bytes of a wasm page. 2^16.
+const WASM_PAGE_SIZE: u32 = 65535;
 
 /// Pack error.
 ///
@@ -187,6 +191,21 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
 		}
 	}
 
+        // Ensure that the initial memory has enough pages to initialize the code data section.
+	let min_initial_pages = (code_data_address as u32 + raw_module.len() as u32).div(WASM_PAGE_SIZE) + 1;
+	let import_section = ctor_module.import_section_mut().unwrap();
+	for import_entry in import_section.entries_mut() {
+		match import_entry.external_mut() {
+			External::Memory(ref mut mem_type) => {
+				let initial_pages = min_initial_pages.max(mem_type.limits().initial());
+				let resized_mem_type = MemoryType::new(initial_pages, mem_type.limits().maximum());
+				core::mem::replace(mem_type, resized_mem_type);
+			}
+			_ => {},
+		}
+
+	}
+
 	let mut new_module = builder::from_module(ctor_module)
 		.function()
 		.signature().build()
@@ -337,4 +356,50 @@ mod test {
 			&target_runtime,
 		);
 	}
+
+        #[test]
+        fn increase_initial_memory() {
+            let target_runtime = TargetRuntime::pwasm();
+            let mut data: Vec<u8> = Vec::new();
+            data.resize(WASM_PAGE_SIZE as usize, 0x00);
+	    let mut module =
+                builder::module()
+                    .import()
+                            .module("env")
+                            .field("memory")
+                            .external().memory(1, None)
+                            .build()
+                    .data()
+                            .offset(elements::Instruction::I32Const(16))
+                            .value(data)
+                            .build()
+                    .function()
+                            .signature().build()
+                            .build()
+                    .export()
+                            .field(target_runtime.symbols().call)
+                            .internal().func(0)
+                            .build()
+                    .export()
+                            .field(target_runtime.symbols().create)
+                            .internal().func(0)
+                            .build()
+                    .build();
+
+            let mut ctor_module = module.clone();
+            optimize(&mut module, vec![target_runtime.symbols().call]).expect("Optimizer to finish without errors");
+            optimize(&mut ctor_module, vec![target_runtime.symbols().create]).expect("Optimizer to finish without errors");
+
+            let raw_module = parity_wasm::serialize(module).unwrap();
+            let ctor_module = pack_instance(raw_module.clone(), ctor_module, &target_runtime).expect("Packing failed");
+
+            let import_section = ctor_module.import_section().expect("Packed module has to have an import section");
+            let mem_type = import_section.entries().iter().find_map(|import_entry| {
+                match import_entry.external() {
+                    External::Memory(mem_type) => Some(mem_type),
+                    _ => None,
+                }
+            }).expect("Packed module must import memory");
+            assert_eq!(mem_type.limits().initial(), 3);
+        }
 }
