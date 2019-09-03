@@ -6,14 +6,14 @@
     (local i32)
     i32.const 5
     call 0
-    get_local 0
-    get_local 1
+    local.get 0
+    local.get 1
     call 2
-    set_local 2
-    get_local 2)
+    local.set 2
+    local.get 2)
   (func (;2;) (type 0) (param i32 i32) (result i32)
     i32.const 3
     call 0
-    get_local 0
-    get_local 1
+    local.get 0
+    local.get 1
     i32.add))
