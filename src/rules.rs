@@ -93,8 +93,8 @@ impl InstructionType {
 			GetLocal(_) => InstructionType::Local,
 			SetLocal(_) => InstructionType::Local,
 			TeeLocal(_) => InstructionType::Local,
-			GetGlobal(_) => InstructionType::Local,
-			SetGlobal(_) => InstructionType::Local,
+			GetGlobal(_) => InstructionType::Global,
+			SetGlobal(_) => InstructionType::Global,
 
 			I32Load(_, _) => InstructionType::Load,
 			I64Load(_, _) => InstructionType::Load,
