@@ -103,4 +103,21 @@ mod tests {
 			(export "exported_internal_global_1" (global 2)))
 		"#
 	}
+
+	test_export_global! {
+		name = with_import_and_some_are_immutable;
+		input = r#"
+		(module
+			(import "env" "global" (global $global i64))
+			(global (;0;) i32 (i32.const 1))
+			(global (;1;) (mut i32) (i32.const 0)))
+		"#;
+		expected = r#"
+		(module
+			(import "env" "global" (global $global i64))
+			(global (;0;) i32 (i32.const 1))
+			(global (;1;) (mut i32) (i32.const 0))
+			(export "exported_internal_global_0" (global 2)))
+		"#
+	}
 }
