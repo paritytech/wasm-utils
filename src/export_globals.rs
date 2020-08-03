@@ -3,6 +3,10 @@ use parity_wasm::elements;
 use crate::optimizer::{global_section, export_section};
 
 /// Export all declared mutable globals.
+///
+/// This will export all internal mutable globals under the name of
+/// concat(`prefix`, i) where i is the index inside the range of
+/// [0..<total number of internal mutable globals>].
 pub fn export_mutable_globals(
 	module: &mut elements::Module,
 	prefix: impl Into<String>,
