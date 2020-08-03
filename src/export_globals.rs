@@ -43,7 +43,7 @@ mod tests {
 
 	fn parse_wat(source: &str) -> elements::Module {
 		let module_bytes = wabt::Wat2Wasm::new()
-			.validate(false)
+			.validate(true)
 			.convert(source)
 			.expect("failed to parse module");
 		elements::deserialize_buffer(module_bytes.as_ref())
