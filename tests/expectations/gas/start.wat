@@ -15,4 +15,4 @@
   (func (;3;) (type 1))
   (export "call" (func 3))
   (start 2)
-  (data (i32.const 8) "\01\02\03\04"))
+  (data (;0;) (i32.const 8) "\01\02\03\04"))
