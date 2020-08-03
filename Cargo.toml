@@ -16,7 +16,7 @@ byteorder = { version = "1", default-features = false }
 
 [dev-dependencies]
 tempdir = "0.3"
-wabt = "0.2"
+wabt = "0.10"
 diff = "0.1.11"
 indoc = "0.3"
 rand = "0.7"

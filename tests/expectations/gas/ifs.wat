@@ -9,12 +9,12 @@
     if (result i32)  ;; label = @1
       i32.const 3
       call 0
-      get_local 0
+      local.get 0
       i32.const 1
       i32.add
     else
       i32.const 2
       call 0
-      get_local 0
+      local.get 0
       i32.popcnt
     end))

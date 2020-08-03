@@ -12,11 +12,11 @@
   (func (param $arg i32)
      (local $tmp i32)
 
-     get_global 0
+     global.get 0
      i32.const 1
      i32.add
 	 tee_local $tmp
-     set_global $counter
+     global.set $counter
 
      get_local $tmp
      get_local $arg
