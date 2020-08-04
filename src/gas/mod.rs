@@ -389,7 +389,7 @@ fn insert_metering_calls(
 /// Transforms a given module into one that charges gas for code to be executed by proxy of an
 /// imported gas metering function.
 ///
-/// The output module imports a function "gas" from the module "env" with type signature
+/// The output module imports a function "gas" from the specified module with type signature
 /// [i32] -> []. The argument is the amount of gas required to continue execution. The external
 /// function is meant to keep track of the total amount of gas used and trap or otherwise halt
 /// execution of the runtime if the gas usage exceeds some allowed limit.
@@ -420,7 +420,7 @@ fn insert_metering_calls(
 ///
 /// The function fails if the module contains any operation forbidden by gas rule set, returning
 /// the original module as an Err.
-pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
+pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set, gas_module_name: &str)
 	-> Result<elements::Module, elements::Module>
 {
 	// Injecting gas counting external
@@ -433,7 +433,7 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 
 	mbuilder.push_import(
 		builder::import()
-			.module("env")
+			.module(gas_module_name)
 			.field("gas")
 			.external().func(import_sig)
 			.build()
@@ -534,7 +534,11 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module, &rules::Set::default().with_grow_cost(10000)).unwrap();
+		let injected_module = inject_gas_counter(
+			module,
+			&rules::Set::default().with_grow_cost(10000),
+			"env",
+		).unwrap();
 
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
@@ -583,7 +587,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module, &rules::Set::default()).unwrap();
+		let injected_module = inject_gas_counter(module, &rules::Set::default(), "env").unwrap();
 
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
@@ -634,7 +638,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module, &Default::default()).unwrap();
+		let injected_module = inject_gas_counter(module, &Default::default(), "env").unwrap();
 
 		assert_eq!(
 			get_function_body(&injected_module, 1).unwrap(),
@@ -681,7 +685,7 @@ mod tests {
 
 		let rules = rules::Set::default().with_forbidden_floats();
 
-		if let Err(_) = inject_gas_counter(module, &rules) { }
+		if let Err(_) = inject_gas_counter(module, &rules, "env") { }
 		else { panic!("Should be error because of the forbidden operation")}
 
 	}
@@ -702,7 +706,7 @@ mod tests {
 				let input_module = parse_wat($input);
 				let expected_module = parse_wat($expected);
 
-				let injected_module = inject_gas_counter(input_module, &Default::default())
+				let injected_module = inject_gas_counter(input_module, &Default::default(), "env")
 					.expect("inject_gas_counter call failed");
 
 				let actual_func_body = get_function_body(&injected_module, 0)
