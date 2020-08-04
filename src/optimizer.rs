@@ -29,7 +29,7 @@ pub fn optimize(
 	let module_temp = module_temp
 		.parse_names()
 		.unwrap_or_else(|(_err, module)| module);
-	mem::replace(module, module_temp);
+	*module = module_temp;
 
 	// Algo starts from the top, listing all items that should stay
 	let mut stay = Set::new();
@@ -309,7 +309,7 @@ pub fn optimize(
 							let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < index).count() as u32;
 							(index - totalle, value)
 						}).collect();
-						mem::replace(func_name.names_mut(), updated_map);
+						*func_name.names_mut() = updated_map;
 					}
 
 					if let Some(ref mut local_name) = name_section.locals_mut() {
@@ -321,8 +321,7 @@ pub fn optimize(
 							let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < index).count() as u32;
 							(index - totalle, value)
 						}).collect();
-
-						mem::replace(local_name.local_names_mut(), updated_map);
+						*local_name.local_names_mut() = updated_map;
 					}
 				}
 				_ => { }
