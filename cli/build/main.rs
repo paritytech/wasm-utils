@@ -230,7 +230,7 @@ mod tests {
 
 			let wasm_path = target_path.join("example_wasm.wasm");
 			let mut f = fs::File::create(wasm_path).expect("create fail failed");
-			f.write(b"\0asm").expect("write file failed");
+			f.write_all(b"\0asm").expect("write file failed");
 		}
 
 		let path = tmp_dir.path().to_string_lossy();

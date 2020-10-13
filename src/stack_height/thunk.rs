@@ -13,7 +13,6 @@ struct Thunk {
 	signature: FunctionType,
 	// Index in function space of this thunk.
 	idx: Option<u32>,
-	original_func_idx: u32,
 	callee_stack_cost: u32,
 }
 
@@ -22,9 +21,6 @@ pub(crate) fn generate_thunks(
 	module: elements::Module,
 ) -> Result<elements::Module, Error> {
 	// First, we need to collect all function indices that should be replaced by thunks
-
-	// Function indices which needs to generate thunks.
-	let mut need_thunks: Vec<u32> = Vec::new();
 
 	let mut replacement_map: Map<u32, Thunk> = {
 		let exports = module
@@ -57,12 +53,10 @@ pub(crate) fn generate_thunks(
 
 			// Don't generate a thunk if stack_cost of a callee is zero.
 			if callee_stack_cost != 0 {
-				need_thunks.push(func_idx);
 				replacement_map.insert(func_idx, Thunk {
 					signature: resolve_func_type(func_idx, &module)?.clone(),
 					idx: None,
 					callee_stack_cost,
-					original_func_idx: func_idx,
 				});
 			}
 		}
@@ -76,17 +70,9 @@ pub(crate) fn generate_thunks(
 	let mut next_func_idx = module.functions_space() as u32;
 
 	let mut mbuilder = builder::from_module(module);
-	for func_idx in need_thunks {
-		let mut thunk = replacement_map
-			.get_mut(&func_idx)
-			.expect(
-				"`func_idx` should come from `need_thunks`;
-				`need_thunks` is populated with the same items that in `replacement_map`;
-				qed"
-			);
-
+	for (func_idx, thunk) in replacement_map.iter_mut() {
 		let instrumented_call = instrument_call!(
-			thunk.original_func_idx as u32,
+			*func_idx,
 			thunk.callee_stack_cost as i32,
 			ctx.stack_height_global_idx(),
 			ctx.stack_limit()
@@ -113,7 +99,7 @@ pub(crate) fn generate_thunks(
 				// Signature of the thunk should match the original function signature.
 				.signature()
 					.with_params(thunk.signature.params().to_vec())
-					.with_return_type(thunk.signature.return_type().clone())
+					.with_return_type(thunk.signature.return_type())
 					.build()
 				.body()
 					.with_instructions(elements::Instructions::new(

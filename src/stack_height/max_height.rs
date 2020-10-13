@@ -288,6 +288,9 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 					.get(x as usize)
 					.ok_or_else(|| Error("Type not found".into()))?;
 
+				// Pop the offset into the function table.
+				stack.pop_values(1)?;
+
 				// Pop values for arguments of the function.
 				stack.pop_values(ty.params().len() as u32)?;
 
@@ -522,5 +525,29 @@ mod tests {
 
 		let height = compute(0, &module).unwrap();
 		assert_eq!(height, 2);
+	}
+
+	#[test]
+	fn call_indirect() {
+		let module = parse_wat(
+			r#"
+(module
+	(table $ptr 1 1 funcref)
+	(elem $ptr (i32.const 0) func 1)
+	(func $main
+		(call_indirect (i32.const 0))
+		(call_indirect (i32.const 0))
+		(call_indirect (i32.const 0))
+	)
+	(func $callee
+		i64.const 42
+		drop
+	)
+)
+"#,
+		);
+
+		let height = compute(0, &module).unwrap();
+		assert_eq!(height, 1);
 	}
 }
