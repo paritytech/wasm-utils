@@ -17,8 +17,8 @@ pub struct SourceInput<'a> {
 impl<'a> SourceInput<'a> {
 	pub fn new<'b>(target_dir: &'b str, bin_name: &'b str) -> SourceInput<'b> {
 		SourceInput {
-			target_dir: target_dir,
-			bin_name: bin_name,
+			target_dir,
+			bin_name,
 			final_name: bin_name,
 			target: SourceTarget::Emscripten,
 		}

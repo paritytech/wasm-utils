@@ -41,22 +41,23 @@ pub enum SourceTarget {
 impl std::fmt::Display for Error {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
 		use self::Error::*;
-		match *self {
-			Encoding(ref err) => write!(f, "Encoding error ({})", err),
+		match self {
+			Encoding(err) => write!(f, "Encoding error ({})", err),
 			Optimizer => write!(f, "Optimization error due to missing export section. Pointed wrong file?"),
-			Packing(ref e) => write!(f, "Packing failed due to module structure error: {}. Sure used correct libraries for building contracts?", e),
+			Packing(e) => write!(f, "Packing failed due to module structure error: {}. Sure used correct libraries for building contracts?", e),
 		}
 	}
 }
 
 fn has_ctor(module: &elements::Module, target_runtime: &TargetRuntime) -> bool {
-	if let Some(ref section) = module.export_section() {
+	if let Some(section) = module.export_section() {
 		section.entries().iter().any(|e| target_runtime.symbols().create == e.field())
 	} else {
 		false
 	}
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn build(
 	mut module: elements::Module,
 	source_target: SourceTarget,

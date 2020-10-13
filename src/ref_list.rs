@@ -28,7 +28,7 @@ impl<T> Entry<T> {
 	/// New entity.
 	pub fn new(val: T, index: usize) -> Entry<T> {
 		Entry {
-			val: val,
+			val,
 			index: EntryOrigin::Index(index),
 		}
 	}
@@ -36,7 +36,7 @@ impl<T> Entry<T> {
 	/// New detached entry.
 	pub fn new_detached(val: T) -> Entry<T> {
 		Entry {
-			val: val,
+			val,
 			index: EntryOrigin::Detached,
 		}
 	}
@@ -152,7 +152,7 @@ impl<T> RefList<T> {
 	/// internal indices of other entries might be updated.
 	pub fn begin_insert(&mut self, at: usize) -> InsertTransaction<T> {
 		InsertTransaction {
-			at: at,
+			at,
 			list: self,
 			items: Vec::new(),
 		}
@@ -201,17 +201,15 @@ impl<T> RefList<T> {
 			let total_less = indices.iter()
 				.take_while(|x| **x < entry.order().expect("Items in the list always have order; qed"))
 				.count();
-			match entry.index {
+			match &mut entry.index {
 				EntryOrigin::Detached => unreachable!("Items in the list always have order!"),
-				EntryOrigin::Index(ref mut idx) => { *idx -= total_less; },
+				EntryOrigin::Index(idx) => { *idx -= total_less; },
 			};
 		}
 
-		let mut total_removed = 0;
-		for idx in indices {
+		for (total_removed, idx) in indices.iter().enumerate() {
 			let detached = self.items.remove(*idx - total_removed);
 			detached.write().index = EntryOrigin::Detached;
-			total_removed += 1;
 		}
 	}
 
@@ -256,6 +254,11 @@ impl<T> RefList<T> {
 	/// Length of the list.
 	pub fn len(&self) -> usize {
 		self.items.len()
+	}
+
+	/// Returns true iff len == 0.
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
 	}
 
 	/// Clone entry (reference counting object to item) by index.

@@ -17,7 +17,7 @@ use rules;
 pub fn update_call_index(instructions: &mut elements::Instructions, inserted_index: u32) {
 	use parity_wasm::elements::Instruction::*;
 	for instruction in instructions.elements_mut().iter_mut() {
-		if let &mut Call(ref mut call_index) = instruction {
+		if let Call(call_index) = instruction {
 			if *call_index >= inserted_index { *call_index += 1}
 		}
 	}
@@ -273,7 +273,7 @@ pub(crate) fn determine_metered_blocks(
 	for cursor in 0..instructions.elements().len() {
 		let instruction = &instructions.elements()[cursor];
 		let instruction_cost = rules.process(instruction)?;
-		match *instruction {
+		match instruction {
 			Block(_) => {
 				counter.increment(instruction_cost)?;
 
@@ -303,10 +303,10 @@ pub(crate) fn determine_metered_blocks(
 
 				// Label is a relative index into the control stack.
 				let active_index = counter.active_control_block_index().ok_or_else(|| ())?;
-				let target_index = active_index.checked_sub(label as usize).ok_or_else(|| ())?;
+				let target_index = active_index.checked_sub(*label as usize).ok_or_else(|| ())?;
 				counter.branch(cursor, &[target_index])?;
 			}
-			BrTable(ref br_table_data) => {
+			BrTable(br_table_data) => {
 				counter.increment(instruction_cost)?;
 
 				let active_index = counter.active_control_block_index().ok_or_else(|| ())?;
@@ -363,7 +363,7 @@ fn insert_metering_calls(
 	let mut block_iter = blocks.into_iter().peekable();
 	for (original_pos, instr) in original_instrs.into_iter().enumerate() {
 		// If there the next block starts at this position, inject metering instructions.
-		let used_block = if let Some(ref block) = block_iter.peek() {
+		let used_block = if let Some(block) = block_iter.peek() {
 			if block.start_pos == original_pos {
 				new_instrs.push(I32Const(block.cost as i32));
 				new_instrs.push(Call(gas_func));
@@ -453,38 +453,36 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set, gas_modu
 	// Updating calling addresses (all calls to function index >= `gas_func` should be incremented)
 	for section in module.sections_mut() {
 		match section {
-			&mut elements::Section::Code(ref mut code_section) => {
-				for ref mut func_body in code_section.bodies_mut() {
+			elements::Section::Code(code_section) => {
+				for func_body in code_section.bodies_mut() {
 					update_call_index(func_body.code_mut(), gas_func);
-					if let Err(_) = inject_counter(func_body.code_mut(), rules, gas_func) {
+					if inject_counter(func_body.code_mut(), rules, gas_func).is_err() {
 						error = true;
 						break;
 					}
-					if rules.grow_cost() > 0 {
-						if inject_grow_counter(func_body.code_mut(), total_func) > 0 {
-							need_grow_counter = true;
-						}
+					if rules.grow_cost() > 0 && inject_grow_counter(func_body.code_mut(), total_func) > 0 {
+						need_grow_counter = true;
 					}
 				}
 			},
-			&mut elements::Section::Export(ref mut export_section) => {
-				for ref mut export in export_section.entries_mut() {
-					if let &mut elements::Internal::Function(ref mut func_index) = export.internal_mut() {
+			elements::Section::Export(export_section) => {
+				for export in export_section.entries_mut() {
+					if let elements::Internal::Function(func_index) = export.internal_mut() {
 						if *func_index >= gas_func { *func_index += 1}
 					}
 				}
 			},
-			&mut elements::Section::Element(ref mut elements_section) => {
+			elements::Section::Element(elements_section) => {
 				// Note that we do not need to check the element type referenced because in the
 				// WebAssembly 1.0 spec, the only allowed element type is funcref.
-				for ref mut segment in elements_section.entries_mut() {
+				for segment in elements_section.entries_mut() {
 					// update all indirect call addresses initial values
 					for func_index in segment.members_mut() {
 						if *func_index >= gas_func { *func_index += 1}
 					}
 				}
 			},
-			&mut elements::Section::Start(ref mut start_idx) => {
+			elements::Section::Start(start_idx) => {
 				if *start_idx >= gas_func { *start_idx += 1}
 			},
 			_ => { }
@@ -685,9 +683,10 @@ mod tests {
 
 		let rules = rules::Set::default().with_forbidden_floats();
 
-		if let Err(_) = inject_gas_counter(module, &rules, "env") { }
-		else { panic!("Should be error because of the forbidden operation")}
 
+		if inject_gas_counter(module, &rules, "env").is_ok() {
+			panic!("Should be error because of the forbidden operation")
+		}
 	}
 
 	fn parse_wat(source: &str) -> elements::Module {

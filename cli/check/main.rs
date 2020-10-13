@@ -11,7 +11,7 @@ fn fail(msg: &str) -> ! {
 	std::process::exit(1)
 }
 
-const ALLOWED_IMPORTS: &'static [&'static str] = &[
+const ALLOWED_IMPORTS: &[&str] = &[
 	"ret",
 	"storage_read",
 	"storage_write",
@@ -54,14 +54,14 @@ fn main() {
 	let module = parity_wasm::deserialize_file(&input).expect("Input module deserialization failed");
 
 	for section in module.sections() {
-		match *section {
-			elements::Section::Import(ref import_section) => {
+		match section {
+			elements::Section::Import(import_section) => {
 				let mut has_imported_memory_properly_named = false;
 				for entry in import_section.entries() {
 					if entry.module() != "env" {
 						fail("All imports should be from env");
 					}
-					match *entry.external() {
+					match entry.external() {
 						elements::External::Function(_) => {
 							if !ALLOWED_IMPORTS.contains(&entry.field()) {
 								fail(&format!("'{}' is not supported by the runtime", entry.field()));

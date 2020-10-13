@@ -5,14 +5,15 @@ use byteorder::{ LittleEndian, ByteOrder };
 pub fn inject_runtime_type(module: Module, runtime_type: [u8; 4], runtime_version: u32) -> Module {
 	let runtime_type: u32 = LittleEndian::read_u32(&runtime_type);
 	let globals_count: u32 = match module.global_section() {
-		Some(ref section) => section.entries().len() as u32,
+		Some(section) => section.entries().len() as u32,
 		None => 0
 	};
 	let imported_globals_count: u32 = match module.import_section() {
-		Some(ref section) => section.entries().iter().filter(|e| match *e.external() {
-			External::Global(ref _a) => true,
-			_ => false
-		}).count() as u32,
+		Some(section) => section
+			.entries()
+			.iter()
+			.filter(|e| matches!(*e.external(), External::Global(_)))
+			.count() as u32,
 		None => 0
 	};
 	let total_globals_count: u32 = globals_count + imported_globals_count;
@@ -39,7 +40,7 @@ mod tests {
 		let global_section = module.global_section().expect("Global section expected");
 		assert_eq!(3, global_section.entries().len());
 		let export_section = module.export_section().expect("Export section expected");
-		assert!(export_section.entries().iter().find(|e| e.field() == "RUNTIME_TYPE" ).is_some());
-		assert!(export_section.entries().iter().find(|e| e.field() == "RUNTIME_VERSION" ).is_some());
+		assert!(export_section.entries().iter().any(|e| e.field() == "RUNTIME_TYPE"));
+		assert!(export_section.entries().iter().any(|e| e.field() == "RUNTIME_VERSION"));
 	}
 }
