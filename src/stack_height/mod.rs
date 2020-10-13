@@ -149,7 +149,7 @@ fn generate_stack_height_global(module: &mut elements::Module) -> u32 {
 
 	// Try to find an existing global section.
 	for section in module.sections_mut() {
-		if let elements::Section::Global(ref mut gs) = *section {
+		if let elements::Section::Global(gs) = section {
 			gs.entries_mut().push(global_entry);
 			return (gs.entries().len() as u32) - 1;
 		}
@@ -212,7 +212,7 @@ fn compute_stack_cost(func_idx: u32, module: &elements::Module) -> Result<u32, E
 
 fn instrument_functions(ctx: &mut Context, module: &mut elements::Module) -> Result<(), Error> {
 	for section in module.sections_mut() {
-		if let elements::Section::Code(ref mut code_section) = *section {
+		if let elements::Section::Code(code_section) = section {
 			for func_body in code_section.bodies_mut() {
 				let opcodes = func_body.code_mut();
 				instrument_function(ctx, opcodes)?;
@@ -270,8 +270,8 @@ fn instrument_function(
 
 		let action: Action = {
 			let instruction = &instructions.elements()[cursor];
-			match *instruction {
-				Call(ref callee_idx) => {
+			match instruction {
+				Call(callee_idx) => {
 					let callee_stack_cost = ctx
 						.stack_cost(*callee_idx)
 						.ok_or_else(||
@@ -347,8 +347,8 @@ fn resolve_func_type(
 			.expect("function import count is not zero; import section must exists; qed")
 			.entries()
 			.iter()
-			.filter_map(|entry| match *entry.external() {
-				elements::External::Function(ref idx) => Some(*idx),
+			.filter_map(|entry| match entry.external() {
+				elements::External::Function(idx) => Some(*idx),
 				_ => None,
 			})
 			.nth(func_idx as usize)
@@ -363,7 +363,7 @@ fn resolve_func_type(
 			.ok_or_else(|| Error(format!("Function at index {} is not defined", func_idx)))?
 			.type_ref()
 	};
-	let Type::Function(ref ty) = *types.get(sig_idx as usize).ok_or_else(|| {
+	let Type::Function(ty) = types.get(sig_idx as usize).ok_or_else(|| {
 		Error(format!(
 			"Signature {} (specified by func {}) isn't defined",
 			sig_idx, func_idx

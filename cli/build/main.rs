@@ -28,12 +28,12 @@ pub enum Error {
 impl std::fmt::Display for Error {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
 		use self::Error::*;
-		match *self {
-			Io(ref io) => write!(f, "Generic i/o error: {}", io),
-			FailedToCopy(ref msg) => write!(f, "{}. Have you tried to run \"cargo build\"?", msg),
-			Decoding(ref err, ref file) => write!(f, "Decoding error ({}). Must be a valid wasm file {}. Pointed wrong file?", err, file),
-			Encoding(ref err) => write!(f, "Encoding error ({}). Almost impossible to happen, no free disk space?", err),
-			Build(ref err) => write!(f, "Build error: {}", err)
+		match self {
+			Io(io) => write!(f, "Generic i/o error: {}", io),
+			FailedToCopy(msg) => write!(f, "{}. Have you tried to run \"cargo build\"?", msg),
+			Decoding(err, file) => write!(f, "Decoding error ({}). Must be a valid wasm file {}. Pointed wrong file?", err, file),
+			Encoding(err) => write!(f, "Encoding error ({}). Almost impossible to happen, no free disk space?", err),
+			Build(err) => write!(f, "Build error: {}", err)
 		}
 	}
 }
@@ -163,9 +163,9 @@ fn do_main() -> Result<(), Error> {
 		None
 	};
 
-	let public_api_entries = matches.value_of("public_api")
-		.map(|val| val.split(",").collect())
-		.unwrap_or(Vec::new());
+	let public_api_entries: Vec<_> = matches.value_of("public_api")
+		.map(|val| val.split(',').collect())
+		.unwrap_or_default();
 
 	let target_runtime = match matches.value_of("target-runtime").expect("target-runtime has a default value; qed") {
 		"pwasm" => TargetRuntime::pwasm(),

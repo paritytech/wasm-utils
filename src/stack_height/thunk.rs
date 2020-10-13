@@ -34,8 +34,8 @@ pub(crate) fn generate_thunks(
 		let start_func_idx = module
 			.start_section();
 
-		let exported_func_indices = exports.iter().filter_map(|entry| match *entry.internal() {
-			Internal::Function(ref function_idx) => Some(*function_idx),
+		let exported_func_indices = exports.iter().filter_map(|entry| match entry.internal() {
+			Internal::Function(function_idx) => Some(*function_idx),
 			_ => None,
 		});
 		let table_func_indices = elem_segments
@@ -119,7 +119,7 @@ pub(crate) fn generate_thunks(
 	let fixup = |function_idx: &mut u32| {
 		// Check whether this function is in replacement_map, since
 		// we can skip thunk generation (e.g. if stack_cost of function is 0).
-		if let Some(ref thunk) = replacement_map.get(function_idx) {
+		if let Some(thunk) = replacement_map.get(function_idx) {
 			*function_idx = thunk
 				.idx
 				.expect("At this point an index must be assigned to each thunk");
@@ -127,22 +127,22 @@ pub(crate) fn generate_thunks(
 	};
 
 	for section in module.sections_mut() {
-		match *section {
-			elements::Section::Export(ref mut export_section) => {
+		match section {
+			elements::Section::Export(export_section) => {
 				for entry in export_section.entries_mut() {
-					if let Internal::Function(ref mut function_idx) = *entry.internal_mut() {
+					if let Internal::Function(function_idx) = entry.internal_mut() {
 						fixup(function_idx)
 					}
 				}
 			}
-			elements::Section::Element(ref mut elem_section) => {
+			elements::Section::Element(elem_section) => {
 				for segment in elem_section.entries_mut() {
 					for function_idx in segment.members_mut() {
 						fixup(function_idx)
 					}
 				}
 			}
-			elements::Section::Start(ref mut start_idx) => {
+			elements::Section::Start(start_idx) => {
 				fixup(start_idx)
 			}
 			_ => {}

@@ -157,7 +157,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 		.get(func_idx as usize)
 		.ok_or_else(|| Error("Function is not found in func section".into()))?
 		.type_ref();
-	let Type::Function(ref func_signature) = *type_section
+	let Type::Function(func_signature) = type_section
 		.types()
 		.get(func_sig_idx as usize)
 		.ok_or_else(|| Error("Function is not found in func section".into()))?;
@@ -200,10 +200,10 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 		let opcode = &instructions.elements()[pc];
 		trace!(target: "max_height", "{:?}", opcode);
 
-		match *opcode {
+		match opcode {
 			Nop => {}
 			Block(ty) | Loop(ty) | If(ty) => {
-				let end_arity = if ty == BlockType::NoResult { 0 } else { 1 };
+				let end_arity = if *ty == BlockType::NoResult { 0 } else { 1 };
 				let branch_arity = if let Loop(_) = *opcode { 0 } else { end_arity };
 				let height = stack.height();
 				stack.push_frame(Frame {
@@ -227,7 +227,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 			}
 			Br(target) => {
 				// Pop values for the destination block result.
-				let target_arity = stack.frame(target)?.branch_arity;
+				let target_arity = stack.frame(*target)?.branch_arity;
 				stack.pop_values(target_arity)?;
 
 				// This instruction unconditionally transfers control to the specified block,
@@ -236,7 +236,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 			}
 			BrIf(target) => {
 				// Pop values for the destination block result.
-				let target_arity = stack.frame(target)?.branch_arity;
+				let target_arity = stack.frame(*target)?.branch_arity;
 				stack.pop_values(target_arity)?;
 
 				// Pop condition value.
@@ -245,7 +245,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 				// Push values back.
 				stack.push_values(target_arity)?;
 			}
-			BrTable(ref br_table_data) => {
+			BrTable(br_table_data) => {
 				let arity_of_default = stack.frame(br_table_data.default)?.branch_arity;
 
 				// Check that all jump targets have an equal arities.
@@ -273,7 +273,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 				stack.mark_unreachable()?;
 			}
 			Call(idx) => {
-				let ty = resolve_func_type(idx, module)?;
+				let ty = resolve_func_type(*idx, module)?;
 
 				// Pop values for arguments of the function.
 				stack.pop_values(ty.params().len() as u32)?;
@@ -283,9 +283,9 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 				stack.push_values(callee_arity)?;
 			}
 			CallIndirect(x, _) => {
-				let Type::Function(ref ty) = *type_section
+				let Type::Function(ty) = type_section
 					.types()
-					.get(x as usize)
+					.get(*x as usize)
 					.ok_or_else(|| Error("Type not found".into()))?;
 
 				// Pop the offset into the function table.
@@ -496,7 +496,7 @@ mod tests {
 
 	#[test]
 	fn yet_another_test() {
-		const SOURCE: &'static str = r#"
+		const SOURCE: &str = r#"
 (module
   (memory 0)
   (func

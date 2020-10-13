@@ -25,7 +25,7 @@ pub fn optimize(
 	//   which in turn compile in unused imports and leaves unused functions
 
 	// try to parse name section
-	let module_temp = mem::replace(module, elements::Module::default());
+	let module_temp = mem::take(module);
 	let module_temp = module_temp
 		.parse_names()
 		.unwrap_or_else(|(_err, module)| module);
@@ -34,7 +34,7 @@ pub fn optimize(
 	// Algo starts from the top, listing all items that should stay
 	let mut stay = Set::new();
 	for (index, entry) in module.export_section().ok_or(Error::NoExportSection)?.entries().iter().enumerate() {
-		if used_exports.iter().find(|e| **e == entry.field()).is_some() {
+		if used_exports.iter().any(|e| *e == entry.field()) {
 			stay.insert(Symbol::Export(index));
 		}
 	}
@@ -119,7 +119,7 @@ pub fn optimize(
 		loop {
 			let mut remove = false;
 			match imports.entries()[index].external() {
-				&elements::External::Function(_) => {
+				elements::External::Function(_) => {
 					if stay.contains(&Symbol::Import(old_index)) {
 						index += 1;
 					} else {
@@ -129,7 +129,7 @@ pub fn optimize(
 					}
 					top_funcs += 1;
 				},
-				&elements::External::Global(_) => {
+				elements::External::Global(_) => {
 					if stay.contains(&Symbol::Import(old_index)) {
 						index += 1;
 					} else {
@@ -210,54 +210,55 @@ pub fn optimize(
 		}
 	}
 
-	if eliminated_globals.len() > 0 || eliminated_funcs.len() > 0 || eliminated_types.len() > 0 {
+	if !eliminated_globals.is_empty() || !eliminated_funcs.is_empty() || !eliminated_types.is_empty() {
 		// Finaly, rewire all calls, globals references and types to the new indices
 		//   (only if there is anything to do)
-		eliminated_globals.sort();
-		eliminated_funcs.sort();
-		eliminated_types.sort();
+		// When sorting primitives sorting unstable is faster without any difference in result.
+		eliminated_globals.sort_unstable();
+		eliminated_funcs.sort_unstable();
+		eliminated_types.sort_unstable();
 
 		for section in module.sections_mut() {
 			match section {
-				&mut elements::Section::Start(ref mut func_index) if eliminated_funcs.len() > 0 => {
+				elements::Section::Start(func_index) if !eliminated_funcs.is_empty() => {
 					let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < *func_index).count();
 					*func_index -= totalle as u32;
 				},
-				&mut elements::Section::Function(ref mut function_section) if eliminated_types.len() > 0 => {
-					for ref mut func_signature in function_section.entries_mut() {
+				elements::Section::Function(function_section) if !eliminated_types.is_empty() => {
+					for func_signature in function_section.entries_mut() {
 						let totalle = eliminated_types.iter().take_while(|i| (**i as u32) < func_signature.type_ref()).count();
 						*func_signature.type_ref_mut() -= totalle as u32;
 					}
 				},
-				&mut elements::Section::Import(ref mut import_section) if eliminated_types.len() > 0 => {
-					for ref mut import_entry in import_section.entries_mut() {
-						if let &mut elements::External::Function(ref mut type_ref) = import_entry.external_mut() {
+				elements::Section::Import(import_section) if !eliminated_types.is_empty() => {
+					for import_entry in import_section.entries_mut() {
+						if let elements::External::Function(type_ref) = import_entry.external_mut() {
 							let totalle = eliminated_types.iter().take_while(|i| (**i as u32) < *type_ref).count();
 							*type_ref -= totalle as u32;
 						}
 					}
 				},
-				&mut elements::Section::Code(ref mut code_section) if eliminated_globals.len() > 0 || eliminated_funcs.len() > 0 => {
-					for ref mut func_body in code_section.bodies_mut() {
-						if eliminated_funcs.len() > 0 {
+				elements::Section::Code(code_section) if !eliminated_globals.is_empty() || !eliminated_funcs.is_empty() => {
+					for func_body in code_section.bodies_mut() {
+						if !eliminated_funcs.is_empty() {
 							update_call_index(func_body.code_mut(), &eliminated_funcs);
 						}
-						if eliminated_globals.len() > 0 {
+						if !eliminated_globals.is_empty() {
 							update_global_index(func_body.code_mut().elements_mut(), &eliminated_globals)
 						}
-						if eliminated_types.len() > 0 {
+						if !eliminated_types.is_empty() {
 							update_type_index(func_body.code_mut(), &eliminated_types)
 						}
 					}
 				},
-				&mut elements::Section::Export(ref mut export_section) => {
-					for ref mut export in export_section.entries_mut() {
+				elements::Section::Export(export_section) => {
+					for export in export_section.entries_mut() {
 						match export.internal_mut() {
-							&mut elements::Internal::Function(ref mut func_index) => {
+							elements::Internal::Function(func_index) => {
 								let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < *func_index).count();
 								*func_index -= totalle as u32;
 							},
-							&mut elements::Internal::Global(ref mut global_index) => {
+							elements::Internal::Global(global_index) => {
 								let totalle = eliminated_globals.iter().take_while(|i| (**i as u32) < *global_index).count();
 								*global_index -= totalle as u32;
 							},
@@ -265,13 +266,13 @@ pub fn optimize(
 						}
 					}
 				},
-				&mut elements::Section::Global(ref mut global_section) => {
-					for ref mut global_entry in global_section.entries_mut() {
+				elements::Section::Global(global_section) => {
+					for global_entry in global_section.entries_mut() {
 						update_global_index(global_entry.init_expr_mut().code_mut(), &eliminated_globals)
 					}
 				},
-				&mut elements::Section::Data(ref mut data_section) => {
-					for ref mut segment in data_section.entries_mut() {
+				elements::Section::Data(data_section) => {
+					for segment in data_section.entries_mut() {
 						update_global_index(
 							segment
 								.offset_mut()
@@ -282,8 +283,8 @@ pub fn optimize(
 						)
 					}
 				},
-				&mut elements::Section::Element(ref mut elements_section) => {
-					for ref mut segment in elements_section.entries_mut() {
+				elements::Section::Element(elements_section) => {
+					for segment in elements_section.entries_mut() {
 						update_global_index(
 							segment
 							.offset_mut()
@@ -299,9 +300,9 @@ pub fn optimize(
 						}
 					}
 				},
-				&mut elements::Section::Name(ref mut name_section) => {
-					if let Some(ref mut func_name) = name_section.functions_mut() {
-						let mut func_name_map = mem::replace(func_name.names_mut(), elements::IndexMap::default());
+				elements::Section::Name(name_section) => {
+					if let Some(func_name) = name_section.functions_mut() {
+						let mut func_name_map = mem::take(func_name.names_mut());
 						for index in &eliminated_funcs {
 							func_name_map.remove(*index as u32);
 						}
@@ -312,8 +313,8 @@ pub fn optimize(
 						*func_name.names_mut() = updated_map;
 					}
 
-					if let Some(ref mut local_name) = name_section.locals_mut() {
-						let mut local_names_map = mem::replace(local_name.local_names_mut(), elements::IndexMap::default());
+					if let Some(local_name) = name_section.locals_mut() {
+						let mut local_names_map = mem::take(local_name.local_names_mut());
 						for index in &eliminated_funcs {
 							local_names_map.remove(*index as u32);
 						}
@@ -336,7 +337,7 @@ pub fn optimize(
 pub fn update_call_index(instructions: &mut elements::Instructions, eliminated_indices: &[usize]) {
 	use parity_wasm::elements::Instruction::*;
 	for instruction in instructions.elements_mut().iter_mut() {
-		if let &mut Call(ref mut call_index) = instruction {
+		if let Call(call_index) = instruction {
 			let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
 			trace!("rewired call {} -> call {}", *call_index, *call_index - totalle as u32);
 			*call_index -= totalle as u32;
@@ -349,7 +350,7 @@ pub fn update_global_index(instructions: &mut Vec<elements::Instruction>, elimin
 	use parity_wasm::elements::Instruction::*;
 	for instruction in instructions.iter_mut() {
 		match instruction {
-			&mut GetGlobal(ref mut index) | &mut SetGlobal(ref mut index) => {
+			GetGlobal(index) | SetGlobal(index) => {
 				let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *index).count();
 				trace!("rewired global {} -> global {}", *index, *index - totalle as u32);
 				*index -= totalle as u32;
@@ -363,7 +364,7 @@ pub fn update_global_index(instructions: &mut Vec<elements::Instruction>, elimin
 pub fn update_type_index(instructions: &mut elements::Instructions, eliminated_indices: &[usize]) {
 	use parity_wasm::elements::Instruction::*;
 	for instruction in instructions.elements_mut().iter_mut() {
-		if let &mut CallIndirect(ref mut call_index, _) = instruction {
+		if let CallIndirect(call_index, _) = instruction {
 			let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
 			trace!("rewired call_indrect {} -> call_indirect {}", *call_index, *call_index - totalle as u32);
 			*call_index -= totalle as u32;
@@ -371,54 +372,54 @@ pub fn update_type_index(instructions: &mut elements::Instructions, eliminated_i
 	}
 }
 
-pub fn import_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::ImportSection> {
+pub fn import_section(module: &mut elements::Module) -> Option<&mut elements::ImportSection> {
    for section in module.sections_mut() {
-		if let &mut elements::Section::Import(ref mut sect) = section {
+		if let elements::Section::Import(sect) = section {
 			return Some(sect);
 		}
 	}
 	None
 }
 
-pub fn global_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::GlobalSection> {
+pub fn global_section(module: &mut elements::Module) -> Option<&mut elements::GlobalSection> {
    for section in module.sections_mut() {
-		if let &mut elements::Section::Global(ref mut sect) = section {
+		if let elements::Section::Global(sect) = section {
 			return Some(sect);
 		}
 	}
 	None
 }
 
-pub fn function_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::FunctionSection> {
+pub fn function_section(module: &mut elements::Module) -> Option<&mut elements::FunctionSection> {
    for section in module.sections_mut() {
-		if let &mut elements::Section::Function(ref mut sect) = section {
+		if let elements::Section::Function(sect) = section {
 			return Some(sect);
 		}
 	}
 	None
 }
 
-pub fn code_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::CodeSection> {
+pub fn code_section(module: &mut elements::Module) -> Option<&mut elements::CodeSection> {
    for section in module.sections_mut() {
-		if let &mut elements::Section::Code(ref mut sect) = section {
+		if let elements::Section::Code(sect) = section {
 			return Some(sect);
 		}
 	}
 	None
 }
 
-pub fn export_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::ExportSection> {
+pub fn export_section(module: &mut elements::Module) -> Option<&mut elements::ExportSection> {
    for section in module.sections_mut() {
-		if let &mut elements::Section::Export(ref mut sect) = section {
+		if let elements::Section::Export(sect) = section {
 			return Some(sect);
 		}
 	}
 	None
 }
 
-pub fn type_section<'a>(module: &'a mut elements::Module) -> Option<&'a mut elements::TypeSection> {
+pub fn type_section(module: &mut elements::Module) -> Option<&mut elements::TypeSection> {
    for section in module.sections_mut() {
-		if let &mut elements::Section::Type(ref mut sect) = section {
+		if let elements::Section::Type(sect) = section {
 			return Some(sect);
 		}
 	}

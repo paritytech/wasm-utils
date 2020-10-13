@@ -56,7 +56,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
 			.find(|entry| target.symbols().create == entry.field()).ok_or_else(|| Error::NoCreateSymbol(target.symbols().create))?;
 
 		let function_index: usize = match found_entry.internal() {
-			&Internal::Function(index) => index as usize,
+			Internal::Function(index) => *index as usize,
 			_ => { return Err(Error::InvalidCreateMember(target.symbols().create)) },
 		};
 
@@ -68,7 +68,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
 			.entries().get(function_index - ctor_import_functions).ok_or(Error::MalformedModule)?
 			.type_ref();
 
-		let &elements::Type::Function(ref func) = ctor_module.type_section().ok_or(Error::NoTypeSection)?
+		let elements::Type::Function(func) = ctor_module.type_section().ok_or(Error::NoTypeSection)?
 			.types().get(type_id as usize).ok_or(Error::MalformedModule)?;
 
 		// Deploy should have no arguments and also should return nothing
@@ -112,21 +112,21 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
 			let ret_func = ctor_module.import_count(ImportCountType::Function) as u32 - 1;
 
 			for section in ctor_module.sections_mut() {
-				match *section {
-					elements::Section::Code(ref mut code_section) => {
-						for ref mut func_body in code_section.bodies_mut() {
+				match section {
+					elements::Section::Code(code_section) => {
+						for func_body in code_section.bodies_mut() {
 							update_call_index(func_body.code_mut(), ret_func);
 						}
 					},
-					elements::Section::Export(ref mut export_section) => {
-						for ref mut export in export_section.entries_mut() {
-							if let &mut elements::Internal::Function(ref mut func_index) = export.internal_mut() {
+					elements::Section::Export(export_section) => {
+						for export in export_section.entries_mut() {
+							if let elements::Internal::Function(func_index) = export.internal_mut() {
 								if *func_index >= ret_func { *func_index += 1}
 							}
 						}
 					},
-					elements::Section::Element(ref mut elements_section) => {
-						for ref mut segment in elements_section.entries_mut() {
+					elements::Section::Element(elements_section) => {
+						for segment in elements_section.entries_mut() {
 							// update all indirect call addresses initial values
 							for func_index in segment.members_mut() {
 								if *func_index >= ret_func { *func_index += 1}
@@ -150,7 +150,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
 	if ctor_module
 		.sections()
 		.iter()
-		.find(|section| match **section { Section::Data(ref _d) => true, _ => false })
+		.find(|section| matches!(**section, Section::Data(_)))
 		.is_none() {
 		// DataSection has to be the last non-custom section according the to the spec
 		ctor_module.sections_mut().push(Section::Data(DataSection::with_entries(vec![])));
@@ -160,8 +160,8 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
 	let mut code_data_address = 0i32;
 
 	for section in ctor_module.sections_mut() {
-		if let &mut Section::Data(ref mut data_section) = section {
-			let (index, offset) = if let Some(ref entry) = data_section.entries().iter().last() {
+		if let Section::Data(data_section) = section {
+			let (index, offset) = if let Some(entry) = data_section.entries().iter().last() {
 				let init_expr = entry
 					.offset()
 					.as_ref()
@@ -202,7 +202,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
 		.build();
 
 	for section in new_module.sections_mut() {
-		if let &mut Section::Export(ref mut export_section) = section {
+		if let Section::Export(export_section) = section {
 			for entry in export_section.entries_mut().iter_mut() {
 				if target.symbols().create == entry.field() {
 					// change `create` symbol export name into default `call` symbol name.

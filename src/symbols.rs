@@ -19,7 +19,7 @@ pub fn resolve_function(module: &elements::Module, index: u32) -> Symbol {
 	let mut functions = 0;
 	if let Some(import_section) = module.import_section() {
 		for (item_index, item) in import_section.entries().iter().enumerate() {
-			if let &elements::External::Function(_) = item.external() {
+			if let elements::External::Function(_) = item.external() {
 				if functions == index {
 					return Symbol::Import(item_index as usize);
 				}
@@ -35,7 +35,7 @@ pub fn resolve_global(module: &elements::Module, index: u32) -> Symbol {
 	let mut globals = 0;
 	if let Some(import_section) = module.import_section() {
 		for (item_index, item) in import_section.entries().iter().enumerate() {
-			if let &elements::External::Global(_) = item.external() {
+			if let elements::External::Global(_) = item.external() {
 				if globals == index {
 					return Symbol::Import(item_index as usize);
 				}
@@ -84,15 +84,15 @@ pub fn expand_symbols(module: &elements::Module, set: &mut Set<Symbol>) {
 			Export(idx) => {
 				let entry = &module.export_section().expect("Export section to exist").entries()[idx];
 				match entry.internal() {
-					&elements::Internal::Function(func_idx) => {
-						let symbol = resolve_function(module, func_idx);
+					elements::Internal::Function(func_idx) => {
+						let symbol = resolve_function(module, *func_idx);
 						if !stop.contains(&symbol) {
 							fringe.push(symbol);
 						}
 						set.insert(symbol);
 					},
-					&elements::Internal::Global(global_idx) => {
-						let symbol = resolve_global(module, global_idx);
+					elements::Internal::Global(global_idx) => {
+						let symbol = resolve_global(module, *global_idx);
 						if !stop.contains(&symbol) {
 							fringe.push(symbol);
 						}
@@ -103,8 +103,8 @@ pub fn expand_symbols(module: &elements::Module, set: &mut Set<Symbol>) {
 			},
 			Import(idx) => {
 				let entry = &module.import_section().expect("Import section to exist").entries()[idx];
-				if let &elements::External::Function(type_idx) = entry.external() {
-					let type_symbol = Symbol::Type(type_idx as usize);
+				if let elements::External::Function(type_idx) = entry.external() {
+					let type_symbol = Symbol::Type(*type_idx as usize);
 					if !stop.contains(&type_symbol) {
 						fringe.push(type_symbol);
 					}

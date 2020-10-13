@@ -285,11 +285,11 @@ impl Default for Set {
 
 impl Set {
 	pub fn new(regular: u32, entries: Map<InstructionType, Metering>) -> Self {
-		Set { regular: regular, entries: entries, grow: 0 }
+		Set { regular, entries, grow: 0 }
 	}
 
 	pub fn process(&self, instruction: &elements::Instruction) -> Result<u32, ()>  {
-		match self.entries.get(&InstructionType::op(instruction)).map(|x| *x) {
+		match self.entries.get(&InstructionType::op(instruction)).cloned() {
 			None | Some(Metering::Regular) => Ok(self.regular),
 			Some(Metering::Forbidden) => Err(()),
 			Some(Metering::Fixed(val)) => Ok(val),

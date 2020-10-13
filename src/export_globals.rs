@@ -22,9 +22,8 @@ pub fn export_mutable_globals(
 		module.sections_mut().push(elements::Section::Export(elements::ExportSection::default()));
 	}
 
-	let mut symbol_index = 0usize;
 	let prefix: String = prefix.into();
-	for export in exports {
+	for (symbol_index, export) in exports.into_iter().enumerate() {
 		let new_entry = elements::ExportEntry::new(
 			format!("{}_{}", prefix, symbol_index),
 			elements::Internal::Global(
@@ -35,7 +34,6 @@ pub fn export_mutable_globals(
 			.expect("added above if does not exists")
 			.entries_mut()
 			.push(new_entry);
-		symbol_index += 1;
 	}
 }
 

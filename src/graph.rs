@@ -238,12 +238,10 @@ impl Module {
 	/// Initialize module from parity-wasm `Module`.
 	pub fn from_elements(module: &elements::Module) -> Result<Self, Error> {
 
-		let mut idx = 0;
 		let mut res = Module::default();
-
 		let mut imported_functions = 0;
 
-		for section in module.sections() {
+		for (idx, section) in module.sections().iter().enumerate() {
 			match section {
 				elements::Section::Type(type_section) => {
 					res.types = RefList::from_slice(type_section.types());
@@ -260,7 +258,7 @@ impl Module {
 							},
 							elements::External::Memory(m) => {
 								res.memory.push(Memory {
-									limits: m.limits().clone(),
+									limits: *m.limits(),
 									origin: entry.into(),
 								});
 							},
@@ -273,7 +271,7 @@ impl Module {
 							},
 							elements::External::Table(t) => {
 								res.tables.push(Table {
-									limits: t.limits().clone(),
+									limits: *t.limits(),
 									origin: entry.into(),
 								});
 							},
@@ -296,7 +294,7 @@ impl Module {
 				elements::Section::Table(table_section) => {
 					for t in table_section.entries() {
 						res.tables.push(Table {
-							limits: t.limits().clone(),
+							limits: *t.limits(),
 							origin: ImportedOrDeclared::Declared(()),
 						});
 					}
@@ -304,7 +302,7 @@ impl Module {
 				elements::Section::Memory(table_section) => {
 					for t in table_section.entries() {
 						res.memory.push(Memory {
-							limits: t.limits().clone(),
+							limits: *t.limits(),
 							origin: ImportedOrDeclared::Declared(()),
 						});
 					}
@@ -322,21 +320,21 @@ impl Module {
 				elements::Section::Export(export_section) => {
 					for e in export_section.entries() {
 						let local = match e.internal() {
-							&elements::Internal::Function(func_idx) => {
-								ExportLocal::Func(res.funcs.clone_ref(func_idx as usize))
+							elements::Internal::Function(func_idx) => {
+								ExportLocal::Func(res.funcs.clone_ref(*func_idx as usize))
 							},
-							&elements::Internal::Global(global_idx) => {
-								ExportLocal::Global(res.globals.clone_ref(global_idx as usize))
+							elements::Internal::Global(global_idx) => {
+								ExportLocal::Global(res.globals.clone_ref(*global_idx as usize))
 							},
-							&elements::Internal::Memory(mem_idx) => {
-								ExportLocal::Memory(res.memory.clone_ref(mem_idx as usize))
+							elements::Internal::Memory(mem_idx) => {
+								ExportLocal::Memory(res.memory.clone_ref(*mem_idx as usize))
 							},
-							&elements::Internal::Table(table_idx) => {
-								ExportLocal::Table(res.tables.clone_ref(table_idx as usize))
+							elements::Internal::Table(table_idx) => {
+								ExportLocal::Table(res.tables.clone_ref(*table_idx as usize))
 							},
 						};
 
-						res.exports.push(Export { local: local, name: e.field().to_owned() })
+						res.exports.push(Export { local, name: e.field().to_owned() })
 					}
 				},
 				elements::Section::Start(start_func) => {
@@ -368,25 +366,21 @@ impl Module {
 
 						res.elements.push(ElementSegment {
 							value: funcs_map,
-							location: location,
+							location,
 						});
 					}
 				},
 				elements::Section::Code(code_section) => {
-					let mut idx = 0;
-					for func_body in code_section.bodies() {
+					for (idx, func_body) in code_section.bodies().iter().enumerate() {
 						let code = res.map_instructions(func_body.code().elements());
-
 						let mut func = res.funcs.get_ref(imported_functions + idx).write();
-						match func.origin {
-							ImportedOrDeclared::Declared(ref mut body) => {
+						match &mut func.origin {
+							ImportedOrDeclared::Declared(body) => {
 								body.code = code;
-								body.locals = func_body.locals().iter().cloned().collect();
+								body.locals = func_body.locals().to_vec();
 							},
 							_ => { return Err(Error::InconsistentSource); }
 						}
-
-						idx += 1;
 					}
 				},
 				elements::Section::Data(data_section) => {
@@ -402,7 +396,7 @@ impl Module {
 
 						res.data.push(DataSegment {
 							value: data_segment.value().to_vec(),
-							location: location,
+							location,
 						});
 					}
 				},
@@ -410,7 +404,6 @@ impl Module {
 					res.other.insert(idx, section.clone());
 				}
 			}
-			idx += 1;
 		}
 
 		Ok(res)
@@ -425,7 +418,7 @@ impl Module {
 
 		custom_round(&self.other, &mut idx, &mut sections);
 
-		if self.types.len() > 0 {
+		if !self.types.is_empty() {
 			// TYPE SECTION (1)
 			let mut type_section = elements::TypeSection::default();
 			{
@@ -447,8 +440,8 @@ impl Module {
 		let add = {
 			let imports = import_section.entries_mut();
 			for func in self.funcs.iter() {
-				match func.read().origin {
-					Imported(ref module, ref field) => {
+				match &func.read().origin {
+					Imported(module, field) => {
 						imports.push(
 							elements::ImportEntry::new(
 								module.to_owned(),
@@ -464,8 +457,8 @@ impl Module {
 			}
 
 			for global in self.globals.iter() {
-				match global.read().origin {
-					Imported(ref module, ref field) => {
+				match &global.read().origin {
+					Imported(module, field) => {
 						imports.push(
 							elements::ImportEntry::new(
 								module.to_owned(),
@@ -484,8 +477,8 @@ impl Module {
 			}
 
 			for memory in self.memory.iter() {
-				match memory.read().origin {
-					Imported(ref module, ref field) => {
+				match &memory.read().origin {
+					Imported(module, field) => {
 						imports.push(
 							elements::ImportEntry::new(
 								module.to_owned(),
@@ -504,8 +497,8 @@ impl Module {
 			}
 
 			for table in self.tables.iter() {
-				match table.read().origin {
-					Imported(ref module, ref field) => {
+				match &table.read().origin {
+					Imported(module, field) => {
 						imports.push(
 							elements::ImportEntry::new(
 								module.to_owned(),
@@ -522,7 +515,7 @@ impl Module {
 					_ => continue,
 				}
 			}
-			imports.len() > 0
+			!imports.is_empty()
 		};
 
 		if add {
@@ -531,7 +524,7 @@ impl Module {
 			custom_round(&self.other, &mut idx, &mut sections);
 		}
 
-		if self.funcs.len() > 0 {
+		if !self.funcs.is_empty() {
 			// FUNC SECTION (3)
 			let mut func_section = elements::FunctionSection::default();
 			{
@@ -554,7 +547,7 @@ impl Module {
 			custom_round(&self.other, &mut idx, &mut sections);
 		}
 
-		if self.tables.len() > 0 {
+		if !self.tables.is_empty() {
 			// TABLE SECTION (4)
 			let mut table_section = elements::TableSection::default();
 			{
@@ -578,7 +571,7 @@ impl Module {
 			custom_round(&self.other, &mut idx, &mut sections);
 		}
 
-		if self.memory.len() > 0 {
+		if !self.memory.is_empty() {
 			// MEMORY SECTION (5)
 			let mut memory_section = elements::MemorySection::default();
 			{
@@ -602,15 +595,15 @@ impl Module {
 			custom_round(&self.other, &mut idx, &mut sections);
 		}
 
-		if self.globals.len() > 0 {
+		if !self.globals.is_empty() {
 			// GLOBAL SECTION (6)
 			let mut global_section = elements::GlobalSection::default();
 			{
 				let globals = global_section.entries_mut();
 
 				for global in self.globals.iter() {
-					match global.read().origin {
-						Declared(ref init_code) => {
+					match &global.read().origin {
+						Declared(init_code) => {
 							globals.push(elements::GlobalEntry::new(
 								elements::GlobalType::new(global.read().content, global.read().is_mut),
 								elements::InitExpr::new(self.generate_instructions(&init_code[..])),
@@ -626,24 +619,24 @@ impl Module {
 			custom_round(&self.other, &mut idx, &mut sections);
 		}
 
-		if self.exports.len() > 0 {
+		if !self.exports.is_empty() {
 			// EXPORT SECTION (7)
 			let mut export_section = elements::ExportSection::default();
 			{
 				let exports = export_section.entries_mut();
 
 				for export in self.exports.iter() {
-					let internal = match export.local {
-						ExportLocal::Func(ref func_ref) => {
+					let internal = match &export.local {
+						ExportLocal::Func(func_ref) => {
 							elements::Internal::Function(func_ref.order().ok_or(Error::DetachedEntry)? as u32)
 						},
-						ExportLocal::Global(ref global_ref) => {
+						ExportLocal::Global(global_ref) => {
 							elements::Internal::Global(global_ref.order().ok_or(Error::DetachedEntry)? as u32)
 						},
-						ExportLocal::Table(ref table_ref) => {
+						ExportLocal::Table(table_ref) => {
 							elements::Internal::Table(table_ref.order().ok_or(Error::DetachedEntry)? as u32)
 						},
-						ExportLocal::Memory(ref memory_ref) => {
+						ExportLocal::Memory(memory_ref) => {
 							elements::Internal::Memory(memory_ref.order().ok_or(Error::DetachedEntry)? as u32)
 						},
 					};
@@ -657,22 +650,22 @@ impl Module {
 			custom_round(&self.other, &mut idx, &mut sections);
 		}
 
-		if let Some(ref func_ref) = self.start {
+		if let Some(func_ref) = &self.start {
 			// START SECTION (8)
 			sections.push(elements::Section::Start(
 				func_ref.order().ok_or(Error::DetachedEntry)? as u32
 			));
 		}
 
-		if self.elements.len() > 0 {
+		if !self.elements.is_empty() {
 			// START SECTION (9)
 			let mut element_section = elements::ElementSection::default();
 			{
 				let element_segments = element_section.entries_mut();
 
 				for element in self.elements.iter() {
-					match element.location {
-						SegmentLocation::Default(ref offset_expr) => {
+					match &element.location {
+						SegmentLocation::Default(offset_expr) => {
 							let mut elements_map = Vec::new();
 							for f in element.value.iter() {
 								elements_map.push(f.order().ok_or(Error::DetachedEntry)? as u32);
@@ -697,15 +690,15 @@ impl Module {
 			custom_round(&self.other, &mut idx, &mut sections);
 		}
 
-		if self.funcs.len() > 0 {
+		if !self.funcs.is_empty() {
 			// CODE SECTION (10)
 			let mut code_section = elements::CodeSection::default();
 			{
 				let funcs = code_section.bodies_mut();
 
 				for func in self.funcs.iter() {
-					match func.read().origin {
-						Declared(ref body) => {
+					match &func.read().origin {
+						Declared(body) => {
 							funcs.push(elements::FuncBody::new(
 								body.locals.clone(),
 								elements::Instructions::new(self.generate_instructions(&body.code[..])),
@@ -722,15 +715,15 @@ impl Module {
 		}
 
 
-		if self.data.len() > 0 {
+		if !self.data.is_empty() {
 			// DATA SECTION (11)
 			let mut data_section = elements::DataSection::default();
 			{
 				let data_segments = data_section.entries_mut();
 
 				for data_entry in self.data.iter() {
-					match data_entry.location {
-						SegmentLocation::Default(ref offset_expr) => {
+					match &data_entry.location {
+						SegmentLocation::Default(offset_expr) => {
 							data_segments.push(
 								elements::DataSegment::new(
 									0,
@@ -843,7 +836,7 @@ mod tests {
 			let element_func = &sample.elements[0].value[1];
 			let rfunc = element_func.read();
 			let rtype = &**rfunc.type_ref.read();
-			let elements::Type::Function(ref ftype) = rtype;
+			let elements::Type::Function(ftype) = rtype;
 
 			// it's func#1 in the function  space
 			assert_eq!(rfunc.order(), Some(1));
@@ -857,7 +850,7 @@ mod tests {
 			let element_func = &sample.elements[0].value[1];
 			let rfunc = element_func.read();
 			let rtype = &**rfunc.type_ref.read();
-			let elements::Type::Function(ref ftype) = rtype;
+			let elements::Type::Function(ftype) = rtype;
 
 			// import deleted so now it's func #0
 			assert_eq!(rfunc.order(), Some(0));
@@ -891,10 +884,7 @@ mod tests {
 			let declared_func_2 = sample.funcs.clone_ref(2);
 
 			let mut tx = sample.funcs.begin_insert_not_until(
-				|f| match f.origin {
-					super::ImportedOrDeclared::Imported(_, _) => true,
-					_ => false,
-				}
+				|f| matches!(f.origin, super::ImportedOrDeclared::Imported(_, _))
 			);
 
 			let new_import_func = tx.push(super::Func {
@@ -908,9 +898,9 @@ mod tests {
 			assert_eq!(declared_func_2.order(), Some(3));
 			assert_eq!(
 				match &declared_func_2.read().origin {
-					super::ImportedOrDeclared::Declared(ref body) => {
-						match body.code[1] {
-							super::Instruction::Call(ref called_func) => called_func.order(),
+					super::ImportedOrDeclared::Declared(body) => {
+						match &body.code[1] {
+							super::Instruction::Call(called_func) => called_func.order(),
 							_ => panic!("instruction #2 should be a call!"),
 						}
 					},
@@ -975,10 +965,10 @@ mod tests {
 		let declared_func_2 = sample.funcs.clone_ref(2);
 		assert_eq!(
 			match &declared_func_2.read().origin {
-				super::ImportedOrDeclared::Declared(ref body) => {
-					match body.code[0] {
-						super::Instruction::Call(ref called_func) => called_func.order(),
-						ref wrong_instruction => panic!("instruction #2 should be a call but got {:?}!", wrong_instruction),
+				super::ImportedOrDeclared::Declared(body) => {
+					match &body.code[0] {
+						super::Instruction::Call(called_func) => called_func.order(),
+						wrong_instruction => panic!("instruction #2 should be a call but got {:?}!", wrong_instruction),
 					}
 				},
 				_ => panic!("func #0 should be declared!"),

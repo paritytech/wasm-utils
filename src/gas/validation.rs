@@ -168,7 +168,7 @@ fn build_control_flow_graph(
 		}
 
 		let instruction_cost = rules.process(instruction)?;
-		match *instruction {
+		match instruction {
 			Instruction::Block(_) => {
 				graph.increment_actual_cost(active_node_id, instruction_cost);
 
@@ -221,7 +221,7 @@ fn build_control_flow_graph(
 				graph.increment_actual_cost(active_node_id, instruction_cost);
 
 				let active_frame_idx = stack.len() - 1;
-				let target_frame_idx = active_frame_idx - (label as usize);
+				let target_frame_idx = active_frame_idx - (*label as usize);
 				graph.new_edge(active_node_id, &stack[target_frame_idx]);
 
 				// Next instruction is unreachable, but carry on anyway.
@@ -233,7 +233,7 @@ fn build_control_flow_graph(
 				graph.increment_actual_cost(active_node_id, instruction_cost);
 
 				let active_frame_idx = stack.len() - 1;
-				let target_frame_idx = active_frame_idx - (label as usize);
+				let target_frame_idx = active_frame_idx - (*label as usize);
 				graph.new_edge(active_node_id, &stack[target_frame_idx]);
 
 				let new_node_id = graph.add_node();
@@ -241,7 +241,7 @@ fn build_control_flow_graph(
 				graph.new_forward_edge(active_node_id, new_node_id);
 				graph.set_first_instr_pos(new_node_id, cursor + 1);
 			}
-			Instruction::BrTable(ref br_table_data) => {
+			Instruction::BrTable(br_table_data) => {
 				graph.increment_actual_cost(active_node_id, instruction_cost);
 
 				let active_frame_idx = stack.len() - 1;
@@ -303,7 +303,7 @@ fn validate_graph_gas_costs(graph: &ControlFlowGraph) -> bool {
 		}
 
 		for loop_node_id in node.loopback_edges.iter() {
-			let (ref mut loop_actual, ref mut loop_charged) = loop_costs.get_mut(loop_node_id)
+			let (loop_actual, loop_charged) = loop_costs.get_mut(loop_node_id)
 				.expect("cannot arrive at loopback edge without visiting loop entry node");
 			if loop_actual != loop_charged {
 				return false;
