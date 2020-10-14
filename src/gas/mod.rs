@@ -474,7 +474,9 @@ pub fn inject_gas_counter<R: Rules>(
 						error = true;
 						break;
 					}
-					if rules.memory_grow_cost().is_some() && inject_grow_counter(func_body.code_mut(), total_func) > 0 {
+					if rules.memory_grow_cost().is_some()
+						&& inject_grow_counter(func_body.code_mut(), total_func) > 0
+					{
 						need_grow_counter = true;
 					}
 				}
