@@ -3,9 +3,38 @@ use std::collections::{HashMap as Map};
 #[cfg(not(features = "std"))]
 use std::collections::{BTreeMap as Map};
 
+use std::num::NonZeroU32;
+
 use parity_wasm::elements;
 
 pub struct UnknownInstruction;
+
+/// An interface that describes instruction costs.
+pub trait Rules {
+	/// Returns the cost for the passed `instruction`.
+	///
+	/// Returning `None` makes the gas instrumention end with an error. This is meant
+	/// as a way to have a partial rule set where any instruction that is not specifed
+	/// is considered as forbidden.
+	fn instruction_cost(&self, instruction: &elements::Instruction) -> Option<u32>;
+
+	/// Returns the costs for growing the memory using the `memory.grow` instruction.
+	///
+	/// Please note that these costs are in addition to the costs specified by `instruction_cost`
+	/// for the `memory.grow` instruction. Specifying `None` leads to no additional charge.
+	/// Those are meant as dynamic costs which take the amount of pages that the memory is
+	/// grown by into consideration. This is not possible using `instruction_cost` because
+	/// those costs depend on the stack and must be injected as code into the function calling
+	/// `memory.grow`. Therefore returning `Some` comes with a performance cost.
+	fn memory_grow_cost(&self) -> Option<MemoryGrowCost>;
+}
+
+/// Dynamic costs for memory growth.
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+pub enum MemoryGrowCost {
+	/// Charge the specified amount for each page that the memory is grown by.
+	Linear(NonZeroU32),
+}
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Metering {
@@ -288,14 +317,6 @@ impl Set {
 		Set { regular, entries, grow: 0 }
 	}
 
-	pub fn process(&self, instruction: &elements::Instruction) -> Result<u32, ()>  {
-		match self.entries.get(&InstructionType::op(instruction)).cloned() {
-			None | Some(Metering::Regular) => Ok(self.regular),
-			Some(Metering::Forbidden) => Err(()),
-			Some(Metering::Fixed(val)) => Ok(val),
-		}
-	}
-
 	pub fn grow_cost(&self) -> u32 {
 		self.grow
 	}
@@ -311,5 +332,23 @@ impl Set {
 		self.entries.insert(InstructionType::FloatConst, Metering::Forbidden);
 		self.entries.insert(InstructionType::FloatConversion, Metering::Forbidden);
 		self
+	}
+}
+
+impl Rules for Set {
+	fn instruction_cost(&self, instruction: &elements::Instruction) -> Option<u32> {
+		match self.entries.get(&InstructionType::op(instruction)) {
+			None | Some(Metering::Regular) => Some(self.regular),
+			Some(Metering::Fixed(val)) => Some(*val),
+			Some(Metering::Forbidden) => None,
+		}
+	}
+
+	fn memory_grow_cost(&self) -> Option<MemoryGrowCost> {
+		if let Some(val) = NonZeroU32::new(self.grow) {
+			Some(MemoryGrowCost::Linear(val))
+		} else {
+			None
+		}
 	}
 }

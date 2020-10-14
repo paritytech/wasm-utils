@@ -12,7 +12,7 @@ use std::mem;
 use std::vec::Vec;
 
 use parity_wasm::{elements, builder};
-use rules;
+use rules::Rules;
 
 pub fn update_call_index(instructions: &mut elements::Instructions, inserted_index: u32) {
 	use parity_wasm::elements::Instruction::*;
@@ -234,8 +234,18 @@ fn inject_grow_counter(instructions: &mut elements::Instructions, grow_counter_f
 	counter
 }
 
-fn add_grow_counter(module: elements::Module, rules: &rules::Set, gas_func: u32) -> elements::Module {
+fn add_grow_counter<R: Rules>(
+	module: elements::Module,
+	rules: &R,
+	gas_func: u32
+) -> elements::Module {
 	use parity_wasm::elements::Instruction::*;
+	use crate::rules::MemoryGrowCost;
+
+	let cost = match rules.memory_grow_cost() {
+		None => return module,
+		Some(MemoryGrowCost::Linear(val)) => val.get(),
+	};
 
 	let mut b = builder::from_module(module);
 	b.push_function(
@@ -245,7 +255,7 @@ fn add_grow_counter(module: elements::Module, rules: &rules::Set, gas_func: u32)
 				.with_instructions(elements::Instructions::new(vec![
 					GetLocal(0),
 					GetLocal(0),
-					I32Const(rules.grow_cost() as i32),
+					I32Const(cost as i32),
 					I32Mul,
 					// todo: there should be strong guarantee that it does not return anything on stack?
 					Call(gas_func),
@@ -259,9 +269,9 @@ fn add_grow_counter(module: elements::Module, rules: &rules::Set, gas_func: u32)
 	b.build()
 }
 
-pub(crate) fn determine_metered_blocks(
+pub(crate) fn determine_metered_blocks<R: Rules>(
 	instructions: &elements::Instructions,
-	rules: &rules::Set,
+	rules: &R,
 ) -> Result<Vec<MeteredBlock>, ()> {
 	use parity_wasm::elements::Instruction::*;
 
@@ -272,7 +282,7 @@ pub(crate) fn determine_metered_blocks(
 
 	for cursor in 0..instructions.elements().len() {
 		let instruction = &instructions.elements()[cursor];
-		let instruction_cost = rules.process(instruction)?;
+		let instruction_cost = rules.instruction_cost(instruction).ok_or(())?;
 		match instruction {
 			Block(_) => {
 				counter.increment(instruction_cost)?;
@@ -333,9 +343,9 @@ pub(crate) fn determine_metered_blocks(
 	Ok(counter.finalized_blocks)
 }
 
-pub fn inject_counter(
+pub fn inject_counter<R: Rules>(
 	instructions: &mut elements::Instructions,
-	rules: &rules::Set,
+	rules: &R,
 	gas_func: u32,
 ) -> Result<(), ()> {
 	let blocks = determine_metered_blocks(instructions, rules)?;
@@ -420,7 +430,11 @@ fn insert_metering_calls(
 ///
 /// The function fails if the module contains any operation forbidden by gas rule set, returning
 /// the original module as an Err.
-pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set, gas_module_name: &str)
+pub fn inject_gas_counter<R: Rules>(
+	module: elements::Module,
+	rules: &R,
+	gas_module_name: &str,
+)
 	-> Result<elements::Module, elements::Module>
 {
 	// Injecting gas counting external
@@ -460,7 +474,9 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set, gas_modu
 						error = true;
 						break;
 					}
-					if rules.grow_cost() > 0 && inject_grow_counter(func_body.code_mut(), total_func) > 0 {
+					if rules.memory_grow_cost().is_some()
+						&& inject_grow_counter(func_body.code_mut(), total_func) > 0
+					{
 						need_grow_counter = true;
 					}
 				}
@@ -636,7 +652,7 @@ mod tests {
 				.build()
 			.build();
 
-		let injected_module = inject_gas_counter(module, &Default::default(), "env").unwrap();
+		let injected_module = inject_gas_counter(module, &rules::Set::default(), "env").unwrap();
 
 		assert_eq!(
 			get_function_body(&injected_module, 1).unwrap(),
@@ -705,7 +721,7 @@ mod tests {
 				let input_module = parse_wat($input);
 				let expected_module = parse_wat($expected);
 
-				let injected_module = inject_gas_counter(input_module, &Default::default(), "env")
+				let injected_module = inject_gas_counter(input_module, &rules::Set::default(), "env")
 					.expect("inject_gas_counter call failed");
 
 				let actual_func_body = get_function_body(&injected_module, 0)
