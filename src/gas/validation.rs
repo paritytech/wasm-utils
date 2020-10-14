@@ -10,6 +10,7 @@
 
 use super::MeteredBlock;
 use rules::Set as RuleSet;
+use rules::Rules;
 use parity_wasm::elements::{FuncBody, Instruction};
 
 use std::collections::HashMap;
@@ -167,7 +168,7 @@ fn build_control_flow_graph(
 			graph.increment_charged_cost(active_node_id, next_metered_block.cost);
 		}
 
-		let instruction_cost = rules.process(instruction)?;
+		let instruction_cost = rules.instruction_cost(instruction).ok_or(())?;
 		match instruction {
 			Instruction::Block(_) => {
 				graph.increment_actual_cost(active_node_id, instruction_cost);
