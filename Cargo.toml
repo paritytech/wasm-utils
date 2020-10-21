@@ -6,6 +6,7 @@ license = "MIT/Apache-2.0"
 readme = "README.md"
 description = "Collection of command-line utilities and corresponding Rust api for producing pwasm-compatible executables"
 keywords = ["wasm", "webassembly", "pwasm"]
+repository = "https://github.com/paritytech/wasm-utils"
 
 [dependencies]
 # If you add the feature "bulk", make sure you fixed all expects that say
