@@ -25,6 +25,8 @@ mod ref_list;
 mod symbols;
 #[cfg(feature = "std")]
 mod export_globals;
+#[cfg(feature = "cli")]
+pub mod logger;
 
 pub mod stack_height;
 

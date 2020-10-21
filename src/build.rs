@@ -1,4 +1,3 @@
-use std;
 use super::{
 	optimize,
 	pack_instance,
@@ -10,7 +9,6 @@ use super::{
 	OptimizerError,
 	TargetRuntime,
 };
-use parity_wasm;
 use parity_wasm::elements;
 
 #[derive(Debug)]

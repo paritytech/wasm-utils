@@ -9,8 +9,8 @@
 //! the worst case.
 
 use super::MeteredBlock;
-use rules::Set as RuleSet;
-use rules::Rules;
+use crate::rules::Set as RuleSet;
+use crate::rules::Rules;
 use parity_wasm::elements::{FuncBody, Instruction};
 
 use std::collections::HashMap;

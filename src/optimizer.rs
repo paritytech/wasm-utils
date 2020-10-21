@@ -7,7 +7,7 @@ use std::mem;
 
 use parity_wasm::elements;
 
-use symbols::{Symbol, expand_symbols, push_code_symbols, resolve_function};
+use crate::symbols::{Symbol, expand_symbols, push_code_symbols, resolve_function};
 
 #[derive(Debug)]
 pub enum Error {

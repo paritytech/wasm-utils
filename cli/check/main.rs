@@ -1,6 +1,6 @@
 extern crate parity_wasm;
 extern crate pwasm_utils as utils;
-extern crate pwasm_utils_cli as logger;
+use pwasm_utils::logger;
 extern crate clap;
 
 use clap::{App, Arg};
@@ -40,7 +40,7 @@ const ALLOWED_IMPORTS: &[&str] = &[
 ];
 
 fn main() {
-	logger::init_log();
+	logger::init();
 
 	let matches = App::new("wasm-check")
 						.arg(Arg::with_name("input")
