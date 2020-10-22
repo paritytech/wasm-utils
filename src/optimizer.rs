@@ -1,9 +1,9 @@
 #[cfg(features = "std")]
-use std::collections::{HashSet as Set};
+use crate::std::collections::{HashSet as Set};
 #[cfg(not(features = "std"))]
-use std::collections::{BTreeSet as Set};
-use std::vec::Vec;
-use std::mem;
+use crate::std::collections::{BTreeSet as Set};
+use crate::std::vec::Vec;
+use crate::std::mem;
 
 use parity_wasm::elements;
 

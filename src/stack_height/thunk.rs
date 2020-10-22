@@ -1,8 +1,8 @@
 #[cfg(features = "std")]
-use std::collections::{HashMap as Map};
+use crate::std::collections::{HashMap as Map};
 #[cfg(not(features = "std"))]
-use std::collections::{BTreeMap as Map};
-use std::vec::Vec;
+use crate::std::collections::{BTreeMap as Map};
+use crate::std::vec::Vec;
 
 use parity_wasm::elements::{self, FunctionType, Internal};
 use parity_wasm::builder;

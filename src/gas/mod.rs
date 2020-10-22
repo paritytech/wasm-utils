@@ -7,9 +7,9 @@
 #[cfg(test)]
 mod validation;
 
-use std::cmp::min;
-use std::mem;
-use std::vec::Vec;
+use crate::std::cmp::min;
+use crate::std::mem;
+use crate::std::vec::Vec;
 
 use parity_wasm::{elements, builder};
 use crate::rules::Rules;

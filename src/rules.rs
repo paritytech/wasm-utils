@@ -1,9 +1,10 @@
 #[cfg(features = "std")]
-use std::collections::{HashMap as Map};
+use crate::std::collections::HashMap as Map;
 #[cfg(not(features = "std"))]
-use std::collections::{BTreeMap as Map};
+use crate::std::collections::BTreeMap as Map;
 
-use std::num::NonZeroU32;
+use crate::std::num::NonZeroU32;
+use crate::std::str::FromStr;
 
 use parity_wasm::elements;
 
@@ -68,7 +69,7 @@ pub enum InstructionType {
 	GrowMemory,
 }
 
-impl ::std::str::FromStr for InstructionType {
+impl FromStr for InstructionType {
 	type Err = UnknownInstruction;
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {

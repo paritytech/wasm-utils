@@ -83,7 +83,7 @@ impl TargetRuntime {
 
 #[cfg(not(feature = "std"))]
 mod std {
-	pub use alloc::{borrow, boxed, string, vec};
+	pub use ::alloc::{borrow, boxed, string, vec};
 	pub use core::*;
 
 	pub mod rc {
@@ -93,4 +93,10 @@ mod std {
 	pub mod collections {
 		pub use alloc::collections::{BTreeMap, BTreeSet};
 	}
+}
+
+
+#[cfg(feature = "std")]
+mod std {
+	pub use std::*;
 }

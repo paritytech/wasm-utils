@@ -49,8 +49,8 @@
 //!   between the frames.
 //! - upon entry into the function entire stack frame is allocated.
 
-use std::string::String;
-use std::vec::Vec;
+use crate::std::string::String;
+use crate::std::vec::Vec;
 
 use parity_wasm::elements::{self, Type};
 use parity_wasm::builder;

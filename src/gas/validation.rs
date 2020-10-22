@@ -11,9 +11,13 @@
 use super::MeteredBlock;
 use crate::rules::Set as RuleSet;
 use crate::rules::Rules;
+use crate::std::vec::Vec;
 use parity_wasm::elements::{FuncBody, Instruction};
 
-use std::collections::HashMap;
+#[cfg(features = "std")]
+use crate::std::collections::HashMap as Map;
+#[cfg(not(features = "std"))]
+use crate::std::collections::BTreeMap as Map;
 
 /// An ID for a node in a ControlFlowGraph.
 type NodeId = usize;
@@ -288,7 +292,7 @@ fn validate_graph_gas_costs(graph: &ControlFlowGraph) -> bool {
 		node_id: NodeId,
 		mut total_actual: u32,
 		mut total_charged: u32,
-		loop_costs: &mut HashMap<NodeId, (u32, u32)>,
+		loop_costs: &mut Map<NodeId, (u32, u32)>,
 	) -> bool {
 		let node = graph.get_node(node_id);
 
@@ -325,7 +329,7 @@ fn validate_graph_gas_costs(graph: &ControlFlowGraph) -> bool {
 	}
 
 	// Recursively explore all paths through the execution graph starting from the entry node.
-	visit(graph, 0, 0, 0, &mut HashMap::new())
+	visit(graph, 0, 0, 0, &mut Map::new())
 }
 
 /// Validate that the metered blocks are correct with respect to the function body by exhaustively

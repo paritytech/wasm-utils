@@ -1,6 +1,6 @@
-use std::fmt;
-use std::vec::Vec;
-use std::borrow::ToOwned;
+use crate::std::fmt;
+use crate::std::vec::Vec;
+use crate::std::borrow::ToOwned;
 
 use parity_wasm::elements::{
 	self, Section, DataSection, Instruction, DataSegment, InitExpr, Internal, External,

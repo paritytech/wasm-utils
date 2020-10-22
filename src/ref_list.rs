@@ -1,9 +1,9 @@
 #![warn(missing_docs)]
 
-use std::rc::Rc;
-use std::cell::RefCell;
-use std::vec::Vec;
-use std::slice;
+use crate::std::rc::Rc;
+use crate::std::cell::RefCell;
+use crate::std::vec::Vec;
+use crate::std::slice;
 
 #[derive(Debug)]
 enum EntryOrigin {
@@ -50,7 +50,7 @@ impl<T> Entry<T> {
 	}
 }
 
-impl<T> ::std::ops::Deref for Entry<T> {
+impl<T> crate::std::ops::Deref for Entry<T> {
 	type Target = T;
 
 	fn deref(&self) -> &T {
@@ -58,7 +58,7 @@ impl<T> ::std::ops::Deref for Entry<T> {
 	}
 }
 
-impl<T> ::std::ops::DerefMut for Entry<T> {
+impl<T> crate::std::ops::DerefMut for Entry<T> {
 	fn deref_mut(&mut self) -> &mut T {
 		&mut self.val
 	}
@@ -82,14 +82,14 @@ impl<T> From<Entry<T>> for EntryRef<T> {
 
 impl<T> EntryRef<T> {
 	/// Read the reference data.
-	pub fn read(&self) -> ::std::cell::Ref<Entry<T>> {
+	pub fn read(&self) -> crate::std::cell::Ref<Entry<T>> {
 		self.0.borrow()
 	}
 
 	/// Try to modify internal content of the referenced object.
 	///
 	/// May panic if it is already borrowed.
-	pub fn write(&self) -> ::std::cell::RefMut<Entry<T>> {
+	pub fn write(&self) -> crate::std::cell::RefMut<Entry<T>> {
 		self.0.borrow_mut()
 	}
 

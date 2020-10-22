@@ -8,6 +8,7 @@ use super::{
 	PackingError,
 	OptimizerError,
 	TargetRuntime,
+	std::fmt,
 };
 use parity_wasm::elements;
 
@@ -36,8 +37,8 @@ pub enum SourceTarget {
 	Unknown,
 }
 
-impl std::fmt::Display for Error {
-	fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+impl fmt::Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
 		use self::Error::*;
 		match self {
 			Encoding(err) => write!(f, "Encoding error ({})", err),

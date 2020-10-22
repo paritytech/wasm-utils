@@ -1,4 +1,4 @@
-use std::vec::Vec;
+use crate::std::vec::Vec;
 
 use parity_wasm::elements::{self, BlockType, Type};
 use super::{resolve_func_type, Error};

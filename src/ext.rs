@@ -1,6 +1,6 @@
-use std::string::String;
-use std::vec::Vec;
-use std::borrow::ToOwned;
+use crate::std::string::String;
+use crate::std::vec::Vec;
+use crate::std::borrow::ToOwned;
 
 use parity_wasm::{elements, builder};
 use byteorder::{LittleEndian, ByteOrder};
