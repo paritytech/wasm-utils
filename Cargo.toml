@@ -69,6 +69,7 @@ binaryen = "0.8"
 default = ["std"]
 std = ["parity-wasm/std", "log/std", "byteorder/std"]
 cli = [
+  "std",
   "glob",
   "clap",
   "env_logger",
