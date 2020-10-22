@@ -4,7 +4,7 @@
 
 use parity_wasm::elements;
 use super::ref_list::{RefList, EntryRef};
-use std::{
+use crate::std::{
 	vec::Vec,
 	borrow::ToOwned,
 	string::String,

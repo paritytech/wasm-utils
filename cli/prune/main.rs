@@ -1,12 +1,12 @@
 extern crate parity_wasm;
 extern crate pwasm_utils as utils;
-extern crate pwasm_utils_cli as logger;
+use pwasm_utils::logger;
 extern crate clap;
 
 use clap::{App, Arg};
 
 fn main() {
-	logger::init_log();
+	logger::init();
 
 	let target_runtime = utils::TargetRuntime::pwasm();
 

@@ -1,21 +1,29 @@
-# wasm-utils
+# pwasm-utils
 
 [![Build Status](https://travis-ci.org/paritytech/wasm-utils.svg?branch=master)](https://travis-ci.org/paritytech/wasm-utils)
 
-Collection of WASM utilities used in pwasm-ethereum and substrate contract development
+A collection of WASM utilities used in pwasm-ethereum and substrate contract development.
 
-## Build tools for cargo
+This repository contains the package `pwasm-utils` which consists of a library crate
+and a collection of cli binaries that make use of this library.
 
-Easiest way to use is to install via `cargo install`:
-
+## Installation of cli tools
 ```
-cargo install pwasm-utils-cli --bin wasm-build
+cargo install pwasm-utils --features cli
 ```
+
+This will install the following binaries:
+* wasm-build
+* wasm-check
+* wasm-ext
+* wasm-gas
+* wasm-pack
+* wasm-prune
+* wasm-stack-height
 
 ## Symbols pruning (wasm-prune)
 
 ```
-cargo install pwasm-utils-cli --bin wasm-prune
 wasm-prune <input_wasm_binary.wasm> <output_wasm_binary.wasm>
 ```
 
@@ -26,13 +34,8 @@ This will optimize WASM symbols tree to leave only those elements that are used 
 For development puposes, raw WASM contract can be injected with gas counters (the same way as it done by pwasm-ethereum/substrate runtime when running contracts)
 
 ```
-cargo install pwasm-utils-cli --bin wasm-gas
 wasm-gas <input_wasm_binary.wasm> <output_wasm_binary.wasm>
 ```
-
-## API
-
-All executables use corresponding api methods of the root crate and can be combined in other build tools.
 
 # License
 

@@ -1,10 +1,7 @@
-#[macro_use] extern crate log;
-#[macro_use] extern crate lazy_static;
-extern crate env_logger;
-
-use std::env;
+use crate::std::env;
 use log::LevelFilter;
 use env_logger::Builder;
+use lazy_static::lazy_static;
 
 lazy_static! {
 	static ref LOG_DUMMY: bool = {
@@ -22,6 +19,6 @@ lazy_static! {
 }
 
 /// Intialize log with default settings
-pub fn init_log() {
+pub fn init() {
 	let _ = *LOG_DUMMY;
 }

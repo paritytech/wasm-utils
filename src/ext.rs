@@ -1,10 +1,11 @@
-use std::string::String;
-use std::vec::Vec;
-use std::borrow::ToOwned;
+use crate::std::string::String;
+use crate::std::vec::Vec;
+use crate::std::borrow::ToOwned;
 
 use parity_wasm::{elements, builder};
-use optimizer::{import_section, export_section};
 use byteorder::{LittleEndian, ByteOrder};
+
+use crate::optimizer::{import_section, export_section};
 
 type Insertion = (usize, u32, u32, String);
 

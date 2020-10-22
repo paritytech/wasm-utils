@@ -5,7 +5,7 @@ extern crate clap;
 extern crate glob;
 extern crate pwasm_utils as utils;
 extern crate parity_wasm;
-extern crate pwasm_utils_cli as logger;
+use pwasm_utils::logger;
 
 mod source;
 
@@ -67,7 +67,7 @@ pub fn process_output(input: &source::SourceInput) -> Result<(), Error> {
 }
 
 fn do_main() -> Result<(), Error> {
-	logger::init_log();
+	logger::init();
 
 	let matches = App::new("wasm-build")
 		.version(crate_version!())

@@ -7,12 +7,12 @@
 #[cfg(test)]
 mod validation;
 
-use std::cmp::min;
-use std::mem;
-use std::vec::Vec;
+use crate::std::cmp::min;
+use crate::std::mem;
+use crate::std::vec::Vec;
 
 use parity_wasm::{elements, builder};
-use rules::Rules;
+use crate::rules::Rules;
 
 pub fn update_call_index(instructions: &mut elements::Instructions, inserted_index: u32) {
 	use parity_wasm::elements::Instruction::*;
@@ -518,7 +518,7 @@ mod tests {
 	use parity_wasm::{serialize, builder, elements};
 	use parity_wasm::elements::Instruction::*;
 	use super::*;
-	use rules;
+	use crate::rules;
 
 	pub fn get_function_body(module: &elements::Module, index: usize)
 		-> Option<&[elements::Instruction]>
