@@ -11,7 +11,7 @@ use crate::std::cmp::min;
 use crate::std::mem;
 use crate::std::vec::Vec;
 
-use parity_wasm::{elements, builder};
+use parity_wasm::{elements, elements::ValueType, builder};
 use crate::rules::Rules;
 
 pub fn update_call_index(instructions: &mut elements::Instructions, inserted_index: u32) {
@@ -250,7 +250,7 @@ fn add_grow_counter<R: Rules>(
 	let mut b = builder::from_module(module);
 	b.push_function(
 		builder::function()
-			.signature().params().i32().build().with_return_type(Some(elements::ValueType::I32)).build()
+			.signature().with_param(ValueType::I32).with_result(ValueType::I32).build()
 			.body()
 				.with_instructions(elements::Instructions::new(vec![
 					GetLocal(0),
@@ -441,7 +441,7 @@ pub fn inject_gas_counter<R: Rules>(
 	let mut mbuilder = builder::from_module(module);
 	let import_sig = mbuilder.push_signature(
 		builder::signature()
-			.param().i32()
+			.with_param(ValueType::I32)
 			.build_sig()
 		);
 
