@@ -173,11 +173,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 
 	// Add implicit frame for the function. Breaks to this frame and execution of
 	// the last end should deal with this frame.
-	let func_arity: u32 = if !func_signature.results().is_empty() {
-		1
-	} else {
-		0
-	};
+	let func_arity = func_signature.results().len() as u32;
 	stack.push_frame(Frame {
 		is_polymorphic: false,
 		end_arity: func_arity,
@@ -279,7 +275,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 				stack.pop_values(ty.params().len() as u32)?;
 
 				// Push result of the function execution to the stack.
-				let callee_arity = if !ty.results().is_empty() { 1 } else { 0 };
+				let callee_arity = ty.results().len() as u32;
 				stack.push_values(callee_arity)?;
 			}
 			CallIndirect(x, _) => {
@@ -295,7 +291,7 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 				stack.pop_values(ty.params().len() as u32)?;
 
 				// Push result of the function execution to the stack.
-				let callee_arity = if !ty.results().is_empty() { 1 } else { 0 };
+				let callee_arity = ty.results().len() as u32;
 				stack.push_values(callee_arity)?;
 			}
 			Drop => {
