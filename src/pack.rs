@@ -75,7 +75,7 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
 		if !func.params().is_empty() {
 			return Err(Error::InvalidCreateSignature(target.symbols().create));
 		}
-		if func.return_type().is_some() {
+		if !func.results().is_empty() {
 			return Err(Error::InvalidCreateSignature(target.symbols().create));
 		}
 

@@ -99,7 +99,7 @@ pub(crate) fn generate_thunks(
 				// Signature of the thunk should match the original function signature.
 				.signature()
 					.with_params(thunk.signature.params().to_vec())
-					.with_return_type(thunk.signature.return_type())
+					.with_results(thunk.signature.results().to_vec())
 					.build()
 				.body()
 					.with_instructions(elements::Instructions::new(
