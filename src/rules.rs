@@ -5,8 +5,7 @@ use crate::std::collections::BTreeMap as Map;
 
 use crate::std::num::NonZeroU32;
 use crate::std::str::FromStr;
-
-use parity_wasm::elements;
+use crate::Instruction;
 
 pub struct UnknownInstruction;
 
@@ -17,7 +16,7 @@ pub trait Rules {
 	/// Returning `None` makes the gas instrumention end with an error. This is meant
 	/// as a way to have a partial rule set where any instruction that is not specifed
 	/// is considered as forbidden.
-	fn instruction_cost(&self, instruction: &elements::Instruction) -> Option<u32>;
+	fn instruction_cost(&self, instruction: &Instruction) -> Option<u32>;
 
 	/// Returns the costs for growing the memory using the `memory.grow` instruction.
 	///
@@ -100,8 +99,8 @@ impl FromStr for InstructionType {
 }
 
 impl InstructionType {
-	pub fn op(instruction: &elements::Instruction) -> Self {
-		use parity_wasm::elements::Instruction::*;
+	pub fn op(instruction: &Instruction) -> Self {
+		use Instruction::*;
 
 		match *instruction {
 			Unreachable => InstructionType::Unreachable,
@@ -337,7 +336,7 @@ impl Set {
 }
 
 impl Rules for Set {
-	fn instruction_cost(&self, instruction: &elements::Instruction) -> Option<u32> {
+	fn instruction_cost(&self, instruction: &Instruction) -> Option<u32> {
 		match self.entries.get(&InstructionType::op(instruction)) {
 			None | Some(Metering::Regular) => Some(self.regular),
 			Some(Metering::Fixed(val)) => Some(*val),
