@@ -9,6 +9,7 @@ mod validation;
 
 use crate::std::cmp::min;
 use crate::std::mem;
+use crate::std::string::String;
 use crate::std::vec::Vec;
 
 use parity_wasm::{elements, elements::ValueType, builder};
@@ -506,9 +507,9 @@ pub fn inject_gas_counter<R: Rules>(
                     let mut new_names = elements::IndexMap::<String>::default();
                     for (idx, func) in funcs.names().iter() {
                         if idx > gas_func {
-                            new_names.insert(idx +1, func.to_string());
+                            new_names.insert(idx + 1, String::from(func));
                         } else {
-                            new_names.insert(idx, func.to_string());
+                            new_names.insert(idx, String::from(func));
                         }
                     }
 
