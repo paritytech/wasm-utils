@@ -110,7 +110,7 @@ mod gas {
 					let rules = utils::rules::Set::default();
 
 					let module = elements::deserialize_buffer(input).expect("Failed to deserialize");
-					let instrumented = utils::inject_gas_counter(module, &rules, "env")
+					let instrumented = utils::inject_gas_counter(module, &rules, "env", utils::ProcessNames::No)
 						.expect("Failed to instrument with gas metering");
 					elements::serialize(instrumented).expect("Failed to serialize")
 				});
