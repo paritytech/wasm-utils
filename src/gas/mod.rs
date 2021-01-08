@@ -397,6 +397,12 @@ fn insert_metering_calls(
 	Ok(())
 }
 
+/// If process name section while injecting gas counter
+pub enum ProcessNames {
+	No,
+	UnsafeYes,
+}
+
 /// Transforms a given module into one that charges gas for code to be executed by proxy of an
 /// imported gas metering function.
 ///
@@ -435,6 +441,7 @@ pub fn inject_gas_counter<R: Rules>(
 	module: elements::Module,
 	rules: &R,
 	gas_module_name: &str,
+	process_names: ProcessNames,
 )
 	-> Result<elements::Module, elements::Module>
 {
@@ -503,17 +510,22 @@ pub fn inject_gas_counter<R: Rules>(
 				if *start_idx >= gas_func { *start_idx += 1}
 			},
 			elements::Section::Name(section) => {
-				if let Some(funcs) = section.functions_mut() {
-					let mut new_names = elements::IndexMap::<String>::default();
-					for (idx, func) in funcs.names().iter() {
-						if idx >= gas_func {
-							new_names.insert(idx + 1, String::from(func));
-						} else {
-							new_names.insert(idx, String::from(func));
+				match process_names {
+					ProcessNames::No => {},
+					ProcessNames::UnsafeYes => {
+						if let Some(funcs) = section.functions_mut() {
+							let mut new_names = elements::IndexMap::<String>::default();
+							for (idx, func) in funcs.names().iter() {
+								if idx >= gas_func {
+									new_names.insert(idx + 1, String::from(func));
+								} else {
+									new_names.insert(idx, String::from(func));
+								}
+							}
+
+							*funcs.names_mut() = new_names;
 						}
 					}
-
-					*funcs.names_mut() = new_names;
 				}
 			}
 			_ => { }
