@@ -558,8 +558,8 @@ mod tests {
 	(func $main
 		block (result i32)
 			block (result i32)
-			i32.const 99
-			br 1
+				i32.const 99
+				br 1
 			end
 		end
 		drop
