@@ -201,6 +201,9 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 			Block(ty) | Loop(ty) | If(ty) => {
 				let end_arity = if *ty == BlockType::NoResult { 0 } else { 1 };
 				let branch_arity = if let Loop(_) = *opcode { 0 } else { end_arity };
+				if let If(_) = *opcode {
+					stack.pop_values(1)?;
+				}
 				let height = stack.height();
 				stack.push_frame(Frame {
 					is_polymorphic: false,
@@ -545,5 +548,53 @@ mod tests {
 
 		let height = compute(0, &module).unwrap();
 		assert_eq!(height, 1);
+	}
+
+#[test]
+	fn breaks() {
+		let module = parse_wat(
+			r#"
+(module
+	(func $main
+		block (result i32)
+			block (result i32)
+			i32.const 99
+			br 1
+			end
+		end
+		drop
+	)
+)
+"#,
+		);
+
+		let height = compute(0, &module).unwrap();
+		assert_eq!(height, 1);
+	}
+
+#[test]
+	fn if_else_works() {
+		let module = parse_wat(
+			r#"
+(module
+	(func $main
+		i32.const 7
+		i32.const 1
+		if (result i32)
+			i32.const 42
+		else
+			i32.const 99
+		end
+		i32.const 97
+		drop
+		drop
+		drop
+	)
+)
+"#,
+		);
+
+		let height = compute(0, &module).unwrap();
+		assert_eq!(height, 3);
 	}
 }
