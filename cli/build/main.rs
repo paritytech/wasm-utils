@@ -1,20 +1,14 @@
 //! Experimental build tool for cargo
 
-#[macro_use]
-extern crate clap;
-extern crate glob;
-extern crate pwasm_utils as utils;
-extern crate parity_wasm;
-use pwasm_utils::logger;
+use pwasm_utils::{build, BuildError, SourceTarget, TargetRuntime, logger};
 
 mod source;
 
 use std::{fs, io};
 use std::path::PathBuf;
 
-use clap::{App, Arg};
+use clap::{App, Arg, crate_version};
 use parity_wasm::elements;
-use utils::{build, BuildError, SourceTarget, TargetRuntime};
 
 #[derive(Debug)]
 pub enum Error {
@@ -210,9 +204,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-	extern crate tempdir;
-
-	use self::tempdir::TempDir;
+	use tempdir::TempDir;
 	use std::fs;
 
 	use super::process_output;

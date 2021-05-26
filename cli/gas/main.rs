@@ -1,7 +1,4 @@
-extern crate parity_wasm;
-extern crate pwasm_utils as utils;
-use pwasm_utils::logger;
-
+use pwasm_utils::{self as utils, logger};
 use std::env;
 
 fn main() {

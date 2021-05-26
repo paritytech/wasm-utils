@@ -218,8 +218,6 @@ pub fn pack_instance(raw_module: Vec<u8>, mut ctor_module: elements::Module, tar
 
 #[cfg(test)]
 mod test {
-	extern crate parity_wasm;
-
 	use parity_wasm::builder;
 	use super::*;
 	use super::super::optimize;

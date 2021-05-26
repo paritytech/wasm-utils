@@ -771,10 +771,8 @@ pub fn generate(f: &Module) -> Result<Vec<u8>, Error> {
 
 #[cfg(test)]
 mod tests {
-
-	extern crate wabt;
-
 	use parity_wasm::elements;
+	use indoc::indoc;
 
 	fn load_sample(wat: &'static str) -> super::Module {
 		super::parse(&wabt::wat2wasm(wat).expect("faled to parse wat!")[..])

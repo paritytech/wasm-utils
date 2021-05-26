@@ -1,5 +1,6 @@
 use crate::std::vec::Vec;
 
+use log::trace;
 use parity_wasm::elements::{self, BlockType, Type};
 use super::{resolve_func_type, Error};
 
@@ -428,7 +429,6 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 
 #[cfg(test)]
 mod tests {
-	extern crate wabt;
 	use parity_wasm::elements;
 	use super::*;
 

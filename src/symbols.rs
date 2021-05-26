@@ -4,6 +4,7 @@ use crate::std::collections::{HashSet as Set};
 use crate::std::collections::{BTreeSet as Set};
 use crate::std::vec::Vec;
 
+use log::trace;
 use parity_wasm::elements;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone, Debug)]
