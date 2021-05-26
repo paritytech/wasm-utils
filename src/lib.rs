@@ -34,8 +34,7 @@ pub use graph::{Module, parse as graph_parse, generate as graph_generate};
 pub use ref_list::{RefList, Entry, EntryRef, DeleteTransaction};
 #[cfg(feature = "std")]
 pub use export_globals::export_mutable_globals;
-pub use parity_wasm::elements::Instruction;
-use parity_wasm;
+pub use parity_wasm;
 
 pub struct TargetSymbols {
 	pub create: &'static str,
