@@ -4,14 +4,6 @@
 #[macro_use]
 extern crate alloc;
 
-extern crate byteorder;
-extern crate parity_wasm;
-#[macro_use] extern crate log;
-#[cfg(test)] #[macro_use] extern crate indoc;
-#[cfg(test)] extern crate rand;
-#[cfg(test)] extern crate binaryen;
-
-
 pub mod rules;
 
 mod build;
@@ -42,7 +34,7 @@ pub use graph::{Module, parse as graph_parse, generate as graph_generate};
 pub use ref_list::{RefList, Entry, EntryRef, DeleteTransaction};
 #[cfg(feature = "std")]
 pub use export_globals::export_mutable_globals;
-pub use parity_wasm::elements::Instruction;
+pub use parity_wasm;
 
 pub struct TargetSymbols {
 	pub create: &'static str,

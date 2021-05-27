@@ -1,5 +1,3 @@
-extern crate pwasm_utils as utils;
-
 use std::env;
 
 fn main() {
@@ -10,7 +8,7 @@ fn main() {
 	}
 
 	// Loading module
-	let mut module = utils::Module::from_elements(
+	let mut module = pwasm_utils::Module::from_elements(
 		&parity_wasm::deserialize_file(&args[1]).expect("Module deserialization to succeed")
 	).expect("Failed to parse parity-wasm format");
 

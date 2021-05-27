@@ -1,8 +1,4 @@
-extern crate parity_wasm;
-extern crate pwasm_utils as utils;
 use pwasm_utils::logger;
-extern crate clap;
-
 use clap::{App, Arg};
 use parity_wasm::elements;
 

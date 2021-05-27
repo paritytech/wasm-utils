@@ -1,4 +1,4 @@
-use log::LevelFilter;
+use log::{LevelFilter, trace};
 use env_logger::Builder;
 use lazy_static::lazy_static;
 

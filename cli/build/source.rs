@@ -3,7 +3,7 @@
 pub const UNKNOWN_TRIPLET: &str = "wasm32-unknown-unknown";
 pub const EMSCRIPTEN_TRIPLET: &str = "wasm32-unknown-emscripten";
 
-use utils::SourceTarget;
+use pwasm_utils::SourceTarget;
 
 /// Configuration of previous build step (cargo compilation)
 #[derive(Debug)]

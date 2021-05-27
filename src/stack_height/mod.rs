@@ -374,7 +374,6 @@ fn resolve_func_type(
 
 #[cfg(test)]
 mod tests {
-	extern crate wabt;
 	use parity_wasm::elements;
 	use super::*;
 

@@ -5,7 +5,7 @@ use crate::std::collections::BTreeMap as Map;
 
 use crate::std::num::NonZeroU32;
 use crate::std::str::FromStr;
-use crate::Instruction;
+use parity_wasm::elements::Instruction;
 
 pub struct UnknownInstruction;
 

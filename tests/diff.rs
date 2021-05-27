@@ -1,12 +1,8 @@
-extern crate diff;
-extern crate pwasm_utils as utils;
-extern crate wabt;
-extern crate parity_wasm;
-
 use std::fs;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use parity_wasm::elements;
+use pwasm_utils as utils;
 
 fn slurp<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
 	let mut f = fs::File::open(path)?;
