@@ -66,9 +66,11 @@ fn run_diff_test<F: FnOnce(&[u8]) -> Vec<u8>>(test_dir: &str, name: &str, test: 
 			}
 		}
 
-		dump(&expected_path, actual_wat.as_bytes()).expect("Failed to write to expected");
-
-		panic!();
+		if std::env::var("BLESS").is_ok() {
+			dump(&expected_path, actual_wat.as_bytes()).expect("Failed to write to expected");
+		} else {
+			panic!();
+		}
 	}
 }
 
