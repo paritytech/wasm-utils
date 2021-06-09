@@ -199,7 +199,13 @@ fn compute_stack_cost(func_idx: u32, module: &elements::Module) -> Result<u32, E
 		.bodies()
 		.get(defined_func_idx as usize)
 		.ok_or_else(|| Error("Function body is out of bounds".into()))?;
-	let locals_count = body.locals().len() as u32;
+
+	let mut locals_count: u32 = 0;
+	for local_group in body.locals() {
+		locals_count = locals_count
+			.checked_add(local_group.count())
+			.ok_or_else(|| Error("Overflow in local count".into()))?;
+	}
 
 	let max_stack_height =
 		max_height::compute(
@@ -207,7 +213,8 @@ fn compute_stack_cost(func_idx: u32, module: &elements::Module) -> Result<u32, E
 			module
 		)?;
 
-	Ok(locals_count + max_stack_height)
+	locals_count.checked_add(max_stack_height)
+		.ok_or_else(|| Error("Overflow in adding locals_count and max_stack_height".into()))
 }
 
 fn instrument_functions(ctx: &mut Context, module: &mut elements::Module) -> Result<(), Error> {
