@@ -331,7 +331,8 @@ pub fn optimize(
 	}
 
 	// Also drop all custom sections
-	module.sections_mut().retain(|section| if let elements::Section::Custom(_) = section { false } else { true });
+	module.sections_mut()
+		.retain(|section| if let elements::Section::Custom(_) = section { false } else { true });
 
 	Ok(())
 }
