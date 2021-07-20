@@ -13,6 +13,7 @@ use std::vec::Vec;
 
 use parity_wasm::{elements, builder};
 use rules;
+use parity_wasm::elements::{Instruction, GlobalType, ValueType, InitExpr, GlobalEntry};
 
 pub fn update_call_index(instructions: &mut elements::Instructions, inserted_index: u32) {
 	use parity_wasm::elements::Instruction::*;
@@ -222,43 +223,6 @@ impl Counter {
 	}
 }
 
-fn inject_grow_counter(instructions: &mut elements::Instructions, grow_counter_func: u32) -> usize {
-	use parity_wasm::elements::Instruction::*;
-	let mut counter = 0;
-	for instruction in instructions.elements_mut() {
-		if let GrowMemory(_) = *instruction {
-			*instruction = Call(grow_counter_func);
-			counter += 1;
-		}
-	}
-	counter
-}
-
-fn add_grow_counter(module: elements::Module, rules: &rules::Set, gas_func: u32) -> elements::Module {
-	use parity_wasm::elements::Instruction::*;
-
-	let mut b = builder::from_module(module);
-	b.push_function(
-		builder::function()
-			.signature().params().i32().build().with_return_type(Some(elements::ValueType::I32)).build()
-			.body()
-				.with_instructions(elements::Instructions::new(vec![
-					GetLocal(0),
-					GetLocal(0),
-					I32Const(rules.grow_cost() as i32),
-					I32Mul,
-					// todo: there should be strong guarantee that it does not return anything on stack?
-					Call(gas_func),
-					GrowMemory(0),
-					End,
-				]))
-				.build()
-			.build()
-	);
-
-	b.build()
-}
-
 pub(crate) fn determine_metered_blocks(
 	instructions: &elements::Instructions,
 	rules: &rules::Set,
@@ -321,6 +285,9 @@ pub(crate) fn determine_metered_blocks(
 			Return => {
 				counter.increment(instruction_cost)?;
 				counter.branch(cursor, &[0])?;
+			},
+			GrowMemory(_) => {
+				counter.increment(rules.grow_cost()+instruction_cost)?;
 			}
 			_ => {
 				// An ordinal non control flow instruction increments the cost of the current block.
@@ -336,17 +303,17 @@ pub(crate) fn determine_metered_blocks(
 pub fn inject_counter(
 	instructions: &mut elements::Instructions,
 	rules: &rules::Set,
-	gas_func: u32,
+	gas_global: u32,
 ) -> Result<(), ()> {
 	let blocks = determine_metered_blocks(instructions, rules)?;
-	insert_metering_calls(instructions, blocks, gas_func)
+	insert_metering_update(instructions, blocks, gas_global)
 }
 
 // Then insert metering calls into a sequence of instructions given the block locations and costs.
-fn insert_metering_calls(
+fn insert_metering_update(
 	instructions: &mut elements::Instructions,
 	blocks: Vec<MeteredBlock>,
-	gas_func: u32,
+	gas_global: u32,
 )
 	-> Result<(), ()>
 {
@@ -366,7 +333,7 @@ fn insert_metering_calls(
 		let used_block = if let Some(ref block) = block_iter.peek() {
 			if block.start_pos == original_pos {
 				new_instrs.push(I32Const(block.cost as i32));
-				new_instrs.push(Call(gas_func));
+				new_instrs.push(SetGlobal(gas_global));
 				true
 			} else { false }
 		} else { false };
@@ -423,69 +390,29 @@ fn insert_metering_calls(
 pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 	-> Result<elements::Module, elements::Module>
 {
-	// Injecting gas counting external
-	let mut mbuilder = builder::from_module(module);
-	let import_sig = mbuilder.push_signature(
-		builder::signature()
-			.param().i32()
-			.build_sig()
-		);
-
-	mbuilder.push_import(
-		builder::import()
-			.module("env")
-			.field("gas")
-			.external().func(import_sig)
-			.build()
-		);
+	// Injecting gas counting global
+	let mut mbuilder = builder::from_module(module)
+		.with_global(GlobalEntry::new(
+		GlobalType::new(ValueType::I64, true),
+		InitExpr::new(vec![Instruction::I64Const(0)]),
+	));
 
 	// back to plain module
 	let mut module = mbuilder.build();
 
-	// calculate actual function index of the imported definition
-	//    (subtract all imports that are NOT functions)
-
-	let gas_func = module.import_count(elements::ImportCountType::Function) as u32 - 1;
-	let total_func = module.functions_space() as u32;
-	let mut need_grow_counter = false;
+	println!("{:?}", module.global_section().unwrap().entries());
+	let gas_global = module.global_section().unwrap().entries().len() as u32 - 1;
 	let mut error = false;
 
-	// Updating calling addresses (all calls to function index >= `gas_func` should be incremented)
 	for section in module.sections_mut() {
 		match section {
 			&mut elements::Section::Code(ref mut code_section) => {
 				for ref mut func_body in code_section.bodies_mut() {
-					update_call_index(func_body.code_mut(), gas_func);
-					if let Err(_) = inject_counter(func_body.code_mut(), rules, gas_func) {
+					if let Err(_) = inject_counter(func_body.code_mut(), rules, gas_global) {
 						error = true;
 						break;
 					}
-					if rules.grow_cost() > 0 {
-						if inject_grow_counter(func_body.code_mut(), total_func) > 0 {
-							need_grow_counter = true;
-						}
-					}
 				}
-			},
-			&mut elements::Section::Export(ref mut export_section) => {
-				for ref mut export in export_section.entries_mut() {
-					if let &mut elements::Internal::Function(ref mut func_index) = export.internal_mut() {
-						if *func_index >= gas_func { *func_index += 1}
-					}
-				}
-			},
-			&mut elements::Section::Element(ref mut elements_section) => {
-				// Note that we do not need to check the element type referenced because in the
-				// WebAssembly 1.0 spec, the only allowed element type is funcref.
-				for ref mut segment in elements_section.entries_mut() {
-					// update all indirect call addresses initial values
-					for func_index in segment.members_mut() {
-						if *func_index >= gas_func { *func_index += 1}
-					}
-				}
-			},
-			&mut elements::Section::Start(ref mut start_idx) => {
-				if *start_idx >= gas_func { *start_idx += 1}
 			},
 			_ => { }
 		}
@@ -493,7 +420,7 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 
 	if error { return Err(module); }
 
-	if need_grow_counter { Ok(add_grow_counter(module, rules, gas_func)) } else { Ok(module) }
+ 	Ok(module)
 }
 
 #[cfg(test)]
@@ -534,32 +461,24 @@ mod tests {
 				.build()
 			.build();
 
+		println!("{:?}", module);
 		let injected_module = inject_gas_counter(module, &rules::Set::default().with_grow_cost(10000)).unwrap();
+		println!("{:?}", injected_module);
 
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
-				I32Const(2),
-				Call(0),
+				I32Const(10002),
+				SetGlobal(1),
 				GetGlobal(0),
-				Call(2),
-				End
-			][..]
-		);
-		assert_eq!(
-			get_function_body(&injected_module, 1).unwrap(),
-			&vec![
-				GetLocal(0),
-				GetLocal(0),
-				I32Const(10000),
-				I32Mul,
-				Call(0),
 				GrowMemory(0),
-				End,
+				End
 			][..]
 		);
 
 		let binary = serialize(injected_module).expect("serialization failed");
+		let wat = wasmprinter::print_bytes(&binary).unwrap();
+		println!("{}", wat);
 		self::wabt::wasm2wat(&binary).unwrap();
 	}
 
@@ -589,14 +508,14 @@ mod tests {
 			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
 				I32Const(2),
-				Call(0),
+				SetGlobal(1),
 				GetGlobal(0),
 				GrowMemory(0),
 				End
 			][..]
 		);
 
-		assert_eq!(injected_module.functions_space(), 2);
+		assert_eq!(injected_module.functions_space(), 1);
 
 		let binary = serialize(injected_module).expect("serialization failed");
 		self::wabt::wasm2wat(&binary).unwrap();
@@ -640,21 +559,21 @@ mod tests {
 			get_function_body(&injected_module, 1).unwrap(),
 			&vec![
 				I32Const(3),
+				SetGlobal(1),
 				Call(0),
-				Call(1),
 				If(elements::BlockType::NoResult),
 					I32Const(3),
+					SetGlobal(1),
 					Call(0),
-					Call(1),
-					Call(1),
-					Call(1),
+					Call(0),
+					Call(0),
 				Else,
 					I32Const(2),
+					SetGlobal(1),
 					Call(0),
-					Call(1),
-					Call(1),
+					Call(0),
 				End,
-				Call(1),
+				Call(0),
 				End
 			][..]
 		);
@@ -725,7 +644,7 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(call 0 (i32.const 1))
+				(set_global 0 (i32.const 1))
 				(get_global 0)))
 		"#
 	}
@@ -745,7 +664,7 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(call 0 (i32.const 6))
+				(set_global 0 (i32.const 6))
 				(get_global 0)
 				(block
 					(get_global 0)
@@ -774,16 +693,16 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(call 0 (i32.const 3))
+				(set_global 0 (i32.const 3))
 				(get_global 0)
 				(if
 					(then
-						(call 0 (i32.const 3))
+						(set_global 0 (i32.const 3))
 						(get_global 0)
 						(get_global 0)
 						(get_global 0))
 					(else
-						(call 0 (i32.const 2))
+						(set_global 0 (i32.const 2))
 						(get_global 0)
 						(get_global 0)))
 				(get_global 0)))
@@ -807,13 +726,13 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(call 0 (i32.const 6))
+				(set_global 0 (i32.const 6))
 				(get_global 0)
 				(block
 					(get_global 0)
 					(drop)
 					(br 0)
-					(call 0 (i32.const 2))
+					(set_global 0 (i32.const 2))
 					(get_global 0)
 					(drop))
 				(get_global 0)))
@@ -841,18 +760,18 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(call 0 (i32.const 5))
+				(set_global 0 (i32.const 5))
 				(get_global 0)
 				(block
 					(get_global 0)
 					(if
 						(then
-							(call 0 (i32.const 4))
+							(set_global 0 (i32.const 4))
 							(get_global 0)
 							(get_global 0)
 							(drop)
 							(br_if 1)))
-					(call 0 (i32.const 2))
+					(set_global 0 (i32.const 2))
 					(get_global 0)
 					(drop))
 				(get_global 0)))
@@ -883,18 +802,18 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(call 0 (i32.const 3))
+				(set_global 0 (i32.const 3))
 				(get_global 0)
 				(loop
-					(call 0 (i32.const 4))
+					(set_global 0 (i32.const 4))
 					(get_global 0)
 					(if
 						(then
-							(call 0 (i32.const 2))
+							(set_global 0 (i32.const 2))
 							(get_global 0)
 							(br_if 0))
 						(else
-							(call 0 (i32.const 4))
+							(set_global 0 (i32.const 4))
 							(get_global 0)
 							(get_global 0)
 							(drop)
@@ -919,13 +838,13 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(call 0 (i32.const 2))
+				(set_global 0 (i32.const 2))
 				(get_global 0)
 				(if
 					(then
-						(call 0 (i32.const 1))
+						(set_global 0 (i32.const 1))
 						(return)))
-				(call 0 (i32.const 1))
+				(set_global 0 (i32.const 1))
 				(get_global 0)))
 		"#
 	}
@@ -948,18 +867,18 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(call 0 (i32.const 5))
+				(set_global 0 (i32.const 5))
 				(get_global 0)
 				(block
 					(get_global 0)
 					(if
 						(then
-							(call 0 (i32.const 1))
+							(set_global 0 (i32.const 1))
 							(br 1))
 						(else
-							(call 0 (i32.const 1))
+							(set_global 0 (i32.const 1))
 							(br 0)))
-					(call 0 (i32.const 2))
+					(set_global 0 (i32.const 2))
 					(get_global 0)
 					(drop))
 				(get_global 0)))
