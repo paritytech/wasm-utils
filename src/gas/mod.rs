@@ -333,10 +333,17 @@ fn insert_metering_update(
 		let used_block = if let Some(ref block) = block_iter.peek() {
 			if block.start_pos == original_pos {
 				new_instrs.extend(vec![
-					I32Const(block.cost as i32),
+					// if gas_global < block.cost: error (TODO: replace unreachable to host function that returns out of gas error)
 					GetGlobal(gas_global),
-					I32Add,
-					SetGlobal(gas_global)
+					I32Const(block.cost as i32),
+					I32LtU,
+					Unreachable,
+					End,
+					// gas_global -= block.cost
+					GetGlobal(gas_global),
+					I32Const(block.cost as i32),
+					I32Sub,
+					SetGlobal(gas_global),
 				]);
 				true
 			} else { false }
@@ -424,6 +431,16 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 	if error { return Err(module); }
 
  	Ok(module)
+}
+
+pub fn set_total_gas(module: elements::Module, total_gas: i32) -> Result<elements::Module, ()> {
+	let mut module = module.clone();
+	let gas_global = module.global_section().ok_or(())?.entries().len() as usize - 1;
+	module.global_section_mut().ok_or(())?.entries_mut()[gas_global] = GlobalEntry::new(
+		GlobalType::new(ValueType::I32, true),
+		InitExpr::new(vec![Instruction::I32Const(total_gas), Instruction::End]),
+	);
+	Ok(module)
 }
 
 #[cfg(test)]
