@@ -334,7 +334,7 @@ fn insert_metering_update(
 		// If there the next block starts at this position, inject metering instructions.
 		let used_block = if let Some(ref block) = block_iter.peek() {
 			if block.start_pos == original_pos {
-				new_instrs.extend(vec![t
+				new_instrs.extend(vec![
 					// if gas_global < block.cost: call host function out_of_gas_callback
 					GetGlobal(gas_global),
 					I32Const(block.cost as i32),
