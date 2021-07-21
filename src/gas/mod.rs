@@ -332,8 +332,12 @@ fn insert_metering_update(
 		// If there the next block starts at this position, inject metering instructions.
 		let used_block = if let Some(ref block) = block_iter.peek() {
 			if block.start_pos == original_pos {
-				new_instrs.push(I32Const(block.cost as i32));
-				new_instrs.push(SetGlobal(gas_global));
+				new_instrs.extend(vec![
+					I32Const(block.cost as i32),
+					GetGlobal(gas_global),
+					I32Add,
+					SetGlobal(gas_global)
+				]);
 				true
 			} else { false }
 		} else { false };
