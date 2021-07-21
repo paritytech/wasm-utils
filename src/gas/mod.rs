@@ -393,14 +393,13 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 	// Injecting gas counting global
 	let mut mbuilder = builder::from_module(module)
 		.with_global(GlobalEntry::new(
-		GlobalType::new(ValueType::I64, true),
-		InitExpr::new(vec![Instruction::I64Const(0)]),
+		GlobalType::new(ValueType::I32, true),
+		InitExpr::new(vec![Instruction::I32Const(0), Instruction::End]),
 	));
 
 	// back to plain module
 	let mut module = mbuilder.build();
 
-	println!("{:?}", module.global_section().unwrap().entries());
 	let gas_global = module.global_section().unwrap().entries().len() as u32 - 1;
 	let mut error = false;
 
@@ -461,9 +460,7 @@ mod tests {
 				.build()
 			.build();
 
-		println!("{:?}", module);
 		let injected_module = inject_gas_counter(module, &rules::Set::default().with_grow_cost(10000)).unwrap();
-		println!("{:?}", injected_module);
 
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
@@ -477,8 +474,6 @@ mod tests {
 		);
 
 		let binary = serialize(injected_module).expect("serialization failed");
-		let wat = wasmprinter::print_bytes(&binary).unwrap();
-		println!("{}", wat);
 		self::wabt::wasm2wat(&binary).unwrap();
 	}
 
