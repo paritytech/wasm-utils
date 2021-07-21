@@ -339,6 +339,7 @@ fn insert_metering_update(
 					GetGlobal(gas_global),
 					I32Const(block.cost as i32),
 					I32LtU,
+					If(elements::BlockType::NoResult),
 					Call(out_of_gas_callback),
 					End,
 					// gas_global -= block.cost
@@ -524,7 +525,15 @@ mod tests {
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
+				GetGlobal(1),
 				I32Const(10002),
+				I32LtU,
+				If(elements::BlockType::NoResult),
+				Call(0),
+				End,
+				GetGlobal(1),
+				I32Const(10002),
+				I32Sub,
 				SetGlobal(1),
 				GetGlobal(0),
 				GrowMemory(0),
