@@ -304,9 +304,10 @@ pub fn inject_counter(
 	instructions: &mut elements::Instructions,
 	rules: &rules::Set,
 	gas_global: u32,
+	out_of_gas_callback: u32,
 ) -> Result<(), ()> {
 	let blocks = determine_metered_blocks(instructions, rules)?;
-	insert_metering_update(instructions, blocks, gas_global)
+	insert_metering_update(instructions, blocks, gas_global, out_of_gas_callback)
 }
 
 // Then insert metering calls into a sequence of instructions given the block locations and costs.
@@ -314,6 +315,7 @@ fn insert_metering_update(
 	instructions: &mut elements::Instructions,
 	blocks: Vec<MeteredBlock>,
 	gas_global: u32,
+	out_of_gas_callback: u32,
 )
 	-> Result<(), ()>
 {
@@ -332,12 +334,12 @@ fn insert_metering_update(
 		// If there the next block starts at this position, inject metering instructions.
 		let used_block = if let Some(ref block) = block_iter.peek() {
 			if block.start_pos == original_pos {
-				new_instrs.extend(vec![
-					// if gas_global < block.cost: error (TODO: replace unreachable to host function that returns out of gas error)
+				new_instrs.extend(vec![t
+					// if gas_global < block.cost: call host function out_of_gas_callback
 					GetGlobal(gas_global),
 					I32Const(block.cost as i32),
 					I32LtU,
-					Unreachable,
+					Call(out_of_gas_callback),
 					End,
 					// gas_global -= block.cost
 					GetGlobal(gas_global),
@@ -401,16 +403,31 @@ fn insert_metering_update(
 pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 	-> Result<elements::Module, elements::Module>
 {
-	// Injecting gas counting global
+	// Injecting remaining gas global
 	let mut mbuilder = builder::from_module(module)
 		.with_global(GlobalEntry::new(
 		GlobalType::new(ValueType::I32, true),
 		InitExpr::new(vec![Instruction::I32Const(0), Instruction::End]),
 	));
+	// Injecting host callback when run out of gas
+	let import_sig = mbuilder.push_signature(
+		builder::signature()
+			.build_sig()
+	);
+	mbuilder.push_import(
+		builder::import()
+			.module("env")
+			.field("out_of_gas_callback")
+			.external().func(import_sig)
+			.build()
+	);
 
 	// back to plain module
 	let mut module = mbuilder.build();
 
+	// calculate actual function index of the imported definition
+	//    (subtract all imports that are NOT functions)
+	let out_of_gas_callback = module.import_count(elements::ImportCountType::Function) as u32 - 1;
 	let gas_global = module.global_section().unwrap().entries().len() as u32 - 1;
 	let mut error = false;
 
@@ -418,11 +435,32 @@ pub fn inject_gas_counter(module: elements::Module, rules: &rules::Set)
 		match section {
 			&mut elements::Section::Code(ref mut code_section) => {
 				for ref mut func_body in code_section.bodies_mut() {
-					if let Err(_) = inject_counter(func_body.code_mut(), rules, gas_global) {
+					update_call_index(func_body.code_mut(), out_of_gas_callback);
+					if let Err(_) = inject_counter(func_body.code_mut(), rules, gas_global, out_of_gas_callback) {
 						error = true;
 						break;
 					}
 				}
+			},
+			&mut elements::Section::Export(ref mut export_section) => {
+				for ref mut export in export_section.entries_mut() {
+					if let &mut elements::Internal::Function(ref mut func_index) = export.internal_mut() {
+						if *func_index >= out_of_gas_callback { *func_index += 1}
+					}
+				}
+			},
+			&mut elements::Section::Element(ref mut elements_section) => {
+				// Note that we do not need to check the element type referenced because in the
+				// WebAssembly 1.0 spec, the only allowed element type is funcref.
+				for ref mut segment in elements_section.entries_mut() {
+					// update all indirect call addresses initial values
+					for func_index in segment.members_mut() {
+						if *func_index >= out_of_gas_callback { *func_index += 1}
+					}
+				}
+			},
+			&mut elements::Section::Start(ref mut start_idx) => {
+				if *start_idx >= out_of_gas_callback { *start_idx += 1}
 			},
 			_ => { }
 		}
