@@ -570,7 +570,15 @@ mod tests {
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
 			&vec![
+				GetGlobal(1),
 				I32Const(2),
+				I32LtU,
+				If(elements::BlockType::NoResult),
+				Call(0),
+				End,
+				GetGlobal(1),
+				I32Const(2),
+				I32Sub,
 				SetGlobal(1),
 				GetGlobal(0),
 				GrowMemory(0),
@@ -578,7 +586,7 @@ mod tests {
 			][..]
 		);
 
-		assert_eq!(injected_module.functions_space(), 1);
+		assert_eq!(injected_module.functions_space(), 2);
 
 		let binary = serialize(injected_module).expect("serialization failed");
 		self::wabt::wasm2wat(&binary).unwrap();
@@ -621,22 +629,46 @@ mod tests {
 		assert_eq!(
 			get_function_body(&injected_module, 1).unwrap(),
 			&vec![
+				GetGlobal(1),
 				I32Const(3),
-				SetGlobal(1),
-				Call(0),
+				I32LtU,
 				If(elements::BlockType::NoResult),
-					I32Const(3),
-					SetGlobal(1),
-					Call(0),
-					Call(0),
-					Call(0),
-				Else,
-					I32Const(2),
-					SetGlobal(1),
-					Call(0),
-					Call(0),
-				End,
 				Call(0),
+				End,
+				GetGlobal(1),
+				I32Const(3),
+				I32Sub,
+				SetGlobal(1),
+				Call(1),
+				If(elements::BlockType::NoResult),
+					GetGlobal(1),
+					I32Const(3),
+					I32LtU,
+					If(elements::BlockType::NoResult),
+						Call(0),
+					End,
+					GetGlobal(1),
+					I32Const(3),
+					I32Sub,
+					SetGlobal(1),
+					Call(1),
+					Call(1),
+					Call(1),
+				Else,
+					GetGlobal(1),
+					I32Const(2),
+					I32LtU,
+					If(elements::BlockType::NoResult),
+						Call(0),
+					End,
+					GetGlobal(1),
+					I32Const(2),
+					I32Sub,
+					SetGlobal(1),
+					Call(1),
+					Call(1),
+				End,
+				Call(1),
 				End
 			][..]
 		);
@@ -691,7 +723,9 @@ mod tests {
 					.expect("injected module must have a function body");
 				let expected_func_body = get_function_body(&expected_module, 0)
 					.expect("post-module must have a function body");
+						let binary = serialize(injected_module.clone()).expect("serialization failed");
 
+		println!("=== {}", self::wabt::wasm2wat(&binary).unwrap());
 				assert_eq!(actual_func_body, expected_func_body);
 			}
 		}
@@ -707,7 +741,16 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(set_global 0 (i32.const 1))
+				get_global 0
+				i32.const 1
+				i32.lt_u
+				if
+				  call 0
+				end
+				get_global 0
+				i32.const 1
+				i32.sub
+				set_global 0
 				(get_global 0)))
 		"#
 	}
@@ -727,7 +770,16 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(set_global 0 (i32.const 6))
+				get_global 0
+				i32.const 6
+				i32.lt_u
+				if
+				  call 0
+				end
+				get_global 0
+				i32.const 6
+				i32.sub
+				set_global 0
 				(get_global 0)
 				(block
 					(get_global 0)
@@ -756,16 +808,43 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(set_global 0 (i32.const 3))
+				get_global 0
+				i32.const 3
+				i32.lt_u
+				if
+				  call 0
+				end
+				get_global 0
+				i32.const 3
+				i32.sub
+				set_global 0
 				(get_global 0)
 				(if
 					(then
-						(set_global 0 (i32.const 3))
+						get_global 0
+						i32.const 3
+					    i32.lt_u
+				        if
+							call 0
+						end
+						get_global 0
+						i32.const 3
+					  	i32.sub
+					 	set_global 0
 						(get_global 0)
 						(get_global 0)
 						(get_global 0))
 					(else
-						(set_global 0 (i32.const 2))
+						get_global 0
+						i32.const 2
+						i32.lt_u
+						if  ;; label = @2
+							call 0
+						end
+						get_global 0
+						i32.const 2
+						i32.sub
+						set_global 0
 						(get_global 0)
 						(get_global 0)))
 				(get_global 0)))
@@ -789,13 +868,31 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(set_global 0 (i32.const 6))
+				get_global 0
+				i32.const 6
+				i32.lt_u
+				if  ;; label = @1
+				  call 0
+				end
+				get_global 0
+				i32.const 6
+				i32.sub
+				set_global 0
 				(get_global 0)
 				(block
 					(get_global 0)
 					(drop)
 					(br 0)
-					(set_global 0 (i32.const 2))
+					get_global 0
+					i32.const 2
+					i32.lt_u
+					if  ;; label = @2
+					call 0
+					end
+					get_global 0
+					i32.const 2
+					i32.sub
+					set_global 0
 					(get_global 0)
 					(drop))
 				(get_global 0)))
@@ -823,18 +920,45 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(set_global 0 (i32.const 5))
+				get_global 0
+				i32.const 5
+				i32.lt_u
+				if  ;; label = @1
+				  call 0
+				end
+				get_global 0
+				i32.const 5
+				i32.sub
+				set_global 0
 				(get_global 0)
 				(block
 					(get_global 0)
 					(if
 						(then
-							(set_global 0 (i32.const 4))
+							get_global 0
+							i32.const 4
+							i32.lt_u
+							if  ;; label = @3
+							  call 0
+							end
+							get_global 0
+							i32.const 4
+							i32.sub
+							set_global 0
 							(get_global 0)
 							(get_global 0)
 							(drop)
 							(br_if 1)))
-					(set_global 0 (i32.const 2))
+					get_global 0
+					i32.const 2
+					i32.lt_u
+					if  ;; label = @2
+					call 0
+					end
+					get_global 0
+					i32.const 2
+					i32.sub
+					set_global 0
 					(get_global 0)
 					(drop))
 				(get_global 0)))
@@ -865,18 +989,54 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(set_global 0 (i32.const 3))
+				get_global 0
+				i32.const 3
+				i32.lt_u
+				if  ;; label = @1
+				  call 0
+				end
+				get_global 0
+				i32.const 3
+				i32.sub
+				set_global 0
 				(get_global 0)
 				(loop
-					(set_global 0 (i32.const 4))
+					get_global 0
+					i32.const 4
+					i32.lt_u
+					if  ;; label = @1
+					  call 0
+					end
+					get_global 0
+					i32.const 4
+					i32.sub
+					set_global 0
 					(get_global 0)
 					(if
 						(then
-							(set_global 0 (i32.const 2))
+							get_global 0
+							i32.const 2
+							i32.lt_u
+							if  ;; label = @3
+							  call 0
+							end
+							get_global 0
+							i32.const 2
+							i32.sub
+							set_global 0
 							(get_global 0)
 							(br_if 0))
 						(else
-							(set_global 0 (i32.const 4))
+							get_global 0
+							i32.const 4
+							i32.lt_u
+							if  ;; label = @3
+							  call 0
+							end
+							get_global 0
+							i32.const 4
+							i32.sub
+							set_global 0
 							(get_global 0)
 							(get_global 0)
 							(drop)
@@ -901,13 +1061,40 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(set_global 0 (i32.const 2))
+				get_global 0
+				i32.const 2
+				i32.lt_u
+				if
+				  call 0
+				end
+				get_global 0
+				i32.const 2
+				i32.sub
+				set_global 0
 				(get_global 0)
 				(if
 					(then
-						(set_global 0 (i32.const 1))
+						get_global 0
+						i32.const 1
+						i32.lt_u
+						if  ;; label = @1
+						  call 0
+						end
+						get_global 0
+						i32.const 1
+						i32.sub
+						set_global 0
 						(return)))
-				(set_global 0 (i32.const 1))
+				get_global 0
+				i32.const 1
+				i32.lt_u
+				if  ;; label = @1
+				  call 0
+				end
+				get_global 0
+				i32.const 1
+				i32.sub
+				set_global 0
 				(get_global 0)))
 		"#
 	}
@@ -930,18 +1117,54 @@ mod tests {
 		expected = r#"
 		(module
 			(func (result i32)
-				(set_global 0 (i32.const 5))
+				get_global 0
+				i32.const 5
+				i32.lt_u
+				if  ;; label = @1
+				  call 0
+				end
+				get_global 0
+				i32.const 5
+				i32.sub
+				set_global 0
 				(get_global 0)
 				(block
 					(get_global 0)
 					(if
 						(then
-							(set_global 0 (i32.const 1))
+							get_global 0
+							i32.const 1
+							i32.lt_u
+							if  ;; label = @3
+							  call 0
+							end
+							get_global 0
+							i32.const 1
+							i32.sub
+							set_global 0
 							(br 1))
 						(else
-							(set_global 0 (i32.const 1))
+							get_global 0
+							i32.const 1
+							i32.lt_u
+							if  ;; label = @3
+							  call 0
+							end
+							get_global 0
+							i32.const 1
+							i32.sub
+							set_global 0
 							(br 0)))
-					(set_global 0 (i32.const 2))
+					get_global 0
+					i32.const 2
+					i32.lt_u
+					if  ;; label = @2
+					call 0
+					end
+					get_global 0
+					i32.const 2
+					i32.sub
+					set_global 0
 					(get_global 0)
 					(drop))
 				(get_global 0)))
