@@ -403,7 +403,8 @@ pub fn optimize(
 	}
 
 	// Also drop all custom sections
-	module.sections_mut()
+	module
+		.sections_mut()
 		.retain(|section| !matches!(section, elements::Section::Custom(_)));
 
 	Ok(())

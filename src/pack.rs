@@ -121,9 +121,10 @@ pub fn pack_instance(
 				builder::import()
 					.module("env")
 					.field(target.symbols().ret)
-					.external().func(import_sig)
-					.build()
-				);
+					.external()
+					.func(import_sig)
+					.build(),
+			);
 
 			ctor_module = mbuilder.build();
 
@@ -172,8 +173,10 @@ pub fn pack_instance(
 
 	// We ensure here that module has the DataSection
 	if !ctor_module
-        .sections()
-        .iter().any(|section| matches!(*section, Section::Data(_))) {
+		.sections()
+		.iter()
+		.any(|section| matches!(*section, Section::Data(_)))
+	{
 		// DataSection has to be the last non-custom section according the to the spec
 		ctor_module
 			.sections_mut()

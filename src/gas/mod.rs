@@ -320,7 +320,8 @@ pub(crate) fn determine_metered_blocks<R: Rules>(
 					.iter()
 					.chain(br_table_data.table.iter())
 					.map(|label| active_index.checked_sub(*label as usize))
-					.collect::<Option<Vec<_>>>().ok_or(())?;
+					.collect::<Option<Vec<_>>>()
+					.ok_or(())?;
 				counter.branch(cursor, &target_indices)?;
 			},
 			Return => {
