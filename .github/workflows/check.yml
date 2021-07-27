@@ -37,14 +37,14 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           toolchain: ${{ matrix.toolchain }}
-          command: test
+          command: build
           args: --no-default-features
 
       - name: Build wasm
         uses: actions-rs/cargo@v1
         with:
           toolchain: ${{ matrix.toolchain }}
-          command: test
+          command: build
           args: --no-default-features --target wasm32-unknown-unknown
 
       - name: Test
