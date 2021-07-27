@@ -120,11 +120,10 @@ pub fn pack_instance(
 			mbuilder.push_import(
 				builder::import()
 					.module("env")
-					.field(&target.symbols().ret)
-					.external()
-					.func(import_sig)
-					.build(),
-			);
+					.field(target.symbols().ret)
+					.external().func(import_sig)
+					.build()
+				);
 
 			ctor_module = mbuilder.build();
 
