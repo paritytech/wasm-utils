@@ -1,13 +1,12 @@
-#[cfg(features = "std")]
-use crate::std::collections::{HashSet as Set};
 #[cfg(not(features = "std"))]
-use crate::std::collections::{BTreeSet as Set};
-use crate::std::vec::Vec;
-use crate::std::mem;
+use crate::std::collections::BTreeSet as Set;
+#[cfg(features = "std")]
+use crate::std::collections::HashSet as Set;
+use crate::std::{mem, vec::Vec};
 
+use crate::symbols::{expand_symbols, push_code_symbols, resolve_function, Symbol};
 use log::trace;
 use parity_wasm::elements;
-use crate::symbols::{Symbol, expand_symbols, push_code_symbols, resolve_function};
 
 #[derive(Debug)]
 pub enum Error {
@@ -26,14 +25,18 @@ pub fn optimize(
 
 	// try to parse name section
 	let module_temp = mem::take(module);
-	let module_temp = module_temp
-		.parse_names()
-		.unwrap_or_else(|(_err, module)| module);
+	let module_temp = module_temp.parse_names().unwrap_or_else(|(_err, module)| module);
 	*module = module_temp;
 
 	// Algo starts from the top, listing all items that should stay
 	let mut stay = Set::new();
-	for (index, entry) in module.export_section().ok_or(Error::NoExportSection)?.entries().iter().enumerate() {
+	for (index, entry) in module
+		.export_section()
+		.ok_or(Error::NoExportSection)?
+		.entries()
+		.iter()
+		.enumerate()
+	{
 		if used_exports.iter().any(|e| *e == entry.field()) {
 			stay.insert(Symbol::Export(index));
 		}
@@ -66,14 +69,16 @@ pub fn optimize(
 					.as_ref()
 					.expect("parity-wasm is compiled without bulk-memory operations")
 					.code(),
-				&mut init_symbols
+				&mut init_symbols,
 			);
 			for func_index in segment.members() {
 				stay.insert(resolve_function(&module, *func_index));
 			}
 		}
 	}
-	for symbol in init_symbols.drain(..) { stay.insert(symbol); }
+	for symbol in init_symbols.drain(..) {
+		stay.insert(symbol);
+	}
 
 	// Call function which will traverse the list recursively, filling stay with all symbols
 	// that are already used by those which already there
@@ -94,7 +99,9 @@ pub fn optimize(
 
 	{
 		loop {
-			if type_section(module).map(|section| section.types_mut().len()).unwrap_or(0) == index { break; }
+			if type_section(module).map(|section| section.types_mut().len()).unwrap_or(0) == index {
+				break
+			}
 
 			if stay.contains(&Symbol::Type(old_index)) {
 				index += 1;
@@ -125,7 +132,12 @@ pub fn optimize(
 					} else {
 						remove = true;
 						eliminated_funcs.push(top_funcs);
-						trace!("Eliminated import({}) func({}, {})", old_index, top_funcs, imports.entries()[index].field());
+						trace!(
+							"Eliminated import({}) func({}, {})",
+							old_index,
+							top_funcs,
+							imports.entries()[index].field()
+						);
 					}
 					top_funcs += 1;
 				},
@@ -135,13 +147,18 @@ pub fn optimize(
 					} else {
 						remove = true;
 						eliminated_globals.push(top_globals);
-						trace!("Eliminated import({}) global({}, {})", old_index, top_globals, imports.entries()[index].field());
+						trace!(
+							"Eliminated import({}) global({}, {})",
+							old_index,
+							top_globals,
+							imports.entries()[index].field()
+						);
 					}
 					top_globals += 1;
 				},
 				_ => {
 					index += 1;
-				}
+				},
 			}
 			if remove {
 				imports.entries_mut().remove(index);
@@ -149,7 +166,9 @@ pub fn optimize(
 
 			old_index += 1;
 
-			if index == imports.entries().len() { break; }
+			if index == imports.entries().len() {
+				break
+			}
 		}
 	}
 
@@ -159,7 +178,9 @@ pub fn optimize(
 		old_index = 0;
 
 		loop {
-			if globals.entries_mut().len() == index { break; }
+			if globals.entries_mut().len() == index {
+				break
+			}
 			if stay.contains(&Symbol::Global(old_index)) {
 				index += 1;
 			} else {
@@ -177,11 +198,18 @@ pub fn optimize(
 		old_index = 0;
 
 		loop {
-			if function_section(module).expect("Functons section to exist").entries_mut().len() == index { break; }
+			if function_section(module).expect("Functons section to exist").entries_mut().len() ==
+				index
+			{
+				break
+			}
 			if stay.contains(&Symbol::Function(old_index)) {
 				index += 1;
 			} else {
-				function_section(module).expect("Functons section to exist").entries_mut().remove(index);
+				function_section(module)
+					.expect("Functons section to exist")
+					.entries_mut()
+					.remove(index);
 				code_section(module).expect("Code section to exist").bodies_mut().remove(index);
 
 				eliminated_funcs.push(top_funcs + old_index);
@@ -199,18 +227,27 @@ pub fn optimize(
 		old_index = 0;
 
 		loop {
-			if exports.entries_mut().len() == index { break; }
+			if exports.entries_mut().len() == index {
+				break
+			}
 			if stay.contains(&Symbol::Export(old_index)) {
 				index += 1;
 			} else {
-				trace!("Eliminated export({}, {})", old_index, exports.entries_mut()[index].field());
+				trace!(
+					"Eliminated export({}, {})",
+					old_index,
+					exports.entries_mut()[index].field()
+				);
 				exports.entries_mut().remove(index);
 			}
 			old_index += 1;
 		}
 	}
 
-	if !eliminated_globals.is_empty() || !eliminated_funcs.is_empty() || !eliminated_types.is_empty() {
+	if !eliminated_globals.is_empty() ||
+		!eliminated_funcs.is_empty() ||
+		!eliminated_types.is_empty()
+	{
 		// Finaly, rewire all calls, globals references and types to the new indices
 		//   (only if there is anything to do)
 		// When sorting primitives sorting unstable is faster without any difference in result.
@@ -221,57 +258,78 @@ pub fn optimize(
 		for section in module.sections_mut() {
 			match section {
 				elements::Section::Start(func_index) if !eliminated_funcs.is_empty() => {
-					let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < *func_index).count();
+					let totalle =
+						eliminated_funcs.iter().take_while(|i| (**i as u32) < *func_index).count();
 					*func_index -= totalle as u32;
 				},
-				elements::Section::Function(function_section) if !eliminated_types.is_empty() => {
+				elements::Section::Function(function_section) if !eliminated_types.is_empty() =>
 					for func_signature in function_section.entries_mut() {
-						let totalle = eliminated_types.iter().take_while(|i| (**i as u32) < func_signature.type_ref()).count();
+						let totalle = eliminated_types
+							.iter()
+							.take_while(|i| (**i as u32) < func_signature.type_ref())
+							.count();
 						*func_signature.type_ref_mut() -= totalle as u32;
-					}
-				},
+					},
 				elements::Section::Import(import_section) if !eliminated_types.is_empty() => {
 					for import_entry in import_section.entries_mut() {
-						if let elements::External::Function(type_ref) = import_entry.external_mut() {
-							let totalle = eliminated_types.iter().take_while(|i| (**i as u32) < *type_ref).count();
+						if let elements::External::Function(type_ref) = import_entry.external_mut()
+						{
+							let totalle = eliminated_types
+								.iter()
+								.take_while(|i| (**i as u32) < *type_ref)
+								.count();
 							*type_ref -= totalle as u32;
 						}
 					}
 				},
-				elements::Section::Code(code_section) if !eliminated_globals.is_empty() || !eliminated_funcs.is_empty() => {
+				elements::Section::Code(code_section)
+					if !eliminated_globals.is_empty() || !eliminated_funcs.is_empty() =>
+				{
 					for func_body in code_section.bodies_mut() {
 						if !eliminated_funcs.is_empty() {
 							update_call_index(func_body.code_mut(), &eliminated_funcs);
 						}
 						if !eliminated_globals.is_empty() {
-							update_global_index(func_body.code_mut().elements_mut(), &eliminated_globals)
+							update_global_index(
+								func_body.code_mut().elements_mut(),
+								&eliminated_globals,
+							)
 						}
 						if !eliminated_types.is_empty() {
 							update_type_index(func_body.code_mut(), &eliminated_types)
 						}
 					}
-				},
+				}
 				elements::Section::Export(export_section) => {
 					for export in export_section.entries_mut() {
 						match export.internal_mut() {
 							elements::Internal::Function(func_index) => {
-								let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < *func_index).count();
+								let totalle = eliminated_funcs
+									.iter()
+									.take_while(|i| (**i as u32) < *func_index)
+									.count();
 								*func_index -= totalle as u32;
 							},
 							elements::Internal::Global(global_index) => {
-								let totalle = eliminated_globals.iter().take_while(|i| (**i as u32) < *global_index).count();
+								let totalle = eliminated_globals
+									.iter()
+									.take_while(|i| (**i as u32) < *global_index)
+									.count();
 								*global_index -= totalle as u32;
 							},
-							_ => {}
+							_ => {},
 						}
 					}
 				},
 				elements::Section::Global(global_section) => {
 					for global_entry in global_section.entries_mut() {
-						update_global_index(global_entry.init_expr_mut().code_mut(), &eliminated_globals)
+						update_global_index(
+							global_entry.init_expr_mut().code_mut(),
+							&eliminated_globals,
+						)
 					}
 				},
-				elements::Section::Data(data_section) => {
+				elements::Section::Data(data_section) =>
 					for segment in data_section.entries_mut() {
 						update_global_index(
 							segment
@@ -281,21 +339,23 @@ pub fn optimize(
 								.code_mut(),
 							&eliminated_globals,
 						)
-					}
-				},
+					},
 				elements::Section::Element(elements_section) => {
 					for segment in elements_section.entries_mut() {
 						update_global_index(
 							segment
-							.offset_mut()
-							.as_mut()
-							.expect("parity-wasm is compiled without bulk-memory operations")
-							.code_mut(),
-							&eliminated_globals
+								.offset_mut()
+								.as_mut()
+								.expect("parity-wasm is compiled without bulk-memory operations")
+								.code_mut(),
+							&eliminated_globals,
 						);
 						// update all indirect call addresses initial values
 						for func_index in segment.members_mut() {
-							let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < *func_index).count();
+							let totalle = eliminated_funcs
+								.iter()
+								.take_while(|i| (**i as u32) < *func_index)
+								.count();
 							*func_index -= totalle as u32;
 						}
 					}
@@ -306,10 +366,16 @@ pub fn optimize(
 						for index in &eliminated_funcs {
 							func_name_map.remove(*index as u32);
 						}
-						let updated_map = func_name_map.into_iter().map(|(index, value)| {
-							let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < index).count() as u32;
-							(index - totalle, value)
-						}).collect();
+						let updated_map = func_name_map
+							.into_iter()
+							.map(|(index, value)| {
+								let totalle = eliminated_funcs
+									.iter()
+									.take_while(|i| (**i as u32) < index)
+									.count() as u32;
+								(index - totalle, value)
+							})
+							.collect();
 						*func_name.names_mut() = updated_map;
 					}
 
@@ -318,31 +384,42 @@ pub fn optimize(
 						for index in &eliminated_funcs {
 							local_names_map.remove(*index as u32);
 						}
-						let updated_map = local_names_map.into_iter().map(|(index, value)| {
-							let totalle = eliminated_funcs.iter().take_while(|i| (**i as u32) < index).count() as u32;
-							(index - totalle, value)
-						}).collect();
+						let updated_map = local_names_map
+							.into_iter()
+							.map(|(index, value)| {
+								let totalle = eliminated_funcs
+									.iter()
+									.take_while(|i| (**i as u32) < index)
+									.count() as u32;
+								(index - totalle, value)
+							})
+							.collect();
 						*local_name.local_names_mut() = updated_map;
 					}
-				}
-				_ => { }
+				},
+				_ => {},
 			}
 		}
 	}
 
 	// Also drop all custom sections
-	module.sections_mut()
-		.retain(|section| if let elements::Section::Custom(_) = section { false } else { true });
+	module.sections_mut().retain(|section| {
+		if let elements::Section::Custom(_) = section {
+			false
+		} else {
+			true
+		}
+	});
 
 	Ok(())
 }
-
 
 pub fn update_call_index(instructions: &mut elements::Instructions, eliminated_indices: &[usize]) {
 	use parity_wasm::elements::Instruction::*;
 	for instruction in instructions.elements_mut().iter_mut() {
 		if let Call(call_index) = instruction {
-			let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
+			let totalle =
+				eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
 			trace!("rewired call {} -> call {}", *call_index, *call_index - totalle as u32);
 			*call_index -= totalle as u32;
 		}
@@ -350,16 +427,20 @@ pub fn update_call_index(instructions: &mut elements::Instructions, eliminated_i
 }
 
 /// Updates global references considering the _ordered_ list of eliminated indices
-pub fn update_global_index(instructions: &mut Vec<elements::Instruction>, eliminated_indices: &[usize]) {
+pub fn update_global_index(
+	instructions: &mut Vec<elements::Instruction>,
+	eliminated_indices: &[usize],
+) {
 	use parity_wasm::elements::Instruction::*;
 	for instruction in instructions.iter_mut() {
 		match instruction {
 			GetGlobal(index) | SetGlobal(index) => {
-				let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *index).count();
+				let totalle =
+					eliminated_indices.iter().take_while(|i| (**i as u32) < *index).count();
 				trace!("rewired global {} -> global {}", *index, *index - totalle as u32);
 				*index -= totalle as u32;
 			},
-			_ => { },
+			_ => {},
 		}
 	}
 }
@@ -369,62 +450,67 @@ pub fn update_type_index(instructions: &mut elements::Instructions, eliminated_i
 	use parity_wasm::elements::Instruction::*;
 	for instruction in instructions.elements_mut().iter_mut() {
 		if let CallIndirect(call_index, _) = instruction {
-			let totalle = eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
-			trace!("rewired call_indrect {} -> call_indirect {}", *call_index, *call_index - totalle as u32);
+			let totalle =
+				eliminated_indices.iter().take_while(|i| (**i as u32) < *call_index).count();
+			trace!(
+				"rewired call_indrect {} -> call_indirect {}",
+				*call_index,
+				*call_index - totalle as u32
+			);
 			*call_index -= totalle as u32;
 		}
 	}
 }
 
 pub fn import_section(module: &mut elements::Module) -> Option<&mut elements::ImportSection> {
-   for section in module.sections_mut() {
+	for section in module.sections_mut() {
 		if let elements::Section::Import(sect) = section {
-			return Some(sect);
+			return Some(sect)
 		}
 	}
 	None
 }
 
 pub fn global_section(module: &mut elements::Module) -> Option<&mut elements::GlobalSection> {
-   for section in module.sections_mut() {
+	for section in module.sections_mut() {
 		if let elements::Section::Global(sect) = section {
-			return Some(sect);
+			return Some(sect)
 		}
 	}
 	None
 }
 
 pub fn function_section(module: &mut elements::Module) -> Option<&mut elements::FunctionSection> {
-   for section in module.sections_mut() {
+	for section in module.sections_mut() {
 		if let elements::Section::Function(sect) = section {
-			return Some(sect);
+			return Some(sect)
 		}
 	}
 	None
 }
 
 pub fn code_section(module: &mut elements::Module) -> Option<&mut elements::CodeSection> {
-   for section in module.sections_mut() {
+	for section in module.sections_mut() {
 		if let elements::Section::Code(sect) = section {
-			return Some(sect);
+			return Some(sect)
 		}
 	}
 	None
 }
 
 pub fn export_section(module: &mut elements::Module) -> Option<&mut elements::ExportSection> {
-   for section in module.sections_mut() {
+	for section in module.sections_mut() {
 		if let elements::Section::Export(sect) = section {
-			return Some(sect);
+			return Some(sect)
 		}
 	}
 	None
 }
 
 pub fn type_section(module: &mut elements::Module) -> Option<&mut elements::TypeSection> {
-   for section in module.sections_mut() {
+	for section in module.sections_mut() {
 		if let elements::Section::Type(sect) = section {
-			return Some(sect);
+			return Some(sect)
 		}
 	}
 	None
@@ -433,8 +519,8 @@ pub fn type_section(module: &mut elements::Module) -> Option<&mut elements::Type
 #[cfg(test)]
 mod tests {
 
-	use parity_wasm::{builder, elements};
 	use super::*;
+	use parity_wasm::{builder, elements};
 
 	/// @spec 0
 	/// Optimizer presumes that export section exists and contains
@@ -458,22 +544,34 @@ mod tests {
 	fn minimal() {
 		let mut module = builder::module()
 			.function()
-				.signature().param().i32().build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.build()
+			.build()
 			.function()
-				.signature()
-					.param().i32()
-					.param().i32()
-					.build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.param()
+			.i32()
+			.build()
+			.build()
 			.export()
-				.field("_call")
-				.internal().func(0).build()
+			.field("_call")
+			.internal()
+			.func(0)
+			.build()
 			.export()
-				.field("_random")
-				.internal().func(1).build()
+			.field("_random")
+			.internal()
+			.func(1)
+			.build()
 			.build();
-		assert_eq!(module.export_section().expect("export section to be generated").entries().len(), 2);
+		assert_eq!(
+			module.export_section().expect("export section to be generated").entries().len(),
+			2
+		);
 
 		optimize(&mut module, vec!["_call"]).expect("optimizer to succeed");
 
@@ -485,7 +583,11 @@ mod tests {
 
 		assert_eq!(
 			1,
-			module.function_section().expect("functions section to be generated").entries().len(),
+			module
+				.function_section()
+				.expect("functions section to be generated")
+				.entries()
+				.len(),
 			"There should 2 (two) functions in the optimized module"
 		);
 	}
@@ -498,22 +600,26 @@ mod tests {
 	fn globals() {
 		let mut module = builder::module()
 			.global()
-				.value_type().i32()
-				.build()
+			.value_type()
+			.i32()
+			.build()
 			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							elements::Instruction::GetGlobal(0),
-							elements::Instruction::End
-						]
-					))
-					.build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.build()
+			.body()
+			.with_instructions(elements::Instructions::new(vec![
+				elements::Instruction::GetGlobal(0),
+				elements::Instruction::End,
+			]))
+			.build()
+			.build()
 			.export()
-				.field("_call")
-				.internal().func(0).build()
+			.field("_call")
+			.internal()
+			.func(0)
+			.build()
 			.build();
 
 		optimize(&mut module, vec!["_call"]).expect("optimizer to succeed");
@@ -534,28 +640,34 @@ mod tests {
 	fn globals_2() {
 		let mut module = builder::module()
 			.global()
-				.value_type().i32()
-				.build()
+			.value_type()
+			.i32()
+			.build()
 			.global()
-				.value_type().i64()
-				.build()
+			.value_type()
+			.i64()
+			.build()
 			.global()
-				.value_type().f32()
-				.build()
+			.value_type()
+			.f32()
+			.build()
 			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							elements::Instruction::GetGlobal(1),
-							elements::Instruction::End
-						]
-					))
-					.build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.build()
+			.body()
+			.with_instructions(elements::Instructions::new(vec![
+				elements::Instruction::GetGlobal(1),
+				elements::Instruction::End,
+			]))
+			.build()
+			.build()
 			.export()
-				.field("_call")
-				.internal().func(0).build()
+			.field("_call")
+			.internal()
+			.func(0)
+			.build()
 			.build();
 
 		optimize(&mut module, vec!["_call"]).expect("optimizer to succeed");
@@ -576,30 +688,40 @@ mod tests {
 	fn call_ref() {
 		let mut module = builder::module()
 			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							elements::Instruction::Call(1),
-							elements::Instruction::End
-						]
-					))
-					.build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.build()
+			.body()
+			.with_instructions(elements::Instructions::new(vec![
+				elements::Instruction::Call(1),
+				elements::Instruction::End,
+			]))
+			.build()
+			.build()
 			.function()
-				.signature()
-					.param().i32()
-					.param().i32()
-					.build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.param()
+			.i32()
+			.build()
+			.build()
 			.export()
-				.field("_call")
-				.internal().func(0).build()
+			.field("_call")
+			.internal()
+			.func(0)
+			.build()
 			.export()
-				.field("_random")
-				.internal().func(1).build()
+			.field("_random")
+			.internal()
+			.func(1)
+			.build()
 			.build();
-		assert_eq!(module.export_section().expect("export section to be generated").entries().len(), 2);
+		assert_eq!(
+			module.export_section().expect("export section to be generated").entries().len(),
+			2
+		);
 
 		optimize(&mut module, vec!["_call"]).expect("optimizer to succeed");
 
@@ -611,7 +733,11 @@ mod tests {
 
 		assert_eq!(
 			2,
-			module.function_section().expect("functions section to be generated").entries().len(),
+			module
+				.function_section()
+				.expect("functions section to be generated")
+				.entries()
+				.len(),
 			"There should 2 (two) functions in the optimized module"
 		);
 	}
@@ -623,25 +749,40 @@ mod tests {
 	fn call_indirect() {
 		let mut module = builder::module()
 			.function()
-				.signature().param().i32().param().i32().build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.param()
+			.i32()
+			.build()
+			.build()
 			.function()
-				.signature().param().i32().param().i32().param().i32().build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.param()
+			.i32()
+			.param()
+			.i32()
+			.build()
+			.build()
 			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							elements::Instruction::CallIndirect(1, 0),
-							elements::Instruction::End
-						]
-					))
-					.build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.build()
+			.body()
+			.with_instructions(elements::Instructions::new(vec![
+				elements::Instruction::CallIndirect(1, 0),
+				elements::Instruction::End,
+			]))
+			.build()
+			.build()
 			.export()
-				.field("_call")
-				.internal().func(2).build()
+			.field("_call")
+			.internal()
+			.func(2)
+			.build()
 			.build();
 
 		optimize(&mut module, vec!["_call"]).expect("optimizer to succeed");
@@ -652,7 +793,10 @@ mod tests {
 			"There should 2 (two) types left in the module, 1 for indirect call and one for _call"
 		);
 
-		let indirect_opcode = &module.code_section().expect("code section to be generated").bodies()[0].code().elements()[0];
+		let indirect_opcode =
+			&module.code_section().expect("code section to be generated").bodies()[0]
+				.code()
+				.elements()[0];
 		match *indirect_opcode {
 			elements::Instruction::CallIndirect(0, 0) => {},
 			_ => {
@@ -660,8 +804,7 @@ mod tests {
 					"Expected call_indirect to use index 0 after optimization, since previois 0th was eliminated, but got {:?}",
 					indirect_opcode
 				);
-			}
+			},
 		}
 	}
-
 }

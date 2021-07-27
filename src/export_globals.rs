@@ -1,25 +1,36 @@
 use parity_wasm::elements;
 
-use crate::optimizer::{global_section, export_section};
+use crate::optimizer::{export_section, global_section};
 
 /// Export all declared mutable globals.
 ///
 /// This will export all internal mutable globals under the name of
 /// concat(`prefix`, i) where i is the index inside the range of
 /// [0..<total number of internal mutable globals>].
-pub fn export_mutable_globals(
-	module: &mut elements::Module,
-	prefix: impl Into<String>,
-) {
-
-	let exports = global_section(module).map(
-		|section| section.entries().iter().enumerate().filter_map(
-			|(index, global)| if global.global_type().is_mutable() { Some(index) } else { None }
-		).collect::<Vec<_>>()
-	).unwrap_or_default();
+pub fn export_mutable_globals(module: &mut elements::Module, prefix: impl Into<String>) {
+	let exports = global_section(module)
+		.map(|section| {
+			section
+				.entries()
+				.iter()
+				.enumerate()
+				.filter_map(
+					|(index, global)| {
+						if global.global_type().is_mutable() {
+							Some(index)
+						} else {
+							None
+						}
+					},
+				)
+				.collect::<Vec<_>>()
+		})
+		.unwrap_or_default();
 
 	if module.export_section().is_none() {
-		module.sections_mut().push(elements::Section::Export(elements::ExportSection::default()));
+		module
+			.sections_mut()
+			.push(elements::Section::Export(elements::ExportSection::default()));
 	}
 
 	let prefix: String = prefix.into();
@@ -27,7 +38,7 @@ pub fn export_mutable_globals(
 		let new_entry = elements::ExportEntry::new(
 			format!("{}_{}", prefix, symbol_index),
 			elements::Internal::Global(
-				(module.import_count(elements::ImportCountType::Global) + export) as _
+				(module.import_count(elements::ImportCountType::Global) + export) as _,
 			),
 		);
 		export_section(module)
@@ -48,8 +59,7 @@ mod tests {
 			.validate(true)
 			.convert(source)
 			.expect("failed to parse module");
-		elements::deserialize_buffer(module_bytes.as_ref())
-			.expect("failed to parse module")
+		elements::deserialize_buffer(module_bytes.as_ref()).expect("failed to parse module")
 	}
 
 	macro_rules! test_export_global {
@@ -69,7 +79,7 @@ mod tests {
 
 				assert_eq!(actual_bytes, expected_bytes);
 			}
-		}
+		};
 	}
 
 	test_export_global! {

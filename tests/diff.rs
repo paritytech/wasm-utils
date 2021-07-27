@@ -1,8 +1,10 @@
-use std::fs;
-use std::io::{self, Read, Write};
-use std::path::{Path, PathBuf};
 use parity_wasm::elements;
 use pwasm_utils as utils;
+use std::{
+	fs,
+	io::{self, Read, Write},
+	path::{Path, PathBuf},
+};
 
 fn slurp<P: AsRef<Path>>(path: P) -> io::Result<Vec<u8>> {
 	let mut f = fs::File::open(path)?;
@@ -18,27 +20,19 @@ fn dump<P: AsRef<Path>>(path: P, buf: &[u8]) -> io::Result<()> {
 }
 
 fn validate_wasm(binary: &[u8]) -> Result<(), wabt::Error> {
-	wabt::Module::read_binary(
-		&binary,
-		&Default::default()
-	)?.validate()?;
+	wabt::Module::read_binary(&binary, &Default::default())?.validate()?;
 	Ok(())
 }
 
 fn run_diff_test<F: FnOnce(&[u8]) -> Vec<u8>>(test_dir: &str, name: &str, test: F) {
 	// FIXME: not going to work on windows?
-	let mut fixture_path = PathBuf::from(concat!(
-		env!("CARGO_MANIFEST_DIR"),
-		"/tests/fixtures/",
-	));
+	let mut fixture_path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/",));
 	fixture_path.push(test_dir);
 	fixture_path.push(name);
 
 	// FIXME: not going to work on windows?
-	let mut expected_path = PathBuf::from(concat!(
-		env!("CARGO_MANIFEST_DIR"),
-		"/tests/expectations/"
-	));
+	let mut expected_path =
+		PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/expectations/"));
 	expected_path.push(test_dir);
 	expected_path.push(name);
 
@@ -82,8 +76,10 @@ mod stack_height {
 			#[test]
 			fn $name() {
 				run_diff_test("stack-height", concat!(stringify!($name), ".wat"), |input| {
-					let module = elements::deserialize_buffer(input).expect("Failed to deserialize");
-					let instrumented = utils::stack_height::inject_limiter(module, 1024).expect("Failed to instrument with stack counter");
+					let module =
+						elements::deserialize_buffer(input).expect("Failed to deserialize");
+					let instrumented = utils::stack_height::inject_limiter(module, 1024)
+						.expect("Failed to instrument with stack counter");
 					elements::serialize(instrumented).expect("Failed to serialize")
 				});
 			}
@@ -108,7 +104,8 @@ mod gas {
 				run_diff_test("gas", concat!(stringify!($name), ".wat"), |input| {
 					let rules = utils::rules::Set::default();
 
-					let module = elements::deserialize_buffer(input).expect("Failed to deserialize");
+					let module =
+						elements::deserialize_buffer(input).expect("Failed to deserialize");
 					let instrumented = utils::inject_gas_counter(module, &rules, "env")
 						.expect("Failed to instrument with gas metering");
 					elements::serialize(instrumented).expect("Failed to serialize")
@@ -116,7 +113,6 @@ mod gas {
 			}
 		};
 	}
-
 
 	def_gas_test!(ifs);
 	def_gas_test!(simple);

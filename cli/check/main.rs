@@ -1,6 +1,6 @@
-use pwasm_utils::logger;
 use clap::{App, Arg};
 use parity_wasm::elements;
+use pwasm_utils::logger;
 
 fn fail(msg: &str) -> ! {
 	eprintln!("{}", msg);
@@ -32,22 +32,20 @@ const ALLOWED_IMPORTS: &[&str] = &[
 	"suicide",
 	"panic",
 	"elog",
-	"abort"
+	"abort",
 ];
 
 fn main() {
 	logger::init();
 
 	let matches = App::new("wasm-check")
-						.arg(Arg::with_name("input")
-							.index(1)
-							.required(true)
-							.help("Input WASM file"))
-						.get_matches();
+		.arg(Arg::with_name("input").index(1).required(true).help("Input WASM file"))
+		.get_matches();
 
 	let input = matches.value_of("input").expect("is required; qed");
 
-	let module = parity_wasm::deserialize_file(&input).expect("Input module deserialization failed");
+	let module =
+		parity_wasm::deserialize_file(&input).expect("Input module deserialization failed");
 
 	for section in module.sections() {
 		match section {
@@ -60,7 +58,10 @@ fn main() {
 					match entry.external() {
 						elements::External::Function(_) => {
 							if !ALLOWED_IMPORTS.contains(&entry.field()) {
-								fail(&format!("'{}' is not supported by the runtime", entry.field()));
+								fail(&format!(
+									"'{}' is not supported by the runtime",
+									entry.field()
+								));
 							}
 						},
 						elements::External::Memory(m) => {
@@ -81,18 +82,17 @@ fn main() {
 								));
 							}
 						},
-						elements::External::Global(_) => {
-							fail("Parity runtime does not provide any globals")
-						},
-						_ => { continue; }
+						elements::External::Global(_) =>
+							fail("Parity runtime does not provide any globals"),
+						_ => continue,
 					}
 				}
 
 				if !has_imported_memory_properly_named {
 					fail("No imported memory from env::memory in the contract");
 				}
-			}
-			_ => { continue; }
+			},
+			_ => continue,
 		}
 	}
 }

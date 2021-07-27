@@ -1,15 +1,17 @@
-use crate::std::string::String;
-use crate::std::vec::Vec;
-use crate::std::borrow::ToOwned;
+use crate::std::{borrow::ToOwned, string::String, vec::Vec};
 
-use parity_wasm::{elements, builder};
-use byteorder::{LittleEndian, ByteOrder};
+use byteorder::{ByteOrder, LittleEndian};
+use parity_wasm::{builder, elements};
 
-use crate::optimizer::{import_section, export_section};
+use crate::optimizer::{export_section, import_section};
 
 type Insertion = (usize, u32, u32, String);
 
-pub fn update_call_index(instructions: &mut elements::Instructions, original_imports: usize, inserts: &[Insertion]) {
+pub fn update_call_index(
+	instructions: &mut elements::Instructions,
+	original_imports: usize,
+	inserts: &[Insertion],
+) {
 	use parity_wasm::elements::Instruction::*;
 	for instruction in instructions.elements_mut().iter_mut() {
 		if let Call(call_index) = instruction {
@@ -24,14 +26,18 @@ pub fn update_call_index(instructions: &mut elements::Instructions, original_imp
 
 pub fn memory_section(module: &mut elements::Module) -> Option<&mut elements::MemorySection> {
 	for section in module.sections_mut() {
-	   if let elements::Section::Memory(sect) = section {
-		   return Some(sect);
+		if let elements::Section::Memory(sect) = section {
+			return Some(sect)
 		}
 	}
 	None
 }
 
-pub fn externalize_mem(mut module: elements::Module, adjust_pages: Option<u32>, max_pages: u32) -> elements::Module {
+pub fn externalize_mem(
+	mut module: elements::Module,
+	adjust_pages: Option<u32>,
+	max_pages: u32,
+) -> elements::Module {
 	let mut entry = memory_section(&mut module)
 		.expect("Memory section to exist")
 		.entries_mut()
@@ -48,19 +54,18 @@ pub fn externalize_mem(mut module: elements::Module, adjust_pages: Option<u32>, 
 	}
 
 	let mut builder = builder::from_module(module);
-	builder.push_import(
-		elements::ImportEntry::new(
-			"env".to_owned(),
-			"memory".to_owned(),
-			elements::External::Memory(entry),
-		)
-	);
+	builder.push_import(elements::ImportEntry::new(
+		"env".to_owned(),
+		"memory".to_owned(),
+		elements::External::Memory(entry),
+	));
 
 	builder.build()
 }
 
 fn foreach_public_func_name<F>(mut module: elements::Module, f: F) -> elements::Module
-where F: Fn(&mut String)
+where
+	F: Fn(&mut String),
 {
 	if let Some(section) = import_section(&mut module) {
 		for entry in section.entries_mut() {
@@ -86,7 +91,9 @@ pub fn underscore_funcs(module: elements::Module) -> elements::Module {
 }
 
 pub fn ununderscore_funcs(module: elements::Module) -> elements::Module {
-	foreach_public_func_name(module, |n| { n.remove(0); })
+	foreach_public_func_name(module, |n| {
+		n.remove(0);
+	})
 }
 
 pub fn shrink_unknown_stack(
@@ -113,19 +120,17 @@ pub fn shrink_unknown_stack(
 					}
 				}
 			},
-			_ => continue
+			_ => continue,
 		}
 	}
 	(module, new_stack_top)
 }
 
-pub fn externalize(
-	module: elements::Module,
-	replaced_funcs: Vec<&str>,
-) -> elements::Module {
-   // Save import functions number for later
+pub fn externalize(module: elements::Module, replaced_funcs: Vec<&str>) -> elements::Module {
+	// Save import functions number for later
 	let import_funcs_total = module
-		.import_section().expect("Import section to exist")
+		.import_section()
+		.expect("Import section to exist")
 		.entries()
 		.iter()
 		.filter(|e| matches!(e.external(), &elements::External::Function(_)))
@@ -137,16 +142,19 @@ pub fn externalize(
 		.into_iter()
 		.filter_map(|f| {
 			let export = module
-				.export_section().expect("Export section to exist")
-				.entries().iter().enumerate()
+				.export_section()
+				.expect("Export section to exist")
+				.entries()
+				.iter()
+				.enumerate()
 				.find(|&(_, entry)| entry.field() == f)
 				.expect("All functions of interest to exist");
 
 			if let elements::Internal::Function(func_idx) = *export.1.internal() {
-				let type_ref = module
-					.function_section().expect("Functions section to exist")
-					.entries()[func_idx as usize - import_funcs_total]
-					.type_ref();
+				let type_ref =
+					module.function_section().expect("Functions section to exist").entries()
+						[func_idx as usize - import_funcs_total]
+						.type_ref();
 
 				Some((export.0, func_idx, type_ref, export.1.field().to_owned()))
 			} else {
@@ -161,11 +169,7 @@ pub fn externalize(
 	let mut mbuilder = builder::from_module(module);
 	for (_, _, type_ref, field) in replaces.iter() {
 		mbuilder.push_import(
-			builder::import()
-				.module("env")
-				.field(field)
-				.external().func(*type_ref)
-				.build()
+			builder::import().module("env").field(field).external().func(*type_ref).build(),
 		);
 	}
 
@@ -175,15 +179,16 @@ pub fn externalize(
 	// Third, rewire all calls to imported functions and update all other calls indices
 	for section in module.sections_mut() {
 		match section {
-			elements::Section::Code(code_section) => {
+			elements::Section::Code(code_section) =>
 				for func_body in code_section.bodies_mut() {
 					update_call_index(func_body.code_mut(), import_funcs_total, &replaces);
-				}
-			},
+				},
 			elements::Section::Export(export_section) => {
 				for export in export_section.entries_mut() {
 					if let elements::Internal::Function(func_index) = export.internal_mut() {
-						if *func_index >= import_funcs_total as u32 { *func_index += replaces.len() as u32; }
+						if *func_index >= import_funcs_total as u32 {
+							*func_index += replaces.len() as u32;
+						}
 					}
 				}
 			},
@@ -191,14 +196,15 @@ pub fn externalize(
 				for segment in elements_section.entries_mut() {
 					// update all indirect call addresses initial values
 					for func_index in segment.members_mut() {
-						if *func_index >= import_funcs_total as u32 { *func_index += replaces.len() as u32; }
+						if *func_index >= import_funcs_total as u32 {
+							*func_index += replaces.len() as u32;
+						}
 					}
 				}
 			},
-			_ => { }
+			_ => {},
 		}
 	}
 
 	module
-
 }

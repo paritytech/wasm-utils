@@ -1,14 +1,6 @@
 use super::{
-	optimize,
-	pack_instance,
-	ununderscore_funcs,
-	externalize_mem,
-	shrink_unknown_stack,
-	inject_runtime_type,
-	PackingError,
-	OptimizerError,
-	TargetRuntime,
-	std::fmt,
+	externalize_mem, inject_runtime_type, optimize, pack_instance, shrink_unknown_stack, std::fmt,
+	ununderscore_funcs, OptimizerError, PackingError, TargetRuntime,
 };
 use parity_wasm::elements;
 
@@ -67,7 +59,6 @@ pub fn build(
 	skip_optimization: bool,
 	target_runtime: &TargetRuntime,
 ) -> Result<(elements::Module, Option<elements::Module>), Error> {
-
 	if let SourceTarget::Emscripten = source_target {
 		module = ununderscore_funcs(module);
 	}
@@ -75,11 +66,14 @@ pub fn build(
 	if let SourceTarget::Unknown = source_target {
 		// 49152 is 48kb!
 		if enforce_stack_adjustment {
-			assert!(stack_size <= 1024*1024);
-			let (new_module, new_stack_top) = shrink_unknown_stack(module, 1024 * 1024 - stack_size);
+			assert!(stack_size <= 1024 * 1024);
+			let (new_module, new_stack_top) =
+				shrink_unknown_stack(module, 1024 * 1024 - stack_size);
 			module = new_module;
 			let mut stack_top_page = new_stack_top / 65536;
-			if new_stack_top % 65536 > 0 { stack_top_page += 1 };
+			if new_stack_top % 65536 > 0 {
+				stack_top_page += 1
+			};
 			module = externalize_mem(module, Some(stack_top_page), 16);
 		} else {
 			module = externalize_mem(module, None, 16);
@@ -106,7 +100,8 @@ pub fn build(
 	if !skip_optimization {
 		let preserved_exports = match target_runtime {
 			TargetRuntime::PWasm(_) => vec![target_runtime.symbols().create],
-			TargetRuntime::Substrate(_) => vec![target_runtime.symbols().call, target_runtime.symbols().create],
+			TargetRuntime::Substrate(_) =>
+				vec![target_runtime.symbols().call, target_runtime.symbols().create],
 		};
 		optimize(&mut ctor_module, preserved_exports)?;
 	}

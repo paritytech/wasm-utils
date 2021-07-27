@@ -4,7 +4,7 @@ fn main() {
 	let args = std::env::args().collect::<Vec<_>>();
 	if args.len() != 3 {
 		println!("Usage: {} input_file.wasm output_file.wasm", args[0]);
-		return;
+		return
 	}
 
 	let module = pwasm_utils::externalize(

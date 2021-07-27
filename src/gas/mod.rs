@@ -7,18 +7,18 @@
 #[cfg(test)]
 mod validation;
 
-use crate::std::cmp::min;
-use crate::std::mem;
-use crate::std::vec::Vec;
+use crate::std::{cmp::min, mem, vec::Vec};
 
-use parity_wasm::{elements, elements::ValueType, builder};
 use crate::rules::Rules;
+use parity_wasm::{builder, elements, elements::ValueType};
 
 pub fn update_call_index(instructions: &mut elements::Instructions, inserted_index: u32) {
 	use parity_wasm::elements::Instruction::*;
 	for instruction in instructions.elements_mut().iter_mut() {
 		if let Call(call_index) = instruction {
-			if *call_index >= inserted_index { *call_index += 1}
+			if *call_index >= inserted_index {
+				*call_index += 1
+			}
 		}
 	}
 }
@@ -88,10 +88,7 @@ struct Counter {
 
 impl Counter {
 	fn new() -> Counter {
-		Counter {
-			stack: Vec::new(),
-			finalized_blocks: Vec::new(),
-		}
+		Counter { stack: Vec::new(), finalized_blocks: Vec::new() }
 	}
 
 	/// Open a new control block. The cursor is the position of the first instruction in the block.
@@ -99,10 +96,7 @@ impl Counter {
 		let index = self.stack.len();
 		self.stack.push(ControlBlock {
 			lowest_forward_br_target: index,
-			active_metered_block: MeteredBlock {
-				start_pos: cursor,
-				cost: 0,
-			},
+			active_metered_block: MeteredBlock { start_pos: cursor, cost: 0 },
 			is_loop,
 		})
 	}
@@ -127,7 +121,7 @@ impl Counter {
 			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
 			control_block.lowest_forward_br_target = min(
 				control_block.lowest_forward_br_target,
-				closing_control_block.lowest_forward_br_target
+				closing_control_block.lowest_forward_br_target,
 			);
 		}
 
@@ -149,10 +143,7 @@ impl Counter {
 			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
 			mem::replace(
 				&mut control_block.active_metered_block,
-				MeteredBlock {
-					start_pos: cursor + 1,
-					cost: 0,
-				}
+				MeteredBlock { start_pos: cursor + 1, cost: 0 },
 			)
 		};
 
@@ -163,7 +154,9 @@ impl Counter {
 		// cost into the other active metered block to avoid injecting unnecessary instructions.
 		let last_index = self.stack.len() - 1;
 		if last_index > 0 {
-			let prev_control_block = self.stack.get_mut(last_index - 1)
+			let prev_control_block = self
+				.stack
+				.get_mut(last_index - 1)
 				.expect("last_index is greater than 0; last_index is stack size - 1; qed");
 			let prev_metered_block = &mut prev_control_block.active_metered_block;
 			if closing_metered_block.start_pos == prev_metered_block.start_pos {
@@ -192,7 +185,7 @@ impl Counter {
 				target_block.is_loop
 			};
 			if target_is_loop {
-				continue;
+				continue
 			}
 
 			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
@@ -237,10 +230,10 @@ fn inject_grow_counter(instructions: &mut elements::Instructions, grow_counter_f
 fn add_grow_counter<R: Rules>(
 	module: elements::Module,
 	rules: &R,
-	gas_func: u32
+	gas_func: u32,
 ) -> elements::Module {
-	use parity_wasm::elements::Instruction::*;
 	use crate::rules::MemoryGrowCost;
+	use parity_wasm::elements::Instruction::*;
 
 	let cost = match rules.memory_grow_cost() {
 		None => return module,
@@ -250,20 +243,23 @@ fn add_grow_counter<R: Rules>(
 	let mut b = builder::from_module(module);
 	b.push_function(
 		builder::function()
-			.signature().with_param(ValueType::I32).with_result(ValueType::I32).build()
-			.body()
-				.with_instructions(elements::Instructions::new(vec![
-					GetLocal(0),
-					GetLocal(0),
-					I32Const(cost as i32),
-					I32Mul,
-					// todo: there should be strong guarantee that it does not return anything on stack?
-					Call(gas_func),
-					GrowMemory(0),
-					End,
-				]))
-				.build()
+			.signature()
+			.with_param(ValueType::I32)
+			.with_result(ValueType::I32)
 			.build()
+			.body()
+			.with_instructions(elements::Instructions::new(vec![
+				GetLocal(0),
+				GetLocal(0),
+				I32Const(cost as i32),
+				I32Mul,
+				// todo: there should be strong guarantee that it does not return anything on stack?
+				Call(gas_func),
+				GrowMemory(0),
+				End,
+			]))
+			.build()
+			.build(),
 	);
 
 	b.build()
@@ -293,21 +289,21 @@ pub(crate) fn determine_metered_blocks<R: Rules>(
 				// unnecessary metering instructions.
 				let top_block_start_pos = counter.active_metered_block()?.start_pos;
 				counter.begin_control_block(top_block_start_pos, false);
-			}
+			},
 			If(_) => {
 				counter.increment(instruction_cost)?;
 				counter.begin_control_block(cursor + 1, false);
-			}
+			},
 			Loop(_) => {
 				counter.increment(instruction_cost)?;
 				counter.begin_control_block(cursor + 1, true);
-			}
+			},
 			End => {
 				counter.finalize_control_block(cursor)?;
 			},
 			Else => {
 				counter.finalize_metered_block(cursor)?;
-			}
+			},
 			Br(label) | BrIf(label) => {
 				counter.increment(instruction_cost)?;
 
@@ -315,7 +311,7 @@ pub(crate) fn determine_metered_blocks<R: Rules>(
 				let active_index = counter.active_control_block_index().ok_or_else(|| ())?;
 				let target_index = active_index.checked_sub(*label as usize).ok_or_else(|| ())?;
 				counter.branch(cursor, &[target_index])?;
-			}
+			},
 			BrTable(br_table_data) => {
 				counter.increment(instruction_cost)?;
 
@@ -327,15 +323,15 @@ pub(crate) fn determine_metered_blocks<R: Rules>(
 					.collect::<Option<Vec<_>>>()
 					.ok_or_else(|| ())?;
 				counter.branch(cursor, &target_indices)?;
-			}
+			},
 			Return => {
 				counter.increment(instruction_cost)?;
 				counter.branch(cursor, &[0])?;
-			}
+			},
 			_ => {
 				// An ordinal non control flow instruction increments the cost of the current block.
 				counter.increment(instruction_cost)?;
-			}
+			},
 		}
 	}
 
@@ -357,17 +353,14 @@ fn insert_metering_calls(
 	instructions: &mut elements::Instructions,
 	blocks: Vec<MeteredBlock>,
 	gas_func: u32,
-)
-	-> Result<(), ()>
-{
+) -> Result<(), ()> {
 	use parity_wasm::elements::Instruction::*;
 
 	// To do this in linear time, construct a new vector of instructions, copying over old
 	// instructions one by one and injecting new ones as required.
 	let new_instrs_len = instructions.elements().len() + 2 * blocks.len();
-	let original_instrs = mem::replace(
-		instructions.elements_mut(), Vec::with_capacity(new_instrs_len)
-	);
+	let original_instrs =
+		mem::replace(instructions.elements_mut(), Vec::with_capacity(new_instrs_len));
 	let new_instrs = instructions.elements_mut();
 
 	let mut block_iter = blocks.into_iter().peekable();
@@ -378,8 +371,12 @@ fn insert_metering_calls(
 				new_instrs.push(I32Const(block.cost as i32));
 				new_instrs.push(Call(gas_func));
 				true
-			} else { false }
-		} else { false };
+			} else {
+				false
+			}
+		} else {
+			false
+		};
 
 		if used_block {
 			block_iter.next();
@@ -390,7 +387,7 @@ fn insert_metering_calls(
 	}
 
 	if block_iter.next().is_some() {
-		return Err(());
+		return Err(())
 	}
 
 	Ok(())
@@ -434,24 +431,20 @@ pub fn inject_gas_counter<R: Rules>(
 	module: elements::Module,
 	rules: &R,
 	gas_module_name: &str,
-)
-	-> Result<elements::Module, elements::Module>
-{
+) -> Result<elements::Module, elements::Module> {
 	// Injecting gas counting external
 	let mut mbuilder = builder::from_module(module);
-	let import_sig = mbuilder.push_signature(
-		builder::signature()
-			.with_param(ValueType::I32)
-			.build_sig()
-		);
+	let import_sig =
+		mbuilder.push_signature(builder::signature().with_param(ValueType::I32).build_sig());
 
 	mbuilder.push_import(
 		builder::import()
 			.module(gas_module_name)
 			.field("gas")
-			.external().func(import_sig)
-			.build()
-		);
+			.external()
+			.func(import_sig)
+			.build(),
+	);
 
 	// back to plain module
 	let mut module = mbuilder.build();
@@ -467,24 +460,25 @@ pub fn inject_gas_counter<R: Rules>(
 	// Updating calling addresses (all calls to function index >= `gas_func` should be incremented)
 	for section in module.sections_mut() {
 		match section {
-			elements::Section::Code(code_section) => {
+			elements::Section::Code(code_section) =>
 				for func_body in code_section.bodies_mut() {
 					update_call_index(func_body.code_mut(), gas_func);
 					if inject_counter(func_body.code_mut(), rules, gas_func).is_err() {
 						error = true;
-						break;
+						break
 					}
-					if rules.memory_grow_cost().is_some()
-						&& inject_grow_counter(func_body.code_mut(), total_func) > 0
+					if rules.memory_grow_cost().is_some() &&
+						inject_grow_counter(func_body.code_mut(), total_func) > 0
 					{
 						need_grow_counter = true;
 					}
-				}
-			},
+				},
 			elements::Section::Export(export_section) => {
 				for export in export_section.entries_mut() {
 					if let elements::Internal::Function(func_index) = export.internal_mut() {
-						if *func_index >= gas_func { *func_index += 1}
+						if *func_index >= gas_func {
+							*func_index += 1
+						}
 					}
 				}
 			},
@@ -494,33 +488,43 @@ pub fn inject_gas_counter<R: Rules>(
 				for segment in elements_section.entries_mut() {
 					// update all indirect call addresses initial values
 					for func_index in segment.members_mut() {
-						if *func_index >= gas_func { *func_index += 1}
+						if *func_index >= gas_func {
+							*func_index += 1
+						}
 					}
 				}
 			},
-			elements::Section::Start(start_idx) => {
-				if *start_idx >= gas_func { *start_idx += 1}
-			},
-			_ => { }
+			elements::Section::Start(start_idx) =>
+				if *start_idx >= gas_func {
+					*start_idx += 1
+				},
+			_ => {},
 		}
 	}
 
-	if error { return Err(module); }
+	if error {
+		return Err(module)
+	}
 
-	if need_grow_counter { Ok(add_grow_counter(module, rules, gas_func)) } else { Ok(module) }
+	if need_grow_counter {
+		Ok(add_grow_counter(module, rules, gas_func))
+	} else {
+		Ok(module)
+	}
 }
 
 #[cfg(test)]
 mod tests {
-	use parity_wasm::{serialize, builder, elements};
-	use parity_wasm::elements::Instruction::*;
 	use super::*;
 	use crate::rules;
+	use parity_wasm::{builder, elements, elements::Instruction::*, serialize};
 
-	pub fn get_function_body(module: &elements::Module, index: usize)
-		-> Option<&[elements::Instruction]>
-	{
-		module.code_section()
+	pub fn get_function_body(
+		module: &elements::Module,
+		index: usize,
+	) -> Option<&[elements::Instruction]> {
+		module
+			.code_section()
 			.and_then(|code_section| code_section.bodies().get(index))
 			.map(|func_body| func_body.code().elements())
 	}
@@ -529,49 +533,32 @@ mod tests {
 	fn simple_grow() {
 		let module = builder::module()
 			.global()
-				.value_type().i32()
-				.build()
+			.value_type()
+			.i32()
+			.build()
 			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							GetGlobal(0),
-							GrowMemory(0),
-							End
-						]
-					))
-					.build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.build()
+			.body()
+			.with_instructions(elements::Instructions::new(vec![GetGlobal(0), GrowMemory(0), End]))
+			.build()
+			.build()
 			.build();
 
-		let injected_module = inject_gas_counter(
-			module,
-			&rules::Set::default().with_grow_cost(10000),
-			"env",
-		).unwrap();
+		let injected_module =
+			inject_gas_counter(module, &rules::Set::default().with_grow_cost(10000), "env")
+				.unwrap();
 
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
-			&vec![
-				I32Const(2),
-				Call(0),
-				GetGlobal(0),
-				Call(2),
-				End
-			][..]
+			&vec![I32Const(2), Call(0), GetGlobal(0), Call(2), End][..]
 		);
 		assert_eq!(
 			get_function_body(&injected_module, 1).unwrap(),
-			&vec![
-				GetLocal(0),
-				GetLocal(0),
-				I32Const(10000),
-				I32Mul,
-				Call(0),
-				GrowMemory(0),
-				End,
-			][..]
+			&vec![GetLocal(0), GetLocal(0), I32Const(10000), I32Mul, Call(0), GrowMemory(0), End,]
+				[..]
 		);
 
 		let binary = serialize(injected_module).expect("serialization failed");
@@ -582,33 +569,25 @@ mod tests {
 	fn grow_no_gas_no_track() {
 		let module = builder::module()
 			.global()
-				.value_type().i32()
-				.build()
+			.value_type()
+			.i32()
+			.build()
 			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							GetGlobal(0),
-							GrowMemory(0),
-							End
-						]
-					))
-					.build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.build()
+			.body()
+			.with_instructions(elements::Instructions::new(vec![GetGlobal(0), GrowMemory(0), End]))
+			.build()
+			.build()
 			.build();
 
 		let injected_module = inject_gas_counter(module, &rules::Set::default(), "env").unwrap();
 
 		assert_eq!(
 			get_function_body(&injected_module, 0).unwrap(),
-			&vec![
-				I32Const(2),
-				Call(0),
-				GetGlobal(0),
-				GrowMemory(0),
-				End
-			][..]
+			&vec![I32Const(2), Call(0), GetGlobal(0), GrowMemory(0), End][..]
 		);
 
 		assert_eq!(injected_module.functions_space(), 2);
@@ -621,32 +600,38 @@ mod tests {
 	fn call_index() {
 		let module = builder::module()
 			.global()
-				.value_type().i32()
-				.build()
+			.value_type()
+			.i32()
+			.build()
 			.function()
-				.signature().param().i32().build()
-				.body().build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.build()
+			.body()
+			.build()
+			.build()
 			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							Call(0),
-							If(elements::BlockType::NoResult),
-								Call(0),
-								Call(0),
-								Call(0),
-							Else,
-								Call(0),
-								Call(0),
-							End,
-							Call(0),
-							End
-						]
-					))
-					.build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.build()
+			.body()
+			.with_instructions(elements::Instructions::new(vec![
+				Call(0),
+				If(elements::BlockType::NoResult),
+				Call(0),
+				Call(0),
+				Call(0),
+				Else,
+				Call(0),
+				Call(0),
+				End,
+				Call(0),
+				End,
+			]))
+			.build()
+			.build()
 			.build();
 
 		let injected_module = inject_gas_counter(module, &rules::Set::default(), "env").unwrap();
@@ -658,16 +643,16 @@ mod tests {
 				Call(0),
 				Call(1),
 				If(elements::BlockType::NoResult),
-					I32Const(3),
-					Call(0),
-					Call(1),
-					Call(1),
-					Call(1),
+				I32Const(3),
+				Call(0),
+				Call(1),
+				Call(1),
+				Call(1),
 				Else,
-					I32Const(2),
-					Call(0),
-					Call(1),
-					Call(1),
+				I32Const(2),
+				Call(0),
+				Call(1),
+				Call(1),
 				End,
 				Call(1),
 				End
@@ -679,23 +664,21 @@ mod tests {
 	fn forbidden() {
 		let module = builder::module()
 			.global()
-				.value_type().i32()
-				.build()
+			.value_type()
+			.i32()
+			.build()
 			.function()
-				.signature().param().i32().build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						vec![
-							F32Const(555555),
-							End
-						]
-					))
-					.build()
-				.build()
+			.signature()
+			.param()
+			.i32()
+			.build()
+			.body()
+			.with_instructions(elements::Instructions::new(vec![F32Const(555555), End]))
+			.build()
+			.build()
 			.build();
 
 		let rules = rules::Set::default().with_forbidden_floats();
-
 
 		if inject_gas_counter(module, &rules, "env").is_ok() {
 			panic!("Should be error because of the forbidden operation")
@@ -707,8 +690,7 @@ mod tests {
 			.validate(false)
 			.convert(source)
 			.expect("failed to parse module");
-		elements::deserialize_buffer(module_bytes.as_ref())
-			.expect("failed to parse module")
+		elements::deserialize_buffer(module_bytes.as_ref()).expect("failed to parse module")
 	}
 
 	macro_rules! test_gas_counter_injection {
@@ -718,8 +700,9 @@ mod tests {
 				let input_module = parse_wat($input);
 				let expected_module = parse_wat($expected);
 
-				let injected_module = inject_gas_counter(input_module, &rules::Set::default(), "env")
-					.expect("inject_gas_counter call failed");
+				let injected_module =
+					inject_gas_counter(input_module, &rules::Set::default(), "env")
+						.expect("inject_gas_counter call failed");
 
 				let actual_func_body = get_function_body(&injected_module, 0)
 					.expect("injected module must have a function body");
@@ -728,7 +711,7 @@ mod tests {
 
 				assert_eq!(actual_func_body, expected_func_body);
 			}
-		}
+		};
 	}
 
 	test_gas_counter_injection! {

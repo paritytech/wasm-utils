@@ -1,6 +1,6 @@
-use log::{LevelFilter, trace};
 use env_logger::Builder;
 use lazy_static::lazy_static;
+use log::{trace, LevelFilter};
 
 lazy_static! {
 	static ref LOG_DUMMY: bool = {

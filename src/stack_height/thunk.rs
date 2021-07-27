@@ -1,11 +1,13 @@
-#[cfg(features = "std")]
-use crate::std::collections::{HashMap as Map};
 #[cfg(not(features = "std"))]
-use crate::std::collections::{BTreeMap as Map};
+use crate::std::collections::BTreeMap as Map;
+#[cfg(features = "std")]
+use crate::std::collections::HashMap as Map;
 use crate::std::vec::Vec;
 
-use parity_wasm::elements::{self, FunctionType, Internal};
-use parity_wasm::builder;
+use parity_wasm::{
+	builder,
+	elements::{self, FunctionType, Internal},
+};
 
 use super::{resolve_func_type, Context, Error};
 
@@ -23,41 +25,38 @@ pub(crate) fn generate_thunks(
 	// First, we need to collect all function indices that should be replaced by thunks
 
 	let mut replacement_map: Map<u32, Thunk> = {
-		let exports = module
-			.export_section()
-			.map(|es| es.entries())
-			.unwrap_or(&[]);
-		let elem_segments = module
-			.elements_section()
-			.map(|es| es.entries())
-			.unwrap_or(&[]);
-		let start_func_idx = module
-			.start_section();
+		let exports = module.export_section().map(|es| es.entries()).unwrap_or(&[]);
+		let elem_segments = module.elements_section().map(|es| es.entries()).unwrap_or(&[]);
+		let start_func_idx = module.start_section();
 
 		let exported_func_indices = exports.iter().filter_map(|entry| match entry.internal() {
 			Internal::Function(function_idx) => Some(*function_idx),
 			_ => None,
 		});
-		let table_func_indices = elem_segments
-			.iter()
-			.flat_map(|segment| segment.members())
-			.cloned();
+		let table_func_indices =
+			elem_segments.iter().flat_map(|segment| segment.members()).cloned();
 
 		// Replacement map is at least export section size.
 		let mut replacement_map: Map<u32, Thunk> = Map::new();
 
-		for func_idx in exported_func_indices.chain(table_func_indices).chain(start_func_idx.into_iter()) {
-			let callee_stack_cost = ctx.stack_cost(func_idx).ok_or_else(|| {
-				Error(format!("function with idx {} isn't found", func_idx))
-			})?;
+		for func_idx in exported_func_indices
+			.chain(table_func_indices)
+			.chain(start_func_idx.into_iter())
+		{
+			let callee_stack_cost = ctx
+				.stack_cost(func_idx)
+				.ok_or_else(|| Error(format!("function with idx {} isn't found", func_idx)))?;
 
 			// Don't generate a thunk if stack_cost of a callee is zero.
 			if callee_stack_cost != 0 {
-				replacement_map.insert(func_idx, Thunk {
-					signature: resolve_func_type(func_idx, &module)?.clone(),
-					idx: None,
-					callee_stack_cost,
-				});
+				replacement_map.insert(
+					func_idx,
+					Thunk {
+						signature: resolve_func_type(func_idx, &module)?.clone(),
+						idx: None,
+						callee_stack_cost,
+					},
+				);
 			}
 		}
 
@@ -81,11 +80,8 @@ pub(crate) fn generate_thunks(
 		//  - argument pushing
 		//  - instrumented call
 		//  - end
-		let mut thunk_body: Vec<elements::Instruction> = Vec::with_capacity(
-			thunk.signature.params().len() +
-			instrumented_call.len() +
-			1
-		);
+		let mut thunk_body: Vec<elements::Instruction> =
+			Vec::with_capacity(thunk.signature.params().len() + instrumented_call.len() + 1);
 
 		for (arg_idx, _) in thunk.signature.params().iter().enumerate() {
 			thunk_body.push(elements::Instruction::GetLocal(arg_idx as u32));
@@ -95,18 +91,17 @@ pub(crate) fn generate_thunks(
 
 		// TODO: Don't generate a signature, but find an existing one.
 
-		mbuilder = mbuilder.function()
-				// Signature of the thunk should match the original function signature.
-				.signature()
-					.with_params(thunk.signature.params().to_vec())
-					.with_results(thunk.signature.results().to_vec())
-					.build()
-				.body()
-					.with_instructions(elements::Instructions::new(
-						thunk_body
-					))
-					.build()
-				.build();
+		mbuilder = mbuilder
+			.function()
+			// Signature of the thunk should match the original function signature.
+			.signature()
+			.with_params(thunk.signature.params().to_vec())
+			.with_results(thunk.signature.results().to_vec())
+			.build()
+			.body()
+			.with_instructions(elements::Instructions::new(thunk_body))
+			.build()
+			.build();
 
 		thunk.idx = Some(next_func_idx);
 		next_func_idx += 1;
@@ -120,32 +115,27 @@ pub(crate) fn generate_thunks(
 		// Check whether this function is in replacement_map, since
 		// we can skip thunk generation (e.g. if stack_cost of function is 0).
 		if let Some(thunk) = replacement_map.get(function_idx) {
-			*function_idx = thunk
-				.idx
-				.expect("At this point an index must be assigned to each thunk");
+			*function_idx =
+				thunk.idx.expect("At this point an index must be assigned to each thunk");
 		}
 	};
 
 	for section in module.sections_mut() {
 		match section {
-			elements::Section::Export(export_section) => {
+			elements::Section::Export(export_section) =>
 				for entry in export_section.entries_mut() {
 					if let Internal::Function(function_idx) = entry.internal_mut() {
 						fixup(function_idx)
 					}
-				}
-			}
-			elements::Section::Element(elem_section) => {
+				},
+			elements::Section::Element(elem_section) =>
 				for segment in elem_section.entries_mut() {
 					for function_idx in segment.members_mut() {
 						fixup(function_idx)
 					}
-				}
-			}
-			elements::Section::Start(start_idx) => {
-				fixup(start_idx)
-			}
-			_ => {}
+				},
+			elements::Section::Start(start_idx) => fixup(start_idx),
+			_ => {},
 		}
 	}
 

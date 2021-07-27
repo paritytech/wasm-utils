@@ -1,10 +1,9 @@
-#[cfg(features = "std")]
-use crate::std::collections::HashMap as Map;
 #[cfg(not(features = "std"))]
 use crate::std::collections::BTreeMap as Map;
+#[cfg(features = "std")]
+use crate::std::collections::HashMap as Map;
 
-use crate::std::num::NonZeroU32;
-use crate::std::str::FromStr;
+use crate::std::{num::NonZeroU32, str::FromStr};
 use parity_wasm::elements::Instruction;
 
 pub struct UnknownInstruction;
@@ -304,11 +303,7 @@ pub struct Set {
 
 impl Default for Set {
 	fn default() -> Self {
-		Set {
-			regular: 1,
-			entries: Map::new(),
-			grow: 0,
-		}
+		Set { regular: 1, entries: Map::new(), grow: 0 }
 	}
 }
 
