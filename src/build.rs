@@ -100,8 +100,9 @@ pub fn build(
 	if !skip_optimization {
 		let preserved_exports = match target_runtime {
 			TargetRuntime::PWasm(_) => vec![target_runtime.symbols().create],
-			TargetRuntime::Substrate(_) =>
-				vec![target_runtime.symbols().call, target_runtime.symbols().create],
+			TargetRuntime::Substrate(_) => {
+				vec![target_runtime.symbols().call, target_runtime.symbols().create]
+			},
 		};
 		optimize(&mut ctor_module, preserved_exports)?;
 	}

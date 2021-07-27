@@ -32,10 +32,12 @@ impl fmt::Display for Error {
 			Error::NoTypeSection => write!(f, "No type section in the module"),
 			Error::NoExportSection => write!(f, "No export section in the module"),
 			Error::NoCodeSection => write!(f, "No code section inthe module"),
-			Error::InvalidCreateSignature(sym) =>
-				write!(f, "Exported symbol `{}` has invalid signature, should be () -> ()", sym),
-			Error::InvalidCreateMember(sym) =>
-				write!(f, "Exported symbol `{}` should be a function", sym),
+			Error::InvalidCreateSignature(sym) => {
+				write!(f, "Exported symbol `{}` has invalid signature, should be () -> ()", sym)
+			},
+			Error::InvalidCreateMember(sym) => {
+				write!(f, "Exported symbol `{}` should be a function", sym)
+			},
 			Error::NoCreateSymbol(sym) => write!(f, "No exported `{}` symbol", sym),
 			Error::NoImportSection => write!(f, "No import section in the module"),
 		}

@@ -130,8 +130,7 @@ fn do_main() -> Result<(), Error> {
 
 	let mut source_input = source::SourceInput::new(target_dir, wasm_binary);
 
-	let source_target_val =
-		matches.value_of("source_target").unwrap_or(source::EMSCRIPTEN_TRIPLET);
+	let source_target_val = matches.value_of("source_target").unwrap_or(source::EMSCRIPTEN_TRIPLET);
 	if source_target_val == source::UNKNOWN_TRIPLET {
 		source_input = source_input.unknown()
 	} else if source_target_val == source::EMSCRIPTEN_TRIPLET {
