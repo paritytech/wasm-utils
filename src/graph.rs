@@ -370,9 +370,7 @@ impl Module {
 								body.code = code;
 								body.locals = func_body.locals().to_vec();
 							},
-							_ => {
-								return Err(Error::InconsistentSource)
-							},
+							_ => return Err(Error::InconsistentSource),
 						}
 					}
 				},

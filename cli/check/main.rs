@@ -84,9 +84,7 @@ fn main() {
 						},
 						elements::External::Global(_) =>
 							fail("Parity runtime does not provide any globals"),
-						_ => {
-							continue
-						},
+						_ => continue,
 					}
 				}
 
@@ -94,9 +92,7 @@ fn main() {
 					fail("No imported memory from env::memory in the contract");
 				}
 			},
-			_ => {
-				continue
-			},
+			_ => continue,
 		}
 	}
 }

@@ -77,13 +77,9 @@ pub fn expand_symbols(module: &elements::Module, set: &mut Set<Symbol>) {
 	let mut fringe = set.iter().cloned().collect::<Vec<Symbol>>();
 	loop {
 		let next = match fringe.pop() {
-			Some(s) if stop.contains(&s) => {
-				continue
-			},
+			Some(s) if stop.contains(&s) => continue,
 			Some(s) => s,
-			_ => {
-				break
-			},
+			_ => break,
 		};
 		trace!("Processing symbol {:?}", next);
 
