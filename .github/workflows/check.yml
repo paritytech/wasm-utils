@@ -1,4 +1,4 @@
-name: Rust
+name: Check
 
 on:
   push:
@@ -14,7 +14,7 @@ jobs:
     strategy:
       matrix:
         os: ["ubuntu-latest", "macos-latest"]
-        toolchains: ["stable", "nightly"]
+        toolchain: ["stable", "nightly"]
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install Rust toolchain
@@ -26,20 +26,20 @@ jobs:
           components: clippy, rustfmt
 
       - uses: actions/checkout@v2
-      
+
       - name: Build
         uses: actions-rs/cargo@v1
         with:
           toolchain: ${{ matrix.toolchain }}
           command: build
-      
+
       - name: Build no_std
         uses: actions-rs/cargo@v1
         with:
           toolchain: ${{ matrix.toolchain }}
           command: test
           args: --no-default-features
-          
+
       - name: Build wasm
         uses: actions-rs/cargo@v1
         with:
