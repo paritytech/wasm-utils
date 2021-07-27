@@ -109,7 +109,7 @@ impl Counter {
 		self.finalize_metered_block(cursor)?;
 
 		// Pop the control block stack.
-		let closing_control_block = self.stack.pop().ok_or_else(|| ())?;
+		let closing_control_block = self.stack.pop().ok_or(())?;
 		let closing_control_index = self.stack.len();
 
 		if self.stack.is_empty() {
@@ -118,7 +118,7 @@ impl Counter {
 
 		// Update the lowest_forward_br_target for the control block now on top of the stack.
 		{
-			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
+			let control_block = self.stack.last_mut().ok_or(())?;
 			control_block.lowest_forward_br_target = min(
 				control_block.lowest_forward_br_target,
 				closing_control_block.lowest_forward_br_target,
@@ -140,7 +140,7 @@ impl Counter {
 	/// Finalized blocks have final cost which will not change later.
 	fn finalize_metered_block(&mut self, cursor: usize) -> Result<(), ()> {
 		let closing_metered_block = {
-			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
+			let control_block = self.stack.last_mut().ok_or(())?;
 			mem::replace(
 				&mut control_block.active_metered_block,
 				MeteredBlock { start_pos: cursor + 1, cost: 0 },
@@ -181,14 +181,14 @@ impl Counter {
 		// Update the lowest_forward_br_target of the current control block.
 		for &index in indices {
 			let target_is_loop = {
-				let target_block = self.stack.get(index).ok_or_else(|| ())?;
+				let target_block = self.stack.get(index).ok_or(())?;
 				target_block.is_loop
 			};
 			if target_is_loop {
 				continue
 			}
 
-			let control_block = self.stack.last_mut().ok_or_else(|| ())?;
+			let control_block = self.stack.last_mut().ok_or(())?;
 			control_block.lowest_forward_br_target =
 				min(control_block.lowest_forward_br_target, index);
 		}
@@ -203,14 +203,14 @@ impl Counter {
 
 	/// Get a reference to the currently active metered block.
 	fn active_metered_block(&mut self) -> Result<&mut MeteredBlock, ()> {
-		let top_block = self.stack.last_mut().ok_or_else(|| ())?;
+		let top_block = self.stack.last_mut().ok_or(())?;
 		Ok(&mut top_block.active_metered_block)
 	}
 
 	/// Increment the cost of the current block by the specified value.
 	fn increment(&mut self, val: u32) -> Result<(), ()> {
 		let top_block = self.active_metered_block()?;
-		top_block.cost = top_block.cost.checked_add(val).ok_or_else(|| ())?;
+		top_block.cost = top_block.cost.checked_add(val).ok_or(())?;
 		Ok(())
 	}
 }
@@ -308,20 +308,20 @@ pub(crate) fn determine_metered_blocks<R: Rules>(
 				counter.increment(instruction_cost)?;
 
 				// Label is a relative index into the control stack.
-				let active_index = counter.active_control_block_index().ok_or_else(|| ())?;
-				let target_index = active_index.checked_sub(*label as usize).ok_or_else(|| ())?;
+				let active_index = counter.active_control_block_index().ok_or(())?;
+				let target_index = active_index.checked_sub(*label as usize).ok_or(())?;
 				counter.branch(cursor, &[target_index])?;
 			},
 			BrTable(br_table_data) => {
 				counter.increment(instruction_cost)?;
 
-				let active_index = counter.active_control_block_index().ok_or_else(|| ())?;
+				let active_index = counter.active_control_block_index().ok_or(())?;
 				let target_indices = [br_table_data.default]
 					.iter()
 					.chain(br_table_data.table.iter())
 					.map(|label| active_index.checked_sub(*label as usize))
 					.collect::<Option<Vec<_>>>()
-					.ok_or_else(|| ())?;
+					.ok_or(())?;
 				counter.branch(cursor, &target_indices)?;
 			},
 			Return => {
