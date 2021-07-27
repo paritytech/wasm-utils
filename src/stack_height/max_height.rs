@@ -506,7 +506,7 @@ mod tests {
 )
 "#;
 		let module = elements::deserialize_buffer(
-			&wabt::Wat2Wasm::new()
+			wabt::Wat2Wasm::new()
 				.validate(false)
 				.convert(SOURCE)
 				.expect("Failed to wat2wasm")

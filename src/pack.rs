@@ -251,7 +251,6 @@ pub fn pack_instance(
 #[cfg(test)]
 mod test {
 	use super::{super::optimize, *};
-	use parity_wasm::builder;
 
 	fn test_packer(mut module: elements::Module, target_runtime: &TargetRuntime) {
 		let mut ctor_module = module.clone();
