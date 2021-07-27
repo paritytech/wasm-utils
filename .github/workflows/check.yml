@@ -23,33 +23,51 @@ jobs:
           profile: minimal
           target: wasm32-unknown-unknown
           toolchain: ${{ matrix.toolchain }}
-          components: clippy, rustfmt
 
       - uses: actions/checkout@v2
 
-      - name: Build
+      - name: Cargo build
         uses: actions-rs/cargo@v1
         with:
           toolchain: ${{ matrix.toolchain }}
           command: build
 
-      - name: Build no_std
+      - name: Cargo build (no_std)
         uses: actions-rs/cargo@v1
         with:
           toolchain: ${{ matrix.toolchain }}
           command: build
           args: --no-default-features
 
-      - name: Build wasm
+      - name: Cargo build (wasm)
         uses: actions-rs/cargo@v1
         with:
           toolchain: ${{ matrix.toolchain }}
           command: build
           args: --no-default-features --target wasm32-unknown-unknown
 
-      - name: Test
+      - name: Cargo test
         uses: actions-rs/cargo@v1
         with:
           toolchain: ${{ matrix.toolchain }}
           command: test
           args: --all-features
+
+  rustfmt:
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: nightly
+          components: rustfmt
+
+      - uses: actions/checkout@v2
+
+      - name: Cargo fmt
+        uses: actions-rs/cargo@v1
+        with:
+          toolchain: nightly
+          command: fmt
+          args: --all -- --check
