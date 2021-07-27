@@ -43,14 +43,14 @@ pub fn optimize(
 	}
 
 	// If there is start function in module, it should stary
-	module.start_section().map(|ss| stay.insert(resolve_function(&module, ss)));
+	module.start_section().map(|ss| stay.insert(resolve_function(module, ss)));
 
 	// All symbols used in data/element segments are also should be preserved
 	let mut init_symbols = Vec::new();
 	if let Some(data_section) = module.data_section() {
 		for segment in data_section.entries() {
 			push_code_symbols(
-				&module,
+				module,
 				segment
 					.offset()
 					.as_ref()
@@ -63,7 +63,7 @@ pub fn optimize(
 	if let Some(elements_section) = module.elements_section() {
 		for segment in elements_section.entries() {
 			push_code_symbols(
-				&module,
+				module,
 				segment
 					.offset()
 					.as_ref()
@@ -72,7 +72,7 @@ pub fn optimize(
 				&mut init_symbols,
 			);
 			for func_index in segment.members() {
-				stay.insert(resolve_function(&module, *func_index));
+				stay.insert(resolve_function(module, *func_index));
 			}
 		}
 	}
@@ -403,13 +403,8 @@ pub fn optimize(
 	}
 
 	// Also drop all custom sections
-	module.sections_mut().retain(|section| {
-		if let elements::Section::Custom(_) = section {
-			false
-		} else {
-			true
-		}
-	});
+	module.sections_mut()
+		.retain(|section| !matches!(section, elements::Section::Custom(_)));
 
 	Ok(())
 }

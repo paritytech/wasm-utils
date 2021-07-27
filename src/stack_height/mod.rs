@@ -176,7 +176,7 @@ fn compute_stack_costs(module: &elements::Module) -> Result<Vec<u32>, Error> {
 				// We can't calculate stack_cost of the import functions.
 				Ok(0)
 			} else {
-				compute_stack_cost(func_idx as u32, &module)
+				compute_stack_cost(func_idx as u32, module)
 			}
 		})
 		.collect()

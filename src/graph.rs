@@ -723,7 +723,7 @@ fn custom_round(
 	idx: &mut usize,
 	sections: &mut Vec<elements::Section>,
 ) {
-	while let Some(other_section) = map.get(&idx) {
+	while let Some(other_section) = map.get(idx) {
 		sections.push(other_section.clone());
 		*idx += 1;
 	}
