@@ -9,15 +9,16 @@
 //! the worst case.
 
 use super::MeteredBlock;
-use crate::rules::Set as RuleSet;
-use crate::rules::Rules;
-use crate::std::vec::Vec;
+use crate::{
+	rules::{Rules, Set as RuleSet},
+	std::vec::Vec,
+};
 use parity_wasm::elements::{FuncBody, Instruction};
 
-#[cfg(features = "std")]
-use crate::std::collections::HashMap as Map;
 #[cfg(not(features = "std"))]
 use crate::std::collections::BTreeMap as Map;
+#[cfg(features = "std")]
+use crate::std::collections::HashMap as Map;
 
 /// An ID for a node in a ControlFlowGraph.
 type NodeId = usize;
@@ -71,9 +72,7 @@ pub struct ControlFlowGraph {
 
 impl ControlFlowGraph {
 	fn new() -> Self {
-		ControlFlowGraph {
-			nodes: Vec::new(),
-		}
+		ControlFlowGraph { nodes: Vec::new() }
 	}
 
 	fn get_node(&self, node_id: NodeId) -> &ControlFlowNode {
@@ -145,7 +144,7 @@ impl ControlFrame {
 fn build_control_flow_graph(
 	body: &FuncBody,
 	rules: &RuleSet,
-	blocks: &[MeteredBlock]
+	blocks: &[MeteredBlock],
 ) -> Result<ControlFlowGraph, ()> {
 	let mut graph = ControlFlowGraph::new();
 
@@ -159,16 +158,17 @@ fn build_control_flow_graph(
 
 	let mut metered_blocks_iter = blocks.iter().peekable();
 	for (cursor, instruction) in body.code().elements().iter().enumerate() {
-		let active_node_id = stack.last()
+		let active_node_id = stack
+			.last()
 			.expect("module is valid by pre-condition; control stack must not be empty; qed")
 			.active_node;
 
 		// Increment the charged cost if there are metering instructions to be inserted here.
-		let apply_block = metered_blocks_iter.peek()
-			.map_or(false, |block| block.start_pos == cursor);
+		let apply_block =
+			metered_blocks_iter.peek().map_or(false, |block| block.start_pos == cursor);
 		if apply_block {
-			let next_metered_block = metered_blocks_iter.next()
-				.expect("peek returned an item; qed");
+			let next_metered_block =
+				metered_blocks_iter.next().expect("peek returned an item; qed");
 			graph.increment_charged_cost(active_node_id, next_metered_block.cost);
 		}
 
@@ -179,7 +179,7 @@ fn build_control_flow_graph(
 
 				let exit_node_id = graph.add_node();
 				stack.push(ControlFrame::new(active_node_id, exit_node_id, false));
-			}
+			},
 			Instruction::If(_) => {
 				graph.increment_actual_cost(active_node_id, instruction_cost);
 
@@ -189,7 +189,7 @@ fn build_control_flow_graph(
 				stack.push(ControlFrame::new(then_node_id, exit_node_id, false));
 				graph.new_forward_edge(active_node_id, then_node_id);
 				graph.set_first_instr_pos(then_node_id, cursor + 1);
-			}
+			},
 			Instruction::Loop(_) => {
 				graph.increment_actual_cost(active_node_id, instruction_cost);
 
@@ -199,7 +199,7 @@ fn build_control_flow_graph(
 				stack.push(ControlFrame::new(loop_node_id, exit_node_id, true));
 				graph.new_forward_edge(active_node_id, loop_node_id);
 				graph.set_first_instr_pos(loop_node_id, cursor + 1);
-			}
+			},
 			Instruction::Else => {
 				let active_frame_idx = stack.len() - 1;
 				let prev_frame_idx = stack.len() - 2;
@@ -210,7 +210,7 @@ fn build_control_flow_graph(
 				let prev_node_id = stack[prev_frame_idx].active_node;
 				graph.new_forward_edge(prev_node_id, else_node_id);
 				graph.set_first_instr_pos(else_node_id, cursor + 1);
-			}
+			},
 			Instruction::End => {
 				let closing_frame = stack.pop()
 					.expect("module is valid by pre-condition; ends correspond to control stack frames; qed");
@@ -221,7 +221,7 @@ fn build_control_flow_graph(
 				if let Some(active_frame) = stack.last_mut() {
 					active_frame.active_node = closing_frame.exit_node;
 				}
-			}
+			},
 			Instruction::Br(label) => {
 				graph.increment_actual_cost(active_node_id, instruction_cost);
 
@@ -233,7 +233,7 @@ fn build_control_flow_graph(
 				let new_node_id = graph.add_node();
 				stack[active_frame_idx].active_node = new_node_id;
 				graph.set_first_instr_pos(new_node_id, cursor + 1);
-			}
+			},
 			Instruction::BrIf(label) => {
 				graph.increment_actual_cost(active_node_id, instruction_cost);
 
@@ -245,7 +245,7 @@ fn build_control_flow_graph(
 				stack[active_frame_idx].active_node = new_node_id;
 				graph.new_forward_edge(active_node_id, new_node_id);
 				graph.set_first_instr_pos(new_node_id, cursor + 1);
-			}
+			},
 			Instruction::BrTable(br_table_data) => {
 				graph.increment_actual_cost(active_node_id, instruction_cost);
 
@@ -258,7 +258,7 @@ fn build_control_flow_graph(
 				let new_node_id = graph.add_node();
 				stack[active_frame_idx].active_node = new_node_id;
 				graph.set_first_instr_pos(new_node_id, cursor + 1);
-			}
+			},
 			Instruction::Return => {
 				graph.increment_actual_cost(active_node_id, instruction_cost);
 
@@ -268,7 +268,7 @@ fn build_control_flow_graph(
 				let new_node_id = graph.add_node();
 				stack[active_frame_idx].active_node = new_node_id;
 				graph.set_first_instr_pos(new_node_id, cursor + 1);
-			}
+			},
 			_ => graph.increment_actual_cost(active_node_id, instruction_cost),
 		}
 	}
@@ -304,20 +304,21 @@ fn validate_graph_gas_costs(graph: &ControlFlowGraph) -> bool {
 		}
 
 		if node.forward_edges.is_empty() && total_actual != total_charged {
-			return false;
+			return false
 		}
 
 		for loop_node_id in node.loopback_edges.iter() {
-			let (loop_actual, loop_charged) = loop_costs.get_mut(loop_node_id)
+			let (loop_actual, loop_charged) = loop_costs
+				.get_mut(loop_node_id)
 				.expect("cannot arrive at loopback edge without visiting loop entry node");
 			if loop_actual != loop_charged {
-				return false;
+				return false
 			}
 		}
 
 		for next_node_id in node.forward_edges.iter() {
 			if !visit(graph, *next_node_id, total_actual, total_charged, loop_costs) {
-				return false;
+				return false
 			}
 		}
 
@@ -339,18 +340,17 @@ fn validate_graph_gas_costs(graph: &ControlFlowGraph) -> bool {
 fn validate_metering_injections(
 	body: &FuncBody,
 	rules: &RuleSet,
-	blocks: &[MeteredBlock]
+	blocks: &[MeteredBlock],
 ) -> Result<bool, ()> {
 	let graph = build_control_flow_graph(body, rules, blocks)?;
 	Ok(validate_graph_gas_costs(&graph))
 }
 
 mod tests {
-	use super::*;
-	use super::super::determine_metered_blocks;
+	use super::{super::determine_metered_blocks, *};
 
-	use parity_wasm::elements;
 	use binaryen::tools::translate_to_fuzz_mvp;
+	use parity_wasm::elements;
 	use rand::{thread_rng, RngCore};
 
 	#[test]
@@ -367,7 +367,8 @@ mod tests {
 				let rules = RuleSet::default();
 
 				let metered_blocks = determine_metered_blocks(func_body.code(), &rules).unwrap();
-				let success = validate_metering_injections(func_body, &rules, &metered_blocks).unwrap();
+				let success =
+					validate_metering_injections(func_body, &rules, &metered_blocks).unwrap();
 				assert!(success);
 			}
 		}

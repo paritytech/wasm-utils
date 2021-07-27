@@ -1,7 +1,7 @@
-#[cfg(features = "std")]
-use crate::std::collections::{HashSet as Set};
 #[cfg(not(features = "std"))]
-use crate::std::collections::{BTreeSet as Set};
+use crate::std::collections::BTreeSet as Set;
+#[cfg(features = "std")]
+use crate::std::collections::HashSet as Set;
 use crate::std::vec::Vec;
 
 use log::trace;
@@ -22,7 +22,7 @@ pub fn resolve_function(module: &elements::Module, index: u32) -> Symbol {
 		for (item_index, item) in import_section.entries().iter().enumerate() {
 			if let elements::External::Function(_) = item.external() {
 				if functions == index {
-					return Symbol::Import(item_index as usize);
+					return Symbol::Import(item_index as usize)
 				}
 				functions += 1;
 			}
@@ -38,7 +38,7 @@ pub fn resolve_global(module: &elements::Module, index: u32) -> Symbol {
 		for (item_index, item) in import_section.entries().iter().enumerate() {
 			if let elements::External::Global(_) = item.external() {
 				if globals == index {
-					return Symbol::Import(item_index as usize);
+					return Symbol::Import(item_index as usize)
 				}
 				globals += 1;
 			}
@@ -48,7 +48,11 @@ pub fn resolve_global(module: &elements::Module, index: u32) -> Symbol {
 	Symbol::Global(index as usize - globals as usize)
 }
 
-pub fn push_code_symbols(module: &elements::Module, instructions: &[elements::Instruction], dest: &mut Vec<Symbol>) {
+pub fn push_code_symbols(
+	module: &elements::Module,
+	instructions: &[elements::Instruction],
+	dest: &mut Vec<Symbol>,
+) {
 	use parity_wasm::elements::Instruction::*;
 
 	for instruction in instructions {
@@ -59,10 +63,8 @@ pub fn push_code_symbols(module: &elements::Module, instructions: &[elements::In
 			&CallIndirect(idx, _) => {
 				dest.push(Symbol::Type(idx as usize));
 			},
-			&GetGlobal(idx) | &SetGlobal(idx) => {
-				dest.push(resolve_global(module, idx))
-			},
-			_ => { },
+			&GetGlobal(idx) | &SetGlobal(idx) => dest.push(resolve_global(module, idx)),
+			_ => {},
 		}
 	}
 }
@@ -75,15 +77,20 @@ pub fn expand_symbols(module: &elements::Module, set: &mut Set<Symbol>) {
 	let mut fringe = set.iter().cloned().collect::<Vec<Symbol>>();
 	loop {
 		let next = match fringe.pop() {
-			Some(s) if stop.contains(&s) => { continue; }
+			Some(s) if stop.contains(&s) => {
+				continue
+			},
 			Some(s) => s,
-			_ => { break; }
+			_ => {
+				break
+			},
 		};
 		trace!("Processing symbol {:?}", next);
 
 		match next {
 			Export(idx) => {
-				let entry = &module.export_section().expect("Export section to exist").entries()[idx];
+				let entry =
+					&module.export_section().expect("Export section to exist").entries()[idx];
 				match entry.internal() {
 					elements::Internal::Function(func_idx) => {
 						let symbol = resolve_function(module, *func_idx);
@@ -99,11 +106,12 @@ pub fn expand_symbols(module: &elements::Module, set: &mut Set<Symbol>) {
 						}
 						set.insert(symbol);
 					},
-					_ => {}
+					_ => {},
 				}
 			},
 			Import(idx) => {
-				let entry = &module.import_section().expect("Import section to exist").entries()[idx];
+				let entry =
+					&module.import_section().expect("Import section to exist").entries()[idx];
 				if let elements::External::Function(type_idx) = entry.external() {
 					let type_symbol = Symbol::Type(*type_idx as usize);
 					if !stop.contains(&type_symbol) {
@@ -123,7 +131,8 @@ pub fn expand_symbols(module: &elements::Module, set: &mut Set<Symbol>) {
 					set.insert(symbol);
 				}
 
-				let signature = &module.function_section().expect("Functions section to exist").entries()[idx];
+				let signature =
+					&module.function_section().expect("Functions section to exist").entries()[idx];
 				let type_symbol = Symbol::Type(signature.type_ref() as usize);
 				if !stop.contains(&type_symbol) {
 					fringe.push(type_symbol);
@@ -131,7 +140,8 @@ pub fn expand_symbols(module: &elements::Module, set: &mut Set<Symbol>) {
 				set.insert(type_symbol);
 			},
 			Global(idx) => {
-				let entry = &module.global_section().expect("Global section to exist").entries()[idx];
+				let entry =
+					&module.global_section().expect("Global section to exist").entries()[idx];
 				let mut code_symbols = Vec::new();
 				push_code_symbols(module, entry.init_expr().code(), &mut code_symbols);
 				for symbol in code_symbols.drain(..) {
@@ -140,8 +150,8 @@ pub fn expand_symbols(module: &elements::Module, set: &mut Set<Symbol>) {
 					}
 					set.insert(symbol);
 				}
-			}
-			_ => {}
+			},
+			_ => {},
 		}
 
 		stop.insert(next);

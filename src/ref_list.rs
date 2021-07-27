@@ -1,9 +1,6 @@
 #![warn(missing_docs)]
 
-use crate::std::rc::Rc;
-use crate::std::cell::RefCell;
-use crate::std::vec::Vec;
-use crate::std::slice;
+use crate::std::{cell::RefCell, rc::Rc, slice, vec::Vec};
 
 #[derive(Debug)]
 enum EntryOrigin {
@@ -27,18 +24,12 @@ pub struct Entry<T> {
 impl<T> Entry<T> {
 	/// New entity.
 	pub fn new(val: T, index: usize) -> Entry<T> {
-		Entry {
-			val,
-			index: EntryOrigin::Index(index),
-		}
+		Entry { val, index: EntryOrigin::Index(index) }
 	}
 
 	/// New detached entry.
 	pub fn new_detached(val: T) -> Entry<T> {
-		Entry {
-			val,
-			index: EntryOrigin::Detached,
-		}
+		Entry { val, index: EntryOrigin::Detached }
 	}
 
 	/// Index of the element within the reference list.
@@ -117,9 +108,10 @@ impl<T> Default for RefList<T> {
 }
 
 impl<T> RefList<T> {
-
 	/// New empty list.
-	pub fn new() -> Self { Self::default() }
+	pub fn new() -> Self {
+		Self::default()
+	}
 
 	/// Push new element in the list.
 	///
@@ -138,10 +130,7 @@ impl<T> RefList<T> {
 	/// When transaction is finailized, all entries are deleted and
 	/// internal indices of other entries are updated.
 	pub fn begin_delete(&mut self) -> DeleteTransaction<T> {
-		DeleteTransaction {
-			list: self,
-			deleted: Vec::new(),
-		}
+		DeleteTransaction { list: self, deleted: Vec::new() }
 	}
 
 	/// Start inserting.
@@ -151,11 +140,7 @@ impl<T> RefList<T> {
 	/// When transaction is finailized, all entries are inserted and
 	/// internal indices of other entries might be updated.
 	pub fn begin_insert(&mut self, at: usize) -> InsertTransaction<T> {
-		InsertTransaction {
-			at,
-			list: self,
-			items: Vec::new(),
-		}
+		InsertTransaction { at, list: self, items: Vec::new() }
 	}
 
 	/// Start inserting after the condition first matches (or at the end).
@@ -165,11 +150,14 @@ impl<T> RefList<T> {
 	/// When transaction is finailized, all entries are inserted and
 	/// internal indices of other entries might be updated.
 	pub fn begin_insert_after<F>(&mut self, mut f: F) -> InsertTransaction<T>
-		where F : FnMut(&T) -> bool
+	where
+		F: FnMut(&T) -> bool,
 	{
 		let pos = self
-			.items.iter()
-			.position(|rf| f(&**rf.read())).map(|x| x + 1)
+			.items
+			.iter()
+			.position(|rf| f(&**rf.read()))
+			.map(|x| x + 1)
 			.unwrap_or(self.items.len());
 
 		self.begin_insert(pos)
@@ -182,7 +170,8 @@ impl<T> RefList<T> {
 	/// When transaction is finailized, all entries are inserted and
 	/// internal indices of other entries might be updated.
 	pub fn begin_insert_not_until<F>(&mut self, mut f: F) -> InsertTransaction<T>
-		where F : FnMut(&T) -> bool
+	where
+		F: FnMut(&T) -> bool,
 	{
 		let pos = self.items.iter().take_while(|rf| f(&**rf.read())).count();
 		self.begin_insert(pos)
@@ -198,12 +187,17 @@ impl<T> RefList<T> {
 	fn done_delete(&mut self, indices: &[usize]) {
 		for entry in self.items.iter_mut() {
 			let mut entry = entry.write();
-			let total_less = indices.iter()
-				.take_while(|x| **x < entry.order().expect("Items in the list always have order; qed"))
+			let total_less = indices
+				.iter()
+				.take_while(|x| {
+					**x < entry.order().expect("Items in the list always have order; qed")
+				})
 				.count();
 			match &mut entry.index {
 				EntryOrigin::Detached => unreachable!("Items in the list always have order!"),
-				EntryOrigin::Index(idx) => { *idx -= total_less; },
+				EntryOrigin::Index(idx) => {
+					*idx -= total_less;
+				},
 			};
 		}
 
@@ -221,7 +215,7 @@ impl<T> RefList<T> {
 			offset += 1;
 		}
 
-		for idx in (index+offset)..self.items.len() {
+		for idx in (index + offset)..self.items.len() {
 			self.get_ref(idx).write().index = EntryOrigin::Index(idx);
 		}
 	}
@@ -240,7 +234,8 @@ impl<T> RefList<T> {
 	///
 	/// Slice members are cloned.
 	pub fn from_slice(list: &[T]) -> Self
-		where T: Clone
+	where
+		T: Clone,
 	{
 		let mut res = Self::new();
 
@@ -328,7 +323,6 @@ impl<'a, T> InsertTransaction<'a, T> {
 		list.done_insert(at, items);
 	}
 }
-
 
 #[cfg(test)]
 mod tests {

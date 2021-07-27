@@ -2,21 +2,16 @@
 
 #![warn(missing_docs)]
 
+use super::ref_list::{EntryRef, RefList};
+use crate::std::{borrow::ToOwned, collections::BTreeMap, string::String, vec::Vec};
 use parity_wasm::elements;
-use super::ref_list::{RefList, EntryRef};
-use crate::std::{
-	vec::Vec,
-	borrow::ToOwned,
-	string::String,
-	collections::BTreeMap,
-};
 
 /// Imported or declared variant of the same thing.
 ///
 /// In WebAssembly, function/global/memory/table instances can either be
 /// imported or declared internally, forming united index space.
 #[derive(Debug)]
-pub enum ImportedOrDeclared<T=()> {
+pub enum ImportedOrDeclared<T = ()> {
 	/// Variant for imported instances.
 	Imported(String, String),
 	/// Variant for instances declared internally in the module.
@@ -206,38 +201,43 @@ pub struct Module {
 }
 
 impl Module {
-
 	fn map_instructions(&self, instructions: &[elements::Instruction]) -> Vec<Instruction> {
 		use parity_wasm::elements::Instruction::*;
-		instructions.iter().map(|instruction|  match instruction {
-			Call(func_idx) => Instruction::Call(self.funcs.clone_ref(*func_idx as usize)),
-			CallIndirect(type_idx, arg2) =>
-				Instruction::CallIndirect(
-					self.types.clone_ref(*type_idx as usize),
-					*arg2,
-				),
-			SetGlobal(global_idx) =>
-				Instruction::SetGlobal(self.globals.clone_ref(*global_idx as usize)),
-			GetGlobal(global_idx) =>
-				Instruction::GetGlobal(self.globals.clone_ref(*global_idx as usize)),
-			other_instruction => Instruction::Plain(other_instruction.clone()),
-		}).collect()
+		instructions
+			.iter()
+			.map(|instruction| match instruction {
+				Call(func_idx) => Instruction::Call(self.funcs.clone_ref(*func_idx as usize)),
+				CallIndirect(type_idx, arg2) =>
+					Instruction::CallIndirect(self.types.clone_ref(*type_idx as usize), *arg2),
+				SetGlobal(global_idx) =>
+					Instruction::SetGlobal(self.globals.clone_ref(*global_idx as usize)),
+				GetGlobal(global_idx) =>
+					Instruction::GetGlobal(self.globals.clone_ref(*global_idx as usize)),
+				other_instruction => Instruction::Plain(other_instruction.clone()),
+			})
+			.collect()
 	}
 
 	fn generate_instructions(&self, instructions: &[Instruction]) -> Vec<elements::Instruction> {
 		use parity_wasm::elements::Instruction::*;
-		instructions.iter().map(|instruction| match instruction {
-			Instruction::Call(func_ref) => Call(func_ref.order().expect("detached instruction!") as u32),
-			Instruction::CallIndirect(type_ref, arg2) => CallIndirect(type_ref.order().expect("detached instruction!") as u32, *arg2),
-			Instruction::SetGlobal(global_ref) => SetGlobal(global_ref.order().expect("detached instruction!") as u32),
-			Instruction::GetGlobal(global_ref) => GetGlobal(global_ref.order().expect("detached instruction!") as u32),
-			Instruction::Plain(plain) => plain.clone(),
-		}).collect()
+		instructions
+			.iter()
+			.map(|instruction| match instruction {
+				Instruction::Call(func_ref) =>
+					Call(func_ref.order().expect("detached instruction!") as u32),
+				Instruction::CallIndirect(type_ref, arg2) =>
+					CallIndirect(type_ref.order().expect("detached instruction!") as u32, *arg2),
+				Instruction::SetGlobal(global_ref) =>
+					SetGlobal(global_ref.order().expect("detached instruction!") as u32),
+				Instruction::GetGlobal(global_ref) =>
+					GetGlobal(global_ref.order().expect("detached instruction!") as u32),
+				Instruction::Plain(plain) => plain.clone(),
+			})
+			.collect()
 	}
 
 	/// Initialize module from parity-wasm `Module`.
 	pub fn from_elements(module: &elements::Module) -> Result<Self, Error> {
-
 		let mut res = Module::default();
 		let mut imported_functions = 0;
 
@@ -246,21 +246,23 @@ impl Module {
 				elements::Section::Type(type_section) => {
 					res.types = RefList::from_slice(type_section.types());
 				},
-				elements::Section::Import(import_section) => {
+				elements::Section::Import(import_section) =>
 					for entry in import_section.entries() {
 						match *entry.external() {
 							elements::External::Function(f) => {
 								res.funcs.push(Func {
-									type_ref: res.types.get(f as usize).ok_or(Error::InconsistentSource)?.clone(),
+									type_ref: res
+										.types
+										.get(f as usize)
+										.ok_or(Error::InconsistentSource)?
+										.clone(),
 									origin: entry.into(),
 								});
 								imported_functions += 1;
 							},
 							elements::External::Memory(m) => {
-								res.memory.push(Memory {
-									limits: *m.limits(),
-									origin: entry.into(),
-								});
+								res.memory
+									.push(Memory { limits: *m.limits(), origin: entry.into() });
 							},
 							elements::External::Global(g) => {
 								res.globals.push(Global {
@@ -270,44 +272,42 @@ impl Module {
 								});
 							},
 							elements::External::Table(t) => {
-								res.tables.push(Table {
-									limits: *t.limits(),
-									origin: entry.into(),
-								});
+								res.tables
+									.push(Table { limits: *t.limits(), origin: entry.into() });
 							},
 						};
-					}
-				},
+					},
 				elements::Section::Function(function_section) => {
 					for f in function_section.entries() {
 						res.funcs.push(Func {
-							type_ref: res.types.get(f.type_ref() as usize)
-								.ok_or(Error::InconsistentSource)?.clone(),
+							type_ref: res
+								.types
+								.get(f.type_ref() as usize)
+								.ok_or(Error::InconsistentSource)?
+								.clone(),
 							origin: ImportedOrDeclared::Declared(FuncBody {
 								locals: Vec::new(),
 								// code will be populated later
 								code: Vec::new(),
 							}),
 						});
-					};
+					}
 				},
-				elements::Section::Table(table_section) => {
+				elements::Section::Table(table_section) =>
 					for t in table_section.entries() {
 						res.tables.push(Table {
 							limits: *t.limits(),
 							origin: ImportedOrDeclared::Declared(()),
 						});
-					}
-				},
-				elements::Section::Memory(table_section) => {
+					},
+				elements::Section::Memory(table_section) =>
 					for t in table_section.entries() {
 						res.memory.push(Memory {
 							limits: *t.limits(),
 							origin: ImportedOrDeclared::Declared(()),
 						});
-					}
-				},
-				elements::Section::Global(global_section) => {
+					},
+				elements::Section::Global(global_section) =>
 					for g in global_section.entries() {
 						let init_code = res.map_instructions(g.init_expr().code());
 						res.globals.push(Global {
@@ -315,34 +315,27 @@ impl Module {
 							is_mut: g.global_type().is_mutable(),
 							origin: ImportedOrDeclared::Declared(init_code),
 						});
-					}
-				},
-				elements::Section::Export(export_section) => {
+					},
+				elements::Section::Export(export_section) =>
 					for e in export_section.entries() {
 						let local = match e.internal() {
-							elements::Internal::Function(func_idx) => {
-								ExportLocal::Func(res.funcs.clone_ref(*func_idx as usize))
-							},
-							elements::Internal::Global(global_idx) => {
-								ExportLocal::Global(res.globals.clone_ref(*global_idx as usize))
-							},
-							elements::Internal::Memory(mem_idx) => {
-								ExportLocal::Memory(res.memory.clone_ref(*mem_idx as usize))
-							},
-							elements::Internal::Table(table_idx) => {
-								ExportLocal::Table(res.tables.clone_ref(*table_idx as usize))
-							},
+							elements::Internal::Function(func_idx) =>
+								ExportLocal::Func(res.funcs.clone_ref(*func_idx as usize)),
+							elements::Internal::Global(global_idx) =>
+								ExportLocal::Global(res.globals.clone_ref(*global_idx as usize)),
+							elements::Internal::Memory(mem_idx) =>
+								ExportLocal::Memory(res.memory.clone_ref(*mem_idx as usize)),
+							elements::Internal::Table(table_idx) =>
+								ExportLocal::Table(res.tables.clone_ref(*table_idx as usize)),
 						};
 
 						res.exports.push(Export { local, name: e.field().to_owned() })
-					}
-				},
+					},
 				elements::Section::Start(start_func) => {
 					res.start = Some(res.funcs.clone_ref(*start_func as usize));
 				},
 				elements::Section::Element(element_section) => {
 					for element_segment in element_section.entries() {
-
 						// let location = if element_segment.passive() {
 						// 	SegmentLocation::Passive
 						// } else if element_segment.index() == 0 {
@@ -360,14 +353,12 @@ impl Module {
 						let location = SegmentLocation::Default(res.map_instructions(init_expr));
 
 						let funcs_map = element_segment
-							.members().iter()
+							.members()
+							.iter()
 							.map(|idx| res.funcs.clone_ref(*idx as usize))
 							.collect::<Vec<EntryRef<Func>>>();
 
-						res.elements.push(ElementSegment {
-							value: funcs_map,
-							location,
-						});
+						res.elements.push(ElementSegment { value: funcs_map, location });
 					}
 				},
 				elements::Section::Code(code_section) => {
@@ -379,7 +370,9 @@ impl Module {
 								body.code = code;
 								body.locals = func_body.locals().to_vec();
 							},
-							_ => { return Err(Error::InconsistentSource); }
+							_ => {
+								return Err(Error::InconsistentSource)
+							},
 						}
 					}
 				},
@@ -394,15 +387,13 @@ impl Module {
 							.code();
 						let location = SegmentLocation::Default(res.map_instructions(init_expr));
 
-						res.data.push(DataSegment {
-							value: data_segment.value().to_vec(),
-							location,
-						});
+						res.data
+							.push(DataSegment { value: data_segment.value().to_vec(), location });
 					}
 				},
 				_ => {
 					res.other.insert(idx, section.clone());
-				}
+				},
 			}
 		}
 
@@ -441,77 +432,55 @@ impl Module {
 			let imports = import_section.entries_mut();
 			for func in self.funcs.iter() {
 				match &func.read().origin {
-					Imported(module, field) => {
-						imports.push(
-							elements::ImportEntry::new(
-								module.to_owned(),
-								field.to_owned(),
-								elements::External::Function(
-									func.read().type_ref.order().ok_or(Error::DetachedEntry)? as u32
-								),
-							)
-						)
-					},
+					Imported(module, field) => imports.push(elements::ImportEntry::new(
+						module.to_owned(),
+						field.to_owned(),
+						elements::External::Function(
+							func.read().type_ref.order().ok_or(Error::DetachedEntry)? as u32,
+						),
+					)),
 					_ => continue,
 				}
 			}
 
 			for global in self.globals.iter() {
 				match &global.read().origin {
-					Imported(module, field) => {
-						imports.push(
-							elements::ImportEntry::new(
-								module.to_owned(),
-								field.to_owned(),
-								elements::External::Global(
-									elements::GlobalType::new(
-										global.read().content,
-										global.read().is_mut,
-									)
-								),
-							)
-						)
-					},
+					Imported(module, field) => imports.push(elements::ImportEntry::new(
+						module.to_owned(),
+						field.to_owned(),
+						elements::External::Global(elements::GlobalType::new(
+							global.read().content,
+							global.read().is_mut,
+						)),
+					)),
 					_ => continue,
 				}
 			}
 
 			for memory in self.memory.iter() {
 				match &memory.read().origin {
-					Imported(module, field) => {
-						imports.push(
-							elements::ImportEntry::new(
-								module.to_owned(),
-								field.to_owned(),
-								elements::External::Memory(
-									elements::MemoryType::new(
-										memory.read().limits.initial(),
-										memory.read().limits.maximum(),
-									)
-								),
-							)
-						)
-					},
+					Imported(module, field) => imports.push(elements::ImportEntry::new(
+						module.to_owned(),
+						field.to_owned(),
+						elements::External::Memory(elements::MemoryType::new(
+							memory.read().limits.initial(),
+							memory.read().limits.maximum(),
+						)),
+					)),
 					_ => continue,
 				}
 			}
 
 			for table in self.tables.iter() {
 				match &table.read().origin {
-					Imported(module, field) => {
-						imports.push(
-							elements::ImportEntry::new(
-								module.to_owned(),
-								field.to_owned(),
-								elements::External::Table(
-									elements::TableType::new(
-										table.read().limits.initial(),
-										table.read().limits.maximum(),
-									)
-								),
-							)
-						)
-					},
+					Imported(module, field) => imports.push(elements::ImportEntry::new(
+						module.to_owned(),
+						field.to_owned(),
+						elements::External::Table(elements::TableType::new(
+							table.read().limits.initial(),
+							table.read().limits.maximum(),
+						)),
+					)),
 					_ => continue,
 				}
 			}
@@ -534,7 +503,7 @@ impl Module {
 					match func.read().origin {
 						Declared(_) => {
 							funcs.push(elements::Func::new(
-								func.read().type_ref.order().ok_or(Error::DetachedEntry)? as u32
+								func.read().type_ref.order().ok_or(Error::DetachedEntry)? as u32,
 							));
 						},
 						_ => continue,
@@ -605,7 +574,10 @@ impl Module {
 					match &global.read().origin {
 						Declared(init_code) => {
 							globals.push(elements::GlobalEntry::new(
-								elements::GlobalType::new(global.read().content, global.read().is_mut),
+								elements::GlobalType::new(
+									global.read().content,
+									global.read().is_mut,
+								),
 								elements::InitExpr::new(self.generate_instructions(&init_code[..])),
 							));
 						},
@@ -627,18 +599,18 @@ impl Module {
 
 				for export in self.exports.iter() {
 					let internal = match &export.local {
-						ExportLocal::Func(func_ref) => {
-							elements::Internal::Function(func_ref.order().ok_or(Error::DetachedEntry)? as u32)
-						},
-						ExportLocal::Global(global_ref) => {
-							elements::Internal::Global(global_ref.order().ok_or(Error::DetachedEntry)? as u32)
-						},
-						ExportLocal::Table(table_ref) => {
-							elements::Internal::Table(table_ref.order().ok_or(Error::DetachedEntry)? as u32)
-						},
-						ExportLocal::Memory(memory_ref) => {
-							elements::Internal::Memory(memory_ref.order().ok_or(Error::DetachedEntry)? as u32)
-						},
+						ExportLocal::Func(func_ref) => elements::Internal::Function(
+							func_ref.order().ok_or(Error::DetachedEntry)? as u32,
+						),
+						ExportLocal::Global(global_ref) => elements::Internal::Global(
+							global_ref.order().ok_or(Error::DetachedEntry)? as u32,
+						),
+						ExportLocal::Table(table_ref) => elements::Internal::Table(
+							table_ref.order().ok_or(Error::DetachedEntry)? as u32,
+						),
+						ExportLocal::Memory(memory_ref) => elements::Internal::Memory(
+							memory_ref.order().ok_or(Error::DetachedEntry)? as u32,
+						),
 					};
 
 					exports.push(elements::ExportEntry::new(export.name.to_owned(), internal));
@@ -671,13 +643,13 @@ impl Module {
 								elements_map.push(f.order().ok_or(Error::DetachedEntry)? as u32);
 							}
 
-							element_segments.push(
-								elements::ElementSegment::new(
-									0,
-									Some(elements::InitExpr::new(self.generate_instructions(&offset_expr[..]))),
-									elements_map,
-								)
-							);
+							element_segments.push(elements::ElementSegment::new(
+								0,
+								Some(elements::InitExpr::new(
+									self.generate_instructions(&offset_expr[..]),
+								)),
+								elements_map,
+							));
 						},
 						_ => unreachable!("Other segment location types are never added"),
 					}
@@ -701,7 +673,9 @@ impl Module {
 						Declared(body) => {
 							funcs.push(elements::FuncBody::new(
 								body.locals.clone(),
-								elements::Instructions::new(self.generate_instructions(&body.code[..])),
+								elements::Instructions::new(
+									self.generate_instructions(&body.code[..]),
+								),
 							));
 						},
 						_ => continue,
@@ -714,7 +688,6 @@ impl Module {
 			custom_round(&self.other, &mut idx, &mut sections);
 		}
 
-
 		if !self.data.is_empty() {
 			// DATA SECTION (11)
 			let mut data_section = elements::DataSection::default();
@@ -724,13 +697,13 @@ impl Module {
 				for data_entry in self.data.iter() {
 					match &data_entry.location {
 						SegmentLocation::Default(offset_expr) => {
-							data_segments.push(
-								elements::DataSegment::new(
-									0,
-									Some(elements::InitExpr::new(self.generate_instructions(&offset_expr[..]))),
-									data_entry.value.clone(),
-								)
-							);
+							data_segments.push(elements::DataSegment::new(
+								0,
+								Some(elements::InitExpr::new(
+									self.generate_instructions(&offset_expr[..]),
+								)),
+								data_entry.value.clone(),
+							));
 						},
 						_ => unreachable!("Other segment location types are never added"),
 					}
@@ -771,8 +744,8 @@ pub fn generate(f: &Module) -> Result<Vec<u8>, Error> {
 
 #[cfg(test)]
 mod tests {
-	use parity_wasm::elements;
 	use indoc::indoc;
+	use parity_wasm::elements;
 
 	fn load_sample(wat: &'static str) -> super::Module {
 		super::parse(&wabt::wat2wasm(wat).expect("faled to parse wat!")[..])
@@ -789,7 +762,8 @@ mod tests {
 
 	#[test]
 	fn smoky() {
-		let sample = load_sample(indoc!(r#"
+		let sample = load_sample(indoc!(
+			r#"
 			(module
 				(type (func))
 				(func (type 0))
@@ -809,7 +783,8 @@ mod tests {
 
 	#[test]
 	fn table() {
-		let mut sample = load_sample(indoc!(r#"
+		let mut sample = load_sample(indoc!(
+			r#"
 			(module
 				(import "env" "foo" (func $foo))
 				(func (param i32)
@@ -859,7 +834,8 @@ mod tests {
 
 	#[test]
 	fn new_import() {
-		let mut sample = load_sample(indoc!(r#"
+		let mut sample = load_sample(indoc!(
+			r#"
 			(module
 				(type (;0;) (func))
 				(type (;1;) (func (param i32 i32) (result i32)))
@@ -881,9 +857,9 @@ mod tests {
 			let type_ref_0 = sample.types.clone_ref(0);
 			let declared_func_2 = sample.funcs.clone_ref(2);
 
-			let mut tx = sample.funcs.begin_insert_not_until(
-				|f| matches!(f.origin, super::ImportedOrDeclared::Imported(_, _))
-			);
+			let mut tx = sample.funcs.begin_insert_not_until(|f| {
+				matches!(f.origin, super::ImportedOrDeclared::Imported(_, _))
+			});
 
 			let new_import_func = tx.push(super::Func {
 				type_ref: type_ref_0,
@@ -914,7 +890,8 @@ mod tests {
 
 	#[test]
 	fn simple_opt() {
-		let mut sample = load_sample(indoc!(r#"
+		let mut sample = load_sample(indoc!(
+			r#"
 			(module
 				(type (;0;) (func))
 				(type (;1;) (func (param i32 i32) (result i32)))
@@ -966,7 +943,10 @@ mod tests {
 				super::ImportedOrDeclared::Declared(body) => {
 					match &body.code[0] {
 						super::Instruction::Call(called_func) => called_func.order(),
-						wrong_instruction => panic!("instruction #2 should be a call but got {:?}!", wrong_instruction),
+						wrong_instruction => panic!(
+							"instruction #2 should be a call but got {:?}!",
+							wrong_instruction
+						),
 					}
 				},
 				_ => panic!("func #0 should be declared!"),

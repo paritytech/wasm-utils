@@ -4,13 +4,14 @@ fn main() {
 	let args = env::args().collect::<Vec<_>>();
 	if args.len() != 3 {
 		println!("Usage: {} input_file.wasm output_file.wasm", args[0]);
-		return;
+		return
 	}
 
 	// Loading module
 	let mut module = pwasm_utils::Module::from_elements(
-		&parity_wasm::deserialize_file(&args[1]).expect("Module deserialization to succeed")
-	).expect("Failed to parse parity-wasm format");
+		&parity_wasm::deserialize_file(&args[1]).expect("Module deserialization to succeed"),
+	)
+	.expect("Failed to parse parity-wasm format");
 
 	let mut delete_types = Vec::new();
 	for type_ in module.types.iter() {
@@ -20,7 +21,9 @@ fn main() {
 	}
 	module.types.delete(&delete_types[..]);
 
-	parity_wasm::serialize_to_file(&args[2],
-		module.generate().expect("Failed to generate valid format")
-	).expect("Module serialization to succeed")
+	parity_wasm::serialize_to_file(
+		&args[2],
+		module.generate().expect("Failed to generate valid format"),
+	)
+	.expect("Module serialization to succeed")
 }

@@ -49,11 +49,12 @@
 //!   between the frames.
 //! - upon entry into the function entire stack frame is allocated.
 
-use crate::std::string::String;
-use crate::std::vec::Vec;
+use crate::std::{string::String, vec::Vec};
 
-use parity_wasm::elements::{self, Type};
-use parity_wasm::builder;
+use parity_wasm::{
+	builder,
+	elements::{self, Type},
+};
 
 /// Macro to generate preamble and postamble.
 macro_rules! instrument_call {
@@ -151,14 +152,14 @@ fn generate_stack_height_global(module: &mut elements::Module) -> u32 {
 	for section in module.sections_mut() {
 		if let elements::Section::Global(gs) = section {
 			gs.entries_mut().push(global_entry);
-			return (gs.entries().len() as u32) - 1;
+			return (gs.entries().len() as u32) - 1
 		}
 	}
 
 	// Existing section not found, create one!
-	module.sections_mut().push(elements::Section::Global(
-		elements::GlobalSection::with_entries(vec![global_entry]),
-	));
+	module
+		.sections_mut()
+		.push(elements::Section::Global(elements::GlobalSection::with_entries(vec![global_entry])));
 	0
 }
 
@@ -188,13 +189,13 @@ fn compute_stack_cost(func_idx: u32, module: &elements::Module) -> Result<u32, E
 	// To calculate the cost of a function we need to convert index from
 	// function index space to defined function spaces.
 	let func_imports = module.import_count(elements::ImportCountType::Function) as u32;
-	let defined_func_idx = func_idx.checked_sub(func_imports).ok_or_else(|| {
-		Error("This should be a index of a defined function".into())
-	})?;
+	let defined_func_idx = func_idx
+		.checked_sub(func_imports)
+		.ok_or_else(|| Error("This should be a index of a defined function".into()))?;
 
-	let code_section = module.code_section().ok_or_else(|| {
-		Error("Due to validation code section should exists".into())
-	})?;
+	let code_section = module
+		.code_section()
+		.ok_or_else(|| Error("Due to validation code section should exists".into()))?;
 	let body = &code_section
 		.bodies()
 		.get(defined_func_idx as usize)
@@ -207,13 +208,10 @@ fn compute_stack_cost(func_idx: u32, module: &elements::Module) -> Result<u32, E
 			.ok_or_else(|| Error("Overflow in local count".into()))?;
 	}
 
-	let max_stack_height =
-		max_height::compute(
-			defined_func_idx,
-			module
-		)?;
+	let max_stack_height = max_height::compute(defined_func_idx, module)?;
 
-	locals_count.checked_add(max_stack_height)
+	locals_count
+		.checked_add(max_stack_height)
 		.ok_or_else(|| Error("Overflow in adding locals_count and max_stack_height".into()))
 }
 
@@ -264,14 +262,11 @@ fn instrument_function(
 	let mut cursor = 0;
 	loop {
 		if cursor >= instructions.elements().len() {
-			break;
+			break
 		}
 
 		enum Action {
-			InstrumentCall {
-				callee_idx: u32,
-				callee_stack_cost: u32,
-			},
+			InstrumentCall { callee_idx: u32, callee_stack_cost: u32 },
 			Nop,
 		}
 
@@ -279,21 +274,14 @@ fn instrument_function(
 			let instruction = &instructions.elements()[cursor];
 			match instruction {
 				Call(callee_idx) => {
-					let callee_stack_cost = ctx
-						.stack_cost(*callee_idx)
-						.ok_or_else(||
-							Error(
-								format!("Call to function that out-of-bounds: {}", callee_idx)
-							)
-						)?;
+					let callee_stack_cost = ctx.stack_cost(*callee_idx).ok_or_else(|| {
+						Error(format!("Call to function that out-of-bounds: {}", callee_idx))
+					})?;
 
 					// Instrument only calls to a functions which stack_cost is
 					// non-zero.
 					if callee_stack_cost > 0 {
-						Action::InstrumentCall {
-							callee_idx: *callee_idx,
-							callee_stack_cost,
-						}
+						Action::InstrumentCall { callee_idx: *callee_idx, callee_stack_cost }
 					} else {
 						Action::Nop
 					}
@@ -326,11 +314,11 @@ fn instrument_function(
 
 				// Advance cursor to be after the inserted sequence.
 				cursor += new_seq.len();
-			}
+			},
 			// Do nothing for other instructions.
 			_ => {
 				cursor += 1;
-			}
+			},
 		}
 	}
 
@@ -342,10 +330,7 @@ fn resolve_func_type(
 	module: &elements::Module,
 ) -> Result<&elements::FunctionType, Error> {
 	let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
-	let functions = module
-		.function_section()
-		.map(|fs| fs.entries())
-		.unwrap_or(&[]);
+	let functions = module.function_section().map(|fs| fs.entries()).unwrap_or(&[]);
 
 	let func_imports = module.import_count(elements::ImportCountType::Function);
 	let sig_idx = if func_idx < func_imports as u32 {
@@ -371,18 +356,15 @@ fn resolve_func_type(
 			.type_ref()
 	};
 	let Type::Function(ty) = types.get(sig_idx as usize).ok_or_else(|| {
-		Error(format!(
-			"Signature {} (specified by func {}) isn't defined",
-			sig_idx, func_idx
-		))
+		Error(format!("Signature {} (specified by func {}) isn't defined", sig_idx, func_idx))
 	})?;
 	Ok(ty)
 }
 
 #[cfg(test)]
 mod tests {
-	use parity_wasm::elements;
 	use super::*;
+	use parity_wasm::elements;
 
 	fn parse_wat(source: &str) -> elements::Module {
 		elements::deserialize_buffer(&wabt::wat2wasm(source).expect("Failed to wat2wasm"))
@@ -411,8 +393,7 @@ mod tests {
 "#,
 		);
 
-		let module = inject_limiter(module, 1024)
-			.expect("Failed to inject stack counter");
+		let module = inject_limiter(module, 1024).expect("Failed to inject stack counter");
 		validate_module(module);
 	}
 }
