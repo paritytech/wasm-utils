@@ -340,10 +340,6 @@ impl Rules for Set {
 	}
 
 	fn memory_grow_cost(&self) -> Option<MemoryGrowCost> {
-		if let Some(val) = NonZeroU32::new(self.grow) {
-			Some(MemoryGrowCost::Linear(val))
-		} else {
-			None
-		}
+		NonZeroU32::new(self.grow).map(MemoryGrowCost::Linear)
 	}
 }
