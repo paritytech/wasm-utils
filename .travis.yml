@@ -1,8 +1,0 @@
-language: rust
-dist: focal
-rust:
-  - nightly
-  - stable
-script:
-  - cargo test --all-features --verbose
-  - cargo build --no-default-features --verbose
