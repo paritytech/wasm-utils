@@ -46,7 +46,7 @@ mod tests {
 		let mut module = builder::module()
 			.with_global(GlobalEntry::new(
 				GlobalType::new(ValueType::I32, false),
-				InitExpr::new(vec![Instruction::I32Const(42 as i32)]),
+				InitExpr::new(vec![Instruction::I32Const(42)]),
 			))
 			.build();
 		let mut runtime_type: [u8; 4] = Default::default();

@@ -130,8 +130,7 @@ fn do_main() -> Result<(), Error> {
 
 	let mut source_input = source::SourceInput::new(target_dir, wasm_binary);
 
-	let source_target_val =
-		matches.value_of("source_target").unwrap_or_else(|| source::EMSCRIPTEN_TRIPLET);
+	let source_target_val = matches.value_of("source_target").unwrap_or(source::EMSCRIPTEN_TRIPLET);
 	if source_target_val == source::UNKNOWN_TRIPLET {
 		source_input = source_input.unknown()
 	} else if source_target_val == source::EMSCRIPTEN_TRIPLET {
@@ -194,7 +193,7 @@ fn do_main() -> Result<(), Error> {
 		matches.is_present("enforce_stack_adjustment"),
 		matches
 			.value_of("shrink_stack")
-			.unwrap_or_else(|| "49152")
+			.unwrap_or("49152")
 			.parse()
 			.expect("New stack size is not valid u32"),
 		matches.is_present("skip_optimization"),

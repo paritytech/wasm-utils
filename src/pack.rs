@@ -32,10 +32,12 @@ impl fmt::Display for Error {
 			Error::NoTypeSection => write!(f, "No type section in the module"),
 			Error::NoExportSection => write!(f, "No export section in the module"),
 			Error::NoCodeSection => write!(f, "No code section inthe module"),
-			Error::InvalidCreateSignature(sym) =>
-				write!(f, "Exported symbol `{}` has invalid signature, should be () -> ()", sym),
-			Error::InvalidCreateMember(sym) =>
-				write!(f, "Exported symbol `{}` should be a function", sym),
+			Error::InvalidCreateSignature(sym) => {
+				write!(f, "Exported symbol `{}` has invalid signature, should be () -> ()", sym)
+			},
+			Error::InvalidCreateMember(sym) => {
+				write!(f, "Exported symbol `{}` should be a function", sym)
+			},
 			Error::NoCreateSymbol(sym) => write!(f, "No exported `{}` symbol", sym),
 			Error::NoImportSection => write!(f, "No import section in the module"),
 		}
@@ -285,7 +287,7 @@ mod test {
 				.module("env")
 				.field("memory")
 				.external()
-				.memory(1 as u32, Some(1 as u32))
+				.memory(1, Some(1))
 				.build()
 				.function()
 				.signature()
@@ -336,7 +338,7 @@ mod test {
 				.module("env")
 				.field("memory")
 				.external()
-				.memory(1 as u32, Some(1 as u32))
+				.memory(1, Some(1))
 				.build()
 				.data()
 				.offset(elements::Instruction::I32Const(16))

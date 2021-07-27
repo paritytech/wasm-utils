@@ -153,8 +153,7 @@ fn build_control_flow_graph(
 
 	graph.set_first_instr_pos(entry_node_id, 0);
 
-	let mut stack = Vec::new();
-	stack.push(ControlFrame::new(entry_node_id, terminal_node_id, false));
+	let mut stack = vec![ControlFrame::new(entry_node_id, terminal_node_id, false)];
 
 	let mut metered_blocks_iter = blocks.iter().peekable();
 	for (cursor, instruction) in body.code().elements().iter().enumerate() {
