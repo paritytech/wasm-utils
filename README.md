@@ -31,7 +31,7 @@ This will optimize WASM symbols tree to leave only those elements that are used 
 
 ## Gas counter (wasm-gas)
 
-For development puposes, raw WASM contract can be injected with gas counters (the same way as it done by pwasm-ethereum/substrate runtime when running contracts)
+For development purposes, a raw WASM contract can be injected with gas counters (the same way as it done in the `pwasm-ethereum/substrate` runtime when running contracts)
 
 ```
 wasm-gas <input_wasm_binary.wasm> <output_wasm_binary.wasm>
