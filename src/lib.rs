@@ -1,12 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(not(feature = "std"))]
 #[macro_use]
 extern crate alloc;
 
 pub mod rules;
 
 mod build;
+pub mod coverage;
 #[cfg(feature = "std")]
 mod export_globals;
 mod ext;
@@ -18,9 +18,8 @@ mod optimizer;
 mod pack;
 mod ref_list;
 mod runtime_type;
-mod symbols;
-
 pub mod stack_height;
+mod symbols;
 
 pub use build::{build, Error as BuildError, SourceTarget};
 #[cfg(feature = "std")]
