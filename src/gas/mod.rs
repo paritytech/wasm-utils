@@ -964,4 +964,30 @@ mod tests {
 				(get_global 0)))
 		"#
 	}
+
+	test_gas_counter_injection! {
+		name = empty_loop;
+		input = r#"
+		(module
+			(func
+				(loop
+					(br 0)
+				)
+				unreachable
+			)
+		)
+		"#;
+		expected = r#"
+		(module
+			(func
+				(call 0 (i32.const 2))
+				(loop
+					(call 0 (i32.const 1))
+					(br 0)
+				)
+				unreachable
+			)
+		)
+		"#
+	}
 }
