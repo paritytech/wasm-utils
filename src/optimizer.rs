@@ -299,7 +299,7 @@ pub fn optimize(
 							update_type_index(func_body.code_mut(), &eliminated_types)
 						}
 					}
-				}
+				},
 				elements::Section::Export(export_section) => {
 					for export in export_section.entries_mut() {
 						match export.internal_mut() {
