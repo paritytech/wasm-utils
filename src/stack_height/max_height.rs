@@ -4,6 +4,9 @@ use super::{resolve_func_type, Error};
 use log::trace;
 use parity_wasm::elements::{self, BlockType, Type};
 
+#[cfg(feature = "sign_ext")]
+use parity_wasm::elements::SignExtInstruction;
+
 /// Control stack frame.
 #[derive(Debug)]
 struct Frame {
@@ -407,6 +410,16 @@ pub(crate) fn compute(func_idx: u32, module: &elements::Module) -> Result<u32, E
 			F64PromoteF32 | I32ReinterpretF32 | I64ReinterpretF64 | F32ReinterpretI32 |
 			F64ReinterpretI64 => {
 				// Conversion operators take one value and produce one result.
+				stack.pop_values(1)?;
+				stack.push_values(1)?;
+			},
+
+			#[cfg(feature = "sign_ext")]
+			SignExt(SignExtInstruction::I32Extend8S) |
+			SignExt(SignExtInstruction::I32Extend16S) |
+			SignExt(SignExtInstruction::I64Extend8S) |
+			SignExt(SignExtInstruction::I64Extend16S) |
+			SignExt(SignExtInstruction::I64Extend32S) => {
 				stack.pop_values(1)?;
 				stack.push_values(1)?;
 			},
