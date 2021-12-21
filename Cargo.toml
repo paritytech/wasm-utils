@@ -75,3 +75,4 @@ cli = [
   "env_logger",
   "lazy_static",
 ]
+sign_ext = ["parity-wasm/sign_ext"]
