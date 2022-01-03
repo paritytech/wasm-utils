@@ -52,7 +52,7 @@ log = { version = "0.4", default-features = false }
 parity-wasm = { version = "0.42", default-features = false }
 
 # Dependencies only used by the binaries
-clap = { version = "2", optional = true }
+clap = { version = "3", optional = true }
 env_logger = { version = "0.9", optional = true }
 glob = { version = "0.3", optional = true }
 lazy_static = { version = "1", optional = true }
