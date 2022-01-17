@@ -1,6 +1,6 @@
 # pwasm-utils
 
-[![Build Status](https://travis-ci.org/paritytech/wasm-utils.svg?branch=master)](https://travis-ci.org/paritytech/wasm-utils)
+> :warning: **This repository/crate is deprecated and unmaintained**: Switch to [`wasm-instrument`](https://github.com/paritytech/wasm-instrument) in order to use wasm instrumentation (gas metering, stack height limiter) in your project. For wasm code optimization [`binaryen`](https://github.com/WebAssembly/binaryen) should be used.
 
 A collection of WASM utilities used in pwasm-ethereum and substrate contract development.
 
